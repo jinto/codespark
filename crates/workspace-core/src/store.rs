@@ -1,6 +1,9 @@
 use rusqlite::{params, Connection};
 
-use crate::WorkspaceSummary;
+use crate::{
+    CloseReason, NewSession, SessionState, SessionSummary, SessionTransport, WorkspaceDetail,
+    WorkspaceSummary,
+};
 
 pub struct Store {
     conn: Connection,
@@ -15,10 +18,7 @@ impl Store {
     }
 
     pub fn create_workspace(&self, name: &str) -> rusqlite::Result<String> {
-        let updated_at = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .expect("system clock before unix epoch")
-            .as_secs() as i64;
+        let updated_at = now();
         self.conn.execute(
             "insert into workspaces (id, name, note_body, updated_at, last_opened_at)
              values (lower(hex(randomblob(16))), ?1, '', ?2, ?2)",
@@ -52,6 +52,109 @@ impl Store {
         rows.collect()
     }
 
+    pub fn update_workspace_note(
+        &self,
+        workspace_id: &str,
+        note_body: &str,
+    ) -> rusqlite::Result<()> {
+        let updated_at = now();
+        self.conn.execute(
+            "update workspaces
+             set note_body = ?2, updated_at = ?3
+             where id = ?1",
+            params![workspace_id, note_body, updated_at],
+        )?;
+        Ok(())
+    }
+
+    pub fn start_session(&self, input: NewSession) -> rusqlite::Result<String> {
+        let updated_at = now();
+        self.conn.execute(
+            "insert into sessions (
+                id, workspace_id, transport, target_label, title, shell,
+                initial_cwd, last_cwd, state, close_reason, exit_status,
+                updated_at, created_at
+             )
+             values (
+                lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5,
+                ?6, ?6, ?7, null, null,
+                ?8, ?8
+             )",
+            params![
+                input.workspace_id,
+                session_transport_to_str(input.transport),
+                input.target_label,
+                input.title,
+                input.shell,
+                input.initial_cwd,
+                session_state_to_str(SessionState::Live),
+                updated_at,
+            ],
+        )?;
+
+        self.conn.query_row(
+            "select id from sessions where rowid = last_insert_rowid()",
+            [],
+            |row| row.get(0),
+        )
+    }
+
+    pub fn close_session(
+        &self,
+        session_id: &str,
+        reason: CloseReason,
+        last_cwd: Option<String>,
+        exit_status: Option<i64>,
+    ) -> rusqlite::Result<()> {
+        let updated_at = now();
+        let changed = self.conn.execute(
+            "update sessions
+             set state = ?2, close_reason = ?3, last_cwd = ?4, exit_status = ?5, updated_at = ?6
+             where id = ?1",
+            params![
+                session_id,
+                session_state_to_str(SessionState::Closed),
+                close_reason_to_str(reason),
+                last_cwd,
+                exit_status,
+                updated_at,
+            ],
+        )?;
+
+        if changed == 0 {
+            return Err(rusqlite::Error::QueryReturnedNoRows);
+        }
+
+        Ok(())
+    }
+
+    pub fn workspace_detail(&self, workspace_id: &str) -> rusqlite::Result<WorkspaceDetail> {
+        let workspace = self.conn.query_row(
+            "select id, name, note_body
+             from workspaces
+             where id = ?1",
+            params![workspace_id],
+            |row| {
+                Ok(WorkspaceDetail {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    note_body: row.get(2)?,
+                    live_sessions: Vec::new(),
+                    closed_sessions: Vec::new(),
+                })
+            },
+        )?;
+
+        let live_sessions = self.sessions_for_workspace(workspace_id, SessionState::Live)?;
+        let closed_sessions = self.sessions_for_workspace(workspace_id, SessionState::Closed)?;
+
+        Ok(WorkspaceDetail {
+            live_sessions,
+            closed_sessions,
+            ..workspace
+        })
+    }
+
     fn migrate(&self) -> rusqlite::Result<()> {
         self.conn.execute_batch(
             "create table if not exists workspaces (
@@ -60,7 +163,106 @@ impl Store {
                 note_body text not null,
                 updated_at integer not null,
                 last_opened_at integer not null
+            );
+
+            create table if not exists sessions (
+                id text primary key not null,
+                workspace_id text not null,
+                transport text not null,
+                target_label text not null,
+                title text not null,
+                shell text not null,
+                initial_cwd text,
+                last_cwd text,
+                state text not null,
+                close_reason text,
+                exit_status integer,
+                updated_at integer not null,
+                created_at integer not null
             );",
         )
+    }
+
+    fn sessions_for_workspace(
+        &self,
+        workspace_id: &str,
+        state: SessionState,
+    ) -> rusqlite::Result<Vec<SessionSummary>> {
+        let mut stmt = self.conn.prepare(
+            "select id, title, transport, target_label, last_cwd, close_reason
+             from sessions
+             where workspace_id = ?1 and state = ?2
+             order by updated_at desc, rowid desc",
+        )?;
+        let rows = stmt.query_map(params![workspace_id, session_state_to_str(state)], |row| {
+            Ok(SessionSummary {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                transport: session_transport_from_str(&row.get::<_, String>(2)?),
+                target_label: row.get(3)?,
+                last_cwd: row.get(4)?,
+                close_reason: row
+                    .get::<_, Option<String>>(5)?
+                    .as_deref()
+                    .map(close_reason_from_str)
+                    .unwrap_or(CloseReason::UserClosed),
+            })
+        })?;
+
+        rows.collect()
+    }
+}
+
+fn now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("system clock before unix epoch")
+        .as_secs() as i64
+}
+
+fn session_transport_to_str(value: SessionTransport) -> &'static str {
+    match value {
+        SessionTransport::Local => "local",
+        SessionTransport::Ssh => "ssh",
+    }
+}
+
+fn session_transport_from_str(value: &str) -> SessionTransport {
+    match value {
+        "local" => SessionTransport::Local,
+        "ssh" => SessionTransport::Ssh,
+        other => panic!("unknown session transport: {other}"),
+    }
+}
+
+fn session_state_to_str(value: SessionState) -> &'static str {
+    match value {
+        SessionState::Live => "live",
+        SessionState::Closed => "closed",
+        SessionState::Exited => "exited",
+        SessionState::Lost => "lost",
+        SessionState::Crashed => "crashed",
+        SessionState::Interrupted => "interrupted",
+    }
+}
+
+fn close_reason_to_str(value: CloseReason) -> &'static str {
+    match value {
+        CloseReason::UserClosed => "user_closed",
+        CloseReason::ProcessExited => "process_exited",
+        CloseReason::SshDisconnected => "ssh_disconnected",
+        CloseReason::AppCrashed => "app_crashed",
+        CloseReason::HostQuit => "host_quit",
+    }
+}
+
+fn close_reason_from_str(value: &str) -> CloseReason {
+    match value {
+        "user_closed" => CloseReason::UserClosed,
+        "process_exited" => CloseReason::ProcessExited,
+        "ssh_disconnected" => CloseReason::SshDisconnected,
+        "app_crashed" => CloseReason::AppCrashed,
+        "host_quit" => CloseReason::HostQuit,
+        other => panic!("unknown close reason: {other}"),
     }
 }
