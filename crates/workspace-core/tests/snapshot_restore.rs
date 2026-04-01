@@ -84,6 +84,10 @@ fn restore_recipe_prefers_latest_snapshot_cwd_over_stale_session_paths() {
 
     let detail = store.workspace_detail(&workspace_id).unwrap();
     assert_eq!(
+        detail.closed_sessions[0].last_cwd.as_deref(),
+        Some("/srv/app/releases/2026-04-01")
+    );
+    assert_eq!(
         detail.closed_sessions[0].restore_recipe.launch_command,
         "ssh prod -- 'cd /srv/app/releases/2026-04-01 && exec zsh -l'"
     );

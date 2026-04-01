@@ -363,7 +363,7 @@ impl Store {
                 title: row.get(1)?,
                 transport,
                 target_label: row.get(3)?,
-                last_cwd,
+                last_cwd: restore_cwd,
                 close_reason: row
                     .get::<_, Option<String>>(7)?
                     .as_deref()
