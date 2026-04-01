@@ -1,9 +1,9 @@
 use workspace_core::{CloseReason, NewSession, SessionTransport, Store};
+use rusqlite::Connection;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::thread::sleep;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn closing_a_session_moves_it_to_recently_closed_and_persists_the_workspace_note() {
@@ -137,7 +137,6 @@ fn session_activity_updates_workspace_list_recency() {
         assert_eq!(after_create[0].id, beta_id);
         assert_eq!(after_create[1].id, alpha_id);
 
-        sleep(Duration::from_secs(1));
         let session_id = store
             .start_session(NewSession {
                 workspace_id: alpha_id.clone(),
@@ -152,12 +151,10 @@ fn session_activity_updates_workspace_list_recency() {
         let after_start = store.list_workspace_summaries().unwrap();
         assert_eq!(after_start[0].id, alpha_id);
 
-        sleep(Duration::from_secs(1));
         let gamma_id = store.create_workspace("gamma").unwrap();
         let after_gamma = store.list_workspace_summaries().unwrap();
         assert_eq!(after_gamma[0].id, gamma_id);
 
-        sleep(Duration::from_secs(1));
         store
             .close_session(
                 &session_id,
@@ -170,6 +167,31 @@ fn session_activity_updates_workspace_list_recency() {
         let after_close = store.list_workspace_summaries().unwrap();
         assert_eq!(after_close[0].id, alpha_id);
     }
+
+    let _ = fs::remove_file(path);
+}
+
+#[test]
+fn start_session_rejects_missing_workspace_without_creating_orphan_row() {
+    let path = unique_db_path();
+    let store = Store::open(path.to_str().unwrap()).unwrap();
+
+    let result = store.start_session(NewSession {
+        workspace_id: "missing-workspace".into(),
+        transport: SessionTransport::Local,
+        target_label: "local".into(),
+        title: "orphan".into(),
+        shell: "zsh".into(),
+        initial_cwd: None,
+    });
+
+    assert!(result.is_err());
+
+    let conn = Connection::open(path.to_str().unwrap()).unwrap();
+    let session_count: i64 = conn
+        .query_row("select count(*) from sessions", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(session_count, 0);
 
     let _ = fs::remove_file(path);
 }

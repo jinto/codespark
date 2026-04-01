@@ -12,6 +12,7 @@ pub struct Store {
 impl Store {
     pub fn open(path: &str) -> rusqlite::Result<Self> {
         let conn = Connection::open(path)?;
+        conn.execute_batch("pragma foreign_keys = on;")?;
         let store = Self { conn };
         store.migrate()?;
         Ok(store)
@@ -206,7 +207,7 @@ impl Store {
 
             create table if not exists sessions (
                 id text primary key not null,
-                workspace_id text not null,
+                workspace_id text not null references workspaces(id) on delete cascade,
                 transport text not null,
                 target_label text not null,
                 title text not null,
@@ -276,7 +277,7 @@ fn now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .expect("system clock before unix epoch")
-        .as_secs() as i64
+        .as_nanos() as i64
 }
 
 fn session_transport_to_str(value: SessionTransport) -> &'static str {
