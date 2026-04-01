@@ -15,10 +15,14 @@ impl Store {
     }
 
     pub fn create_workspace(&self, name: &str) -> rusqlite::Result<String> {
+        let updated_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system clock before unix epoch")
+            .as_secs() as i64;
         self.conn.execute(
             "insert into workspaces (id, name, note_body, updated_at, last_opened_at)
-             values (lower(hex(randomblob(16))), ?1, '', cast(strftime('%s', 'now') as integer), cast(strftime('%s', 'now') as integer))",
-            params![name],
+             values (lower(hex(randomblob(16))), ?1, '', ?2, ?2)",
+            params![name, updated_at],
         )?;
 
         self.conn.query_row(
