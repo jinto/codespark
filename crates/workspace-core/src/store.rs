@@ -215,7 +215,7 @@ impl Store {
              where state = ?4",
             params![
                 session_state_to_str(SessionState::Interrupted),
-                close_reason_to_str(CloseReason::HostQuit),
+                close_reason_to_str(CloseReason::AppCrashed),
                 updated_at,
                 session_state_to_str(SessionState::Live),
             ],
@@ -338,15 +338,18 @@ impl Store {
         let rows = stmt.query_map(params![workspace_id], |row| {
             let id: String = row.get(0)?;
             let transport = session_transport_from_str(&row.get::<_, String>(2)?);
+            let initial_cwd: Option<String> = row.get(5)?;
+            let last_cwd: Option<String> = row.get(6)?;
             let snapshot = self.latest_snapshot_for(&id)?;
             let snapshot_preview = snapshot
                 .as_ref()
                 .map(|snapshot| snapshot.grid.clone())
                 .unwrap_or_else(TerminalGrid::empty);
-            let restore_cwd = row
-                .get::<_, Option<String>>(6)?
-                .or_else(|| snapshot.as_ref().and_then(|snapshot| snapshot.cwd.clone()))
-                .or_else(|| row.get::<_, Option<String>>(5).ok().flatten());
+            let restore_cwd = snapshot
+                .as_ref()
+                .and_then(|snapshot| snapshot.cwd.clone())
+                .or_else(|| last_cwd.clone())
+                .or_else(|| initial_cwd.clone());
             let shell: String = row.get(4)?;
             let restore_recipe = build_restore_recipe(
                 transport,
@@ -360,7 +363,7 @@ impl Store {
                 title: row.get(1)?,
                 transport,
                 target_label: row.get(3)?,
-                last_cwd: row.get(6)?,
+                last_cwd,
                 close_reason: row
                     .get::<_, Option<String>>(7)?
                     .as_deref()

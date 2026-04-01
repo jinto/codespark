@@ -20,7 +20,7 @@ fn unfinalized_live_sessions_are_marked_interrupted_on_next_launch() {
         .record_snapshot(NewSnapshot {
             session_id,
             kind: SnapshotKind::Checkpoint,
-            cwd: Some("/Users/jinto/projects/spark3".into()),
+            cwd: Some("/Users/jinto/projects/spark3/crates/workspace-core".into()),
             grid: TerminalGrid::from_lines(80, 24, &["cargo test", "waiting"]),
         })
         .unwrap();
@@ -37,7 +37,11 @@ fn unfinalized_live_sessions_are_marked_interrupted_on_next_launch() {
         "cargo test"
     );
     assert_eq!(
+        detail.closed_sessions[0].close_reason,
+        workspace_core::CloseReason::AppCrashed
+    );
+    assert_eq!(
         detail.closed_sessions[0].restore_recipe.launch_command,
-        "cd /Users/jinto/projects/spark3 && exec zsh -l"
+        "cd /Users/jinto/projects/spark3/crates/workspace-core && exec zsh -l"
     );
 }
