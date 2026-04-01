@@ -331,47 +331,45 @@ impl Store {
         let mut stmt = self.conn.prepare(
             "select id, title, transport, target_label, shell, initial_cwd, last_cwd, close_reason
              from sessions
-             where workspace_id = ?1 and state = ?2
+             where workspace_id = ?1
+               and state in ('closed', 'exited', 'lost', 'crashed', 'interrupted')
              order by updated_at desc, rowid desc",
         )?;
-        let rows = stmt.query_map(
-            params![workspace_id, session_state_to_str(SessionState::Closed)],
-            |row| {
-                let id: String = row.get(0)?;
-                let transport = session_transport_from_str(&row.get::<_, String>(2)?);
-                let snapshot = self.latest_snapshot_for(&id)?;
-                let snapshot_preview = snapshot
-                    .as_ref()
-                    .map(|snapshot| snapshot.grid.clone())
-                    .unwrap_or_else(TerminalGrid::empty);
-                let restore_cwd = row
-                    .get::<_, Option<String>>(6)?
-                    .or_else(|| snapshot.as_ref().and_then(|snapshot| snapshot.cwd.clone()))
-                    .or_else(|| row.get::<_, Option<String>>(5).ok().flatten());
-                let shell: String = row.get(4)?;
-                let restore_recipe = build_restore_recipe(
-                    transport,
-                    &row.get::<_, String>(3)?,
-                    &shell,
-                    restore_cwd.as_deref(),
-                );
+        let rows = stmt.query_map(params![workspace_id], |row| {
+            let id: String = row.get(0)?;
+            let transport = session_transport_from_str(&row.get::<_, String>(2)?);
+            let snapshot = self.latest_snapshot_for(&id)?;
+            let snapshot_preview = snapshot
+                .as_ref()
+                .map(|snapshot| snapshot.grid.clone())
+                .unwrap_or_else(TerminalGrid::empty);
+            let restore_cwd = row
+                .get::<_, Option<String>>(6)?
+                .or_else(|| snapshot.as_ref().and_then(|snapshot| snapshot.cwd.clone()))
+                .or_else(|| row.get::<_, Option<String>>(5).ok().flatten());
+            let shell: String = row.get(4)?;
+            let restore_recipe = build_restore_recipe(
+                transport,
+                &row.get::<_, String>(3)?,
+                &shell,
+                restore_cwd.as_deref(),
+            );
 
-                Ok(ClosedSessionSummary {
-                    id,
-                    title: row.get(1)?,
-                    transport,
-                    target_label: row.get(3)?,
-                    last_cwd: row.get(6)?,
-                    close_reason: row
-                        .get::<_, Option<String>>(7)?
-                        .as_deref()
-                        .map(close_reason_from_str)
-                        .unwrap_or(CloseReason::UserClosed),
-                    snapshot_preview,
-                    restore_recipe,
-                })
-            },
-        )?;
+            Ok(ClosedSessionSummary {
+                id,
+                title: row.get(1)?,
+                transport,
+                target_label: row.get(3)?,
+                last_cwd: row.get(6)?,
+                close_reason: row
+                    .get::<_, Option<String>>(7)?
+                    .as_deref()
+                    .map(close_reason_from_str)
+                    .unwrap_or(CloseReason::UserClosed),
+                snapshot_preview,
+                restore_recipe,
+            })
+        })?;
 
         rows.collect()
     }
