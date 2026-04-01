@@ -1,8 +1,8 @@
+use workspace_core::Store;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
-use workspace_core::Store;
 
 #[test]
 fn creates_and_lists_workspaces_in_recent_order() {
