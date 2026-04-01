@@ -1,0 +1,27 @@
+namespace workspace_ffi {};
+
+[Error]
+enum WorkspaceServiceError {
+    "OperationFailed",
+    "PoisonedState",
+};
+
+dictionary WorkspaceDetail {
+    string id;
+    string name;
+    string note_body;
+};
+
+interface WorkspaceService {
+    [Throws=WorkspaceServiceError]
+    constructor();
+
+    [Throws=WorkspaceServiceError]
+    string create_workspace(string name);
+
+    [Throws=WorkspaceServiceError]
+    void update_workspace_note(string workspace_id, string note_body);
+
+    [Throws=WorkspaceServiceError]
+    WorkspaceDetail workspace_detail(string workspace_id);
+};

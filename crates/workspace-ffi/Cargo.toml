@@ -1,0 +1,19 @@
+[package]
+name = "workspace-ffi"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+thiserror = "2"
+uniffi = { version = "0.31.0", features = ["cli"] }
+workspace-core = { path = "../workspace-core" }
+
+[build-dependencies]
+uniffi = { version = "0.31.0", features = ["build"] }
