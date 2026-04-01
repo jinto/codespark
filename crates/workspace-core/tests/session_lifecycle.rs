@@ -1,9 +1,9 @@
-use workspace_core::{CloseReason, NewSession, SessionTransport, Store};
 use rusqlite::Connection;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use workspace_core::{CloseReason, NewSession, SessionTransport, Store};
 
 #[test]
 fn closing_a_session_moves_it_to_recently_closed_and_persists_the_workspace_note() {
@@ -38,7 +38,10 @@ fn closing_a_session_moves_it_to_recently_closed_and_persists_the_workspace_note
     assert_eq!(detail.live_sessions.len(), 0);
     assert_eq!(detail.closed_sessions.len(), 1);
     assert_eq!(detail.closed_sessions[0].title, "prod logs");
-    assert_eq!(detail.closed_sessions[0].close_reason, CloseReason::UserClosed);
+    assert_eq!(
+        detail.closed_sessions[0].close_reason,
+        CloseReason::UserClosed
+    );
 }
 
 #[test]
@@ -120,8 +123,14 @@ fn closing_an_already_closed_session_keeps_existing_recovery_data() {
 
     let detail = store.workspace_detail(&workspace_id).unwrap();
     assert_eq!(detail.closed_sessions.len(), 1);
-    assert_eq!(detail.closed_sessions[0].close_reason, CloseReason::UserClosed);
-    assert_eq!(detail.closed_sessions[0].last_cwd.as_deref(), Some("/srv/app"));
+    assert_eq!(
+        detail.closed_sessions[0].close_reason,
+        CloseReason::UserClosed
+    );
+    assert_eq!(
+        detail.closed_sessions[0].last_cwd.as_deref(),
+        Some("/srv/app")
+    );
 }
 
 #[test]

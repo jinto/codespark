@@ -1,3 +1,5 @@
+use crate::{RestoreRecipe, TerminalGrid};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionTransport {
     Local,
@@ -44,12 +46,24 @@ pub struct SessionSummary {
 }
 
 #[derive(Debug, Clone)]
+pub struct ClosedSessionSummary {
+    pub id: String,
+    pub title: String,
+    pub transport: SessionTransport,
+    pub target_label: String,
+    pub last_cwd: Option<String>,
+    pub close_reason: CloseReason,
+    pub snapshot_preview: TerminalGrid,
+    pub restore_recipe: RestoreRecipe,
+}
+
+#[derive(Debug, Clone)]
 pub struct WorkspaceDetail {
     pub id: String,
     pub name: String,
     pub note_body: String,
     pub live_sessions: Vec<SessionSummary>,
-    pub closed_sessions: Vec<SessionSummary>,
+    pub closed_sessions: Vec<ClosedSessionSummary>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

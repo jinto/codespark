@@ -1,7 +1,8 @@
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::{
-    CloseReason, NewSession, SessionState, SessionSummary, SessionTransport, WorkspaceDetail,
+    build_restore_recipe, CloseReason, ClosedSessionSummary, NewSession, NewSnapshot, SessionState,
+    SessionSummary, SessionTransport, SnapshotKind, TerminalGrid, WorkspaceDetail,
     WorkspaceSummary,
 };
 
@@ -122,6 +123,31 @@ impl Store {
         Ok(session_id)
     }
 
+    pub fn record_snapshot(&self, input: NewSnapshot) -> rusqlite::Result<()> {
+        let created_at = now();
+        self.conn.execute(
+            "insert into snapshots (
+                id, session_id, kind, cwd, cols, rows, line_count, payload, created_at
+             )
+             values (
+                lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8
+             )",
+            params![
+                input.session_id,
+                snapshot_kind_to_str(input.kind),
+                input.cwd,
+                i64::from(input.grid.cols),
+                i64::from(input.grid.rows),
+                input.grid.lines.len() as i64,
+                encode_terminal_grid_lines(&input.grid),
+                created_at,
+            ],
+        )?;
+
+        self.touch_workspace_by_session(&input.session_id)?;
+        Ok(())
+    }
+
     pub fn close_session(
         &self,
         session_id: &str,
@@ -168,6 +194,40 @@ impl Store {
         Ok(())
     }
 
+    pub fn reconcile_interrupted_sessions(&self) -> rusqlite::Result<()> {
+        let updated_at = now();
+        let mut stmt = self.conn.prepare(
+            "select id
+             from sessions
+             where state = ?1",
+        )?;
+        let session_ids = stmt
+            .query_map(params![session_state_to_str(SessionState::Live)], |row| {
+                row.get(0)
+            })?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
+
+        self.conn.execute(
+            "update sessions
+             set state = ?1,
+                 close_reason = ?2,
+                 updated_at = ?3
+             where state = ?4",
+            params![
+                session_state_to_str(SessionState::Interrupted),
+                close_reason_to_str(CloseReason::HostQuit),
+                updated_at,
+                session_state_to_str(SessionState::Live),
+            ],
+        )?;
+
+        for session_id in session_ids {
+            self.touch_workspace_by_session(&session_id)?;
+        }
+
+        Ok(())
+    }
+
     pub fn workspace_detail(&self, workspace_id: &str) -> rusqlite::Result<WorkspaceDetail> {
         let workspace = self.conn.query_row(
             "select id, name, note_body
@@ -186,7 +246,7 @@ impl Store {
         )?;
 
         let live_sessions = self.sessions_for_workspace(workspace_id, SessionState::Live)?;
-        let closed_sessions = self.sessions_for_workspace(workspace_id, SessionState::Closed)?;
+        let closed_sessions = self.closed_sessions_for_workspace(workspace_id)?;
 
         Ok(WorkspaceDetail {
             live_sessions,
@@ -219,6 +279,18 @@ impl Store {
                 exit_status integer,
                 updated_at integer not null,
                 created_at integer not null
+            );
+
+            create table if not exists snapshots (
+                id text primary key not null,
+                session_id text not null references sessions(id) on delete cascade,
+                kind text not null,
+                cwd text,
+                cols integer not null,
+                rows integer not null,
+                line_count integer not null,
+                payload blob not null,
+                created_at integer not null
             );",
         )
     }
@@ -250,6 +322,85 @@ impl Store {
         })?;
 
         rows.collect()
+    }
+
+    fn closed_sessions_for_workspace(
+        &self,
+        workspace_id: &str,
+    ) -> rusqlite::Result<Vec<ClosedSessionSummary>> {
+        let mut stmt = self.conn.prepare(
+            "select id, title, transport, target_label, shell, initial_cwd, last_cwd, close_reason
+             from sessions
+             where workspace_id = ?1 and state = ?2
+             order by updated_at desc, rowid desc",
+        )?;
+        let rows = stmt.query_map(
+            params![workspace_id, session_state_to_str(SessionState::Closed)],
+            |row| {
+                let id: String = row.get(0)?;
+                let transport = session_transport_from_str(&row.get::<_, String>(2)?);
+                let snapshot = self.latest_snapshot_for(&id)?;
+                let snapshot_preview = snapshot
+                    .as_ref()
+                    .map(|snapshot| snapshot.grid.clone())
+                    .unwrap_or_else(TerminalGrid::empty);
+                let restore_cwd = row
+                    .get::<_, Option<String>>(6)?
+                    .or_else(|| snapshot.as_ref().and_then(|snapshot| snapshot.cwd.clone()))
+                    .or_else(|| row.get::<_, Option<String>>(5).ok().flatten());
+                let shell: String = row.get(4)?;
+                let restore_recipe = build_restore_recipe(
+                    transport,
+                    &row.get::<_, String>(3)?,
+                    &shell,
+                    restore_cwd.as_deref(),
+                );
+
+                Ok(ClosedSessionSummary {
+                    id,
+                    title: row.get(1)?,
+                    transport,
+                    target_label: row.get(3)?,
+                    last_cwd: row.get(6)?,
+                    close_reason: row
+                        .get::<_, Option<String>>(7)?
+                        .as_deref()
+                        .map(close_reason_from_str)
+                        .unwrap_or(CloseReason::UserClosed),
+                    snapshot_preview,
+                    restore_recipe,
+                })
+            },
+        )?;
+
+        rows.collect()
+    }
+
+    fn latest_snapshot_for(&self, session_id: &str) -> rusqlite::Result<Option<StoredSnapshot>> {
+        self.conn
+            .query_row(
+                "select kind, cwd, cols, rows, line_count, payload
+                 from snapshots
+                 where session_id = ?1
+                 order by created_at desc, rowid desc
+                 limit 1",
+                params![session_id],
+                |row| {
+                    Ok(StoredSnapshot {
+                        _kind: snapshot_kind_from_str(&row.get::<_, String>(0)?),
+                        cwd: row.get(1)?,
+                        grid: TerminalGrid {
+                            cols: row.get::<_, i64>(2)? as u16,
+                            rows: row.get::<_, i64>(3)? as u16,
+                            lines: decode_terminal_grid_lines(
+                                row.get(4)?,
+                                row.get::<_, Vec<u8>>(5)?,
+                            )?,
+                        },
+                    })
+                },
+            )
+            .optional()
     }
 
     fn touch_workspace(&self, workspace_id: &str) -> rusqlite::Result<()> {
@@ -325,4 +476,41 @@ fn close_reason_from_str(value: &str) -> CloseReason {
         "host_quit" => CloseReason::HostQuit,
         other => panic!("unknown close reason: {other}"),
     }
+}
+
+fn snapshot_kind_to_str(value: SnapshotKind) -> &'static str {
+    match value {
+        SnapshotKind::Checkpoint => "checkpoint",
+        SnapshotKind::Final => "final",
+    }
+}
+
+fn snapshot_kind_from_str(value: &str) -> SnapshotKind {
+    match value {
+        "checkpoint" => SnapshotKind::Checkpoint,
+        "final" => SnapshotKind::Final,
+        other => panic!("unknown snapshot kind: {other}"),
+    }
+}
+
+fn encode_terminal_grid_lines(grid: &TerminalGrid) -> Vec<u8> {
+    grid.lines.join("\n").into_bytes()
+}
+
+fn decode_terminal_grid_lines(line_count: i64, payload: Vec<u8>) -> rusqlite::Result<Vec<String>> {
+    if line_count == 0 {
+        return Ok(Vec::new());
+    }
+
+    let text = String::from_utf8(payload).map_err(|error| {
+        rusqlite::Error::FromSqlConversionFailure(5, rusqlite::types::Type::Blob, Box::new(error))
+    })?;
+    Ok(text.split('\n').map(str::to_owned).collect())
+}
+
+#[derive(Debug, Clone)]
+struct StoredSnapshot {
+    _kind: SnapshotKind,
+    cwd: Option<String>,
+    grid: TerminalGrid,
 }
