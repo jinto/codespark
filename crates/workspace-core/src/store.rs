@@ -111,11 +111,14 @@ impl Store {
             ],
         )?;
 
-        self.conn.query_row(
+        let session_id: String = self.conn.query_row(
             "select id from sessions where rowid = last_insert_rowid()",
             [],
             |row| row.get(0),
-        )
+        )?;
+
+        self.touch_workspace(&input.workspace_id)?;
+        Ok(session_id)
     }
 
     pub fn close_session(
@@ -158,6 +161,8 @@ impl Store {
 
             return Err(rusqlite::Error::QueryReturnedNoRows);
         }
+
+        self.touch_workspace_by_session(session_id)?;
 
         Ok(())
     }
@@ -244,6 +249,26 @@ impl Store {
         })?;
 
         rows.collect()
+    }
+
+    fn touch_workspace(&self, workspace_id: &str) -> rusqlite::Result<()> {
+        let updated_at = now();
+        self.conn.execute(
+            "update workspaces
+             set updated_at = ?2
+             where id = ?1",
+            params![workspace_id, updated_at],
+        )?;
+        Ok(())
+    }
+
+    fn touch_workspace_by_session(&self, session_id: &str) -> rusqlite::Result<()> {
+        let workspace_id: String = self.conn.query_row(
+            "select workspace_id from sessions where id = ?1",
+            params![session_id],
+            |row| row.get(0),
+        )?;
+        self.touch_workspace(&workspace_id)
     }
 }
 

@@ -2,7 +2,8 @@ use workspace_core::{CloseReason, NewSession, SessionTransport, Store};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread::sleep;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[test]
 fn closing_a_session_moves_it_to_recently_closed_and_persists_the_workspace_note() {
@@ -121,6 +122,56 @@ fn closing_an_already_closed_session_keeps_existing_recovery_data() {
     assert_eq!(detail.closed_sessions.len(), 1);
     assert_eq!(detail.closed_sessions[0].close_reason, CloseReason::UserClosed);
     assert_eq!(detail.closed_sessions[0].last_cwd.as_deref(), Some("/srv/app"));
+}
+
+#[test]
+fn session_activity_updates_workspace_list_recency() {
+    let path = unique_db_path();
+
+    {
+        let store = Store::open(path.to_str().unwrap()).unwrap();
+        let alpha_id = store.create_workspace("alpha").unwrap();
+        let beta_id = store.create_workspace("beta").unwrap();
+
+        let after_create = store.list_workspace_summaries().unwrap();
+        assert_eq!(after_create[0].id, beta_id);
+        assert_eq!(after_create[1].id, alpha_id);
+
+        sleep(Duration::from_secs(1));
+        let session_id = store
+            .start_session(NewSession {
+                workspace_id: alpha_id.clone(),
+                transport: SessionTransport::Local,
+                target_label: "local".into(),
+                title: "alpha session".into(),
+                shell: "zsh".into(),
+                initial_cwd: None,
+            })
+            .unwrap();
+
+        let after_start = store.list_workspace_summaries().unwrap();
+        assert_eq!(after_start[0].id, alpha_id);
+
+        sleep(Duration::from_secs(1));
+        let gamma_id = store.create_workspace("gamma").unwrap();
+        let after_gamma = store.list_workspace_summaries().unwrap();
+        assert_eq!(after_gamma[0].id, gamma_id);
+
+        sleep(Duration::from_secs(1));
+        store
+            .close_session(
+                &session_id,
+                CloseReason::UserClosed,
+                Some("/tmp".into()),
+                None,
+            )
+            .unwrap();
+
+        let after_close = store.list_workspace_summaries().unwrap();
+        assert_eq!(after_close[0].id, alpha_id);
+    }
+
+    let _ = fs::remove_file(path);
 }
 
 fn unique_db_path() -> PathBuf {
