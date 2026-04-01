@@ -34,18 +34,37 @@ impl Store {
 
     pub fn list_workspace_summaries(&self) -> rusqlite::Result<Vec<WorkspaceSummary>> {
         let mut stmt = self.conn.prepare(
-            "select id, name, updated_at
-             from workspaces
-             order by updated_at desc, rowid desc",
+            "select
+                w.id,
+                w.name,
+                w.updated_at,
+                coalesce((
+                    select count(*)
+                    from sessions s
+                    where s.workspace_id = w.id and s.state = 'live'
+                ), 0) as live_sessions,
+                coalesce((
+                    select count(*)
+                    from sessions s
+                    where s.workspace_id = w.id
+                      and s.state in ('closed', 'exited', 'lost', 'crashed')
+                ), 0) as recently_closed_sessions,
+                exists(
+                    select 1
+                    from sessions s
+                    where s.workspace_id = w.id and s.state = 'interrupted'
+                ) as has_interrupted_sessions
+             from workspaces w
+             order by w.updated_at desc, w.rowid desc",
         )?;
         let rows = stmt.query_map([], |row| {
             Ok(WorkspaceSummary {
                 id: row.get(0)?,
                 name: row.get(1)?,
-                live_sessions: 0,
-                recently_closed_sessions: 0,
-                has_interrupted_sessions: false,
                 updated_at: row.get(2)?,
+                live_sessions: row.get(3)?,
+                recently_closed_sessions: row.get(4)?,
+                has_interrupted_sessions: row.get::<_, i64>(5)? != 0,
             })
         })?;
 
@@ -109,8 +128,12 @@ impl Store {
         let updated_at = now();
         let changed = self.conn.execute(
             "update sessions
-             set state = ?2, close_reason = ?3, last_cwd = ?4, exit_status = ?5, updated_at = ?6
-             where id = ?1",
+             set state = ?2,
+                 close_reason = ?3,
+                 last_cwd = coalesce(?4, last_cwd),
+                 exit_status = ?5,
+                 updated_at = ?6
+             where id = ?1 and state = ?7",
             params![
                 session_id,
                 session_state_to_str(SessionState::Closed),
@@ -118,10 +141,21 @@ impl Store {
                 last_cwd,
                 exit_status,
                 updated_at,
+                session_state_to_str(SessionState::Live),
             ],
         )?;
 
         if changed == 0 {
+            let exists = self.conn.query_row(
+                "select 1 from sessions where id = ?1",
+                params![session_id],
+                |_| Ok(()),
+            );
+
+            if exists.is_ok() {
+                return Ok(());
+            }
+
             return Err(rusqlite::Error::QueryReturnedNoRows);
         }
 
