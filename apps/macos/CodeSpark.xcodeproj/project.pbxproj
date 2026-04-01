@@ -1,0 +1,963 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0294F8F39ABCFF8882C78A35 /* CoreFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6DE9AB7891F06F27BFD3EC90 /* CoreFoundation.framework */; };
+		0453F36CBDA670D2FF405A59 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B3EF915455EE5A5AEFAE01 /* AppModelTests.swift */; };
+		05775B2732E4FEE5DF603358 /* ProjectFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA1F37A49DC57DD259D7C23 /* ProjectFlowTests.swift */; };
+		3D0FEFA3FAB6C31107E3A49C /* WorkspaceSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */; };
+		07F78497934AA2ABB909879A /* HookEventProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 813E0BA18FE27147BC9B017D /* HookEventProcessor.swift */; };
+		2CE4832E1EECF0838626509C /* KeyEventRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EBC0F80B881E43ADC44ABFA /* KeyEventRouter.swift */; };
+		9ED695B19FC93D927CBF1CBD /* KeyEventRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */; };
+		B4F28A6E1D93C7520EAF6D91 /* UIVerificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */; };
+		0F224C4752D7879585179923 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1981A49E44F4D3FD21B52B2F /* main.swift */; };
+		127138BC65ACF5F05A0DD540 /* TerminalSurfaceHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D401BB4E2423695AD5030BA7 /* TerminalSurfaceHostView.swift */; };
+		17F6D4887541BEBCDD9EBD85 /* TerminalFontSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */; };
+		296B053DAC2476A9C82A1570 /* AddWorktreeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 787ED7070EA378E8B9A0199D /* AddWorktreeSheet.swift */; };
+		2A53F0D0BC3764E0C66B0969 /* TerminalHostProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FDED25D7FAF92C05A934D97 /* TerminalHostProtocol.swift */; };
+		2AD588B127E8EA9EA6EBD176 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CCF0F453E12289D6DA055C7A /* Assets.xcassets */; };
+		3389CBD887323FCBA7DD452F /* MockTerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48CA429791ED61F383243326 /* MockTerminalHost.swift */; };
+		366A365CFA1EFA718DEF53C6 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13C9EBA2F1A781BC47810CD2 /* SidebarView.swift */; };
+		3F0129AAAF55357541A4D8B6 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68D431120939D317364A97A9 /* CoreGraphics.framework */; };
+		47E722B3A80D8F6EA4095FAA /* SessionTabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */; };
+		4A72F1CFFEF80585ED500C3F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E88E37B7F37CF55D219D6B /* SettingsView.swift */; };
+		4E5838C30942E3A4EAC8B3B2 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 17158E6BF62F75313B1E9B2F /* Metal.framework */; };
+		4F7109283E67CEE1A8CA7425 /* GhosttyTerminalSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF23B602753F8B2AC6D2D29 /* GhosttyTerminalSurfaceView.swift */; };
+		5066F54CBC80078498D6B71E /* CodeSparkWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E0D94021E6A37AA34942EED /* CodeSparkWindow.swift */; };
+		55DF7F1F76B8385AE01FBEB5 /* CodeSparkUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1E03959DA8A839A6A0BDA5 /* CodeSparkUITests.swift */; };
+		566296EC328127177468735C /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D4B27F8AE7CBF0B33461523 /* AppModel.swift */; };
+		5A9644496F341ACE93AF9035 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7DA64F8FB306B85441226CB5 /* AppKit.framework */; };
+		60C7CF3D0995795AD79893D3 /* GitWorktreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982886C18B94884FEA504409 /* GitWorktreeService.swift */; };
+		63F552917CA547901266483B /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3450FDDB010612C39DC6A6B /* OnboardingView.swift */; };
+		6EDDCB3536F1F90C00DEC640 /* GhosttyKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E11516437F9C0FF1FF85D2DE /* GhosttyKit.xcframework */; };
+		8434723ACD950CD31779E3C5 /* NoOpTerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE1DCBDAC0F1AD453524CED /* NoOpTerminalHost.swift */; };
+		8562620D298BE43C1FD7FF4F /* MainContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE51452DABDDDB623C9F8A37 /* MainContentView.swift */; };
+		99172E1EB5C2AE4793F3C31E /* ProjectCoreClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63111BBE479AA199E252A364 /* ProjectCoreClient.swift */; };
+		A014AF3F565FAEE68A6AF58D /* GhosttyRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B66760C324727703F07319 /* GhosttyRuntime.swift */; };
+		A1A3C945D732C2265CE7F237 /* GitBranchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C84785B7B190829BA72AF822 /* GitBranchService.swift */; };
+		A3C9A10ACAD571C82C1DCB74 /* MockProjectCoreClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C1F099F0619FDF11DD53CF /* MockProjectCoreClient.swift */; };
+		A8AC8F45878B94C9B42EF42E /* CoreText.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18CA500C962BD0EB2F45C89C /* CoreText.framework */; };
+		ADC7C90A0E6B40786204C136 /* GhosttyTerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6465D8D71A356DB935A2D94C /* GhosttyTerminalHost.swift */; };
+		BA5F43C11DAFD8871379D34B /* codespark-hook in Resources */ = {isa = PBXBuildFile; fileRef = 89EFB0B5A4636EDF3FFF91CB /* codespark-hook */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C32074958E57BD4DEAFFCCC1 /* AppModel+Monitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6AB5E91D161AAA64F9501C4 /* AppModel+Monitor.swift */; };
+		C99241FBDBBE4B339BFDFFBC /* TerminalHostFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */; };
+		D6FB9049A77D020BD711EB57 /* HookSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A611C18C82E4858E7E1A2B3 /* HookSocketServer.swift */; };
+		DBD9D0371990E75C385225FB /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 66BAAF4E673EE8BBBAA95CF7 /* Carbon.framework */; };
+		DD3E928B9A32C6150663F8D8 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6E640D049F79763B0863CD21 /* QuartzCore.framework */; };
+		DDD0640824A174AFD49933F8 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 85F9E2DCA6D0CF00B744A92C /* IOKit.framework */; };
+		E0A153DE5FCE17D9559AC0C3 /* ProjectViewData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 372FF5235CD476B7A3D7D120 /* ProjectViewData.swift */; };
+		E1275E7403FDD3DEE3FB06A2 /* CodeSparkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CCE58232FA2D383F208923 /* CodeSparkApp.swift */; };
+		E898DEED2F56E2BA70A0166F /* StorageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32DD666C1E320049CFEF78CE /* StorageKeys.swift */; };
+		E8CF80B13D9BFCC8278965D6 /* SessionSidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */; };
+		EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */; };
+		EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1188AFD5C69D085D60330D02 /* AppTheme.swift */; };
+		F42B900FB3E9710ABADC4D48 /* AppModel+Hook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5130A58E2FC5881608127D41 /* AppModel+Hook.swift */; };
+		F47361B02296F2A523F06A08 /* ClaudeHooksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */; };
+		552061F050EC181BD64E2449 /* SSHConnectionInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */; };
+		0EEC708F84CF823A8E360EC4 /* NewSSHProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */; };
+		7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */; };
+		450EF5449C0B78E86452B863 /* SSHIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */; };
+		93FAA0C0CD93FC076C934EB3 /* ClipboardImageHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257D067859E4ABC83E423AF3 /* ClipboardImageHandler.swift */; };
+		9F862F9EEFF5775836F6DA22 /* ClipboardImageHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CF9045C1A9AED8862C73FD /* ClipboardImageHandlerTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		41377E75767FA521E141E882 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1DB8162BC007CAA3AE103925 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2263AD2F95218B1DF797CA6C;
+			remoteInfo = CodeSpark;
+		};
+		4B7D860ED7239D33360EBA8B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1DB8162BC007CAA3AE103925 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9F1ECF6F384D1FB661B8D7D2;
+			remoteInfo = "codespark-hook";
+		};
+		E343C6367A850C12BC39CBBF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1DB8162BC007CAA3AE103925 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2263AD2F95218B1DF797CA6C;
+			remoteInfo = CodeSpark;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0D1E03959DA8A839A6A0BDA5 /* CodeSparkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSparkUITests.swift; sourceTree = "<group>"; };
+		1188AFD5C69D085D60330D02 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
+		11CCE58232FA2D383F208923 /* CodeSparkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSparkApp.swift; sourceTree = "<group>"; };
+		13C9EBA2F1A781BC47810CD2 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		17158E6BF62F75313B1E9B2F /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+		18CA500C962BD0EB2F45C89C /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
+		1981A49E44F4D3FD21B52B2F /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostFactoryTests.swift; sourceTree = "<group>"; };
+		23C1F099F0619FDF11DD53CF /* MockProjectCoreClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockProjectCoreClient.swift; sourceTree = "<group>"; };
+		2E0D94021E6A37AA34942EED /* CodeSparkWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSparkWindow.swift; sourceTree = "<group>"; };
+		32DD666C1E320049CFEF78CE /* StorageKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageKeys.swift; sourceTree = "<group>"; };
+		34B3EF915455EE5A5AEFAE01 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
+		372FF5235CD476B7A3D7D120 /* ProjectViewData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectViewData.swift; sourceTree = "<group>"; };
+		381AF8F6420D8B1CC3F1D29A /* CodeSpark-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CodeSpark-Bridging-Header.h"; sourceTree = "<group>"; };
+		3A611C18C82E4858E7E1A2B3 /* HookSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HookSocketServer.swift; sourceTree = "<group>"; };
+		48CA429791ED61F383243326 /* MockTerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTerminalHost.swift; sourceTree = "<group>"; };
+		5EBC0F80B881E43ADC44ABFA /* KeyEventRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyEventRouter.swift; sourceTree = "<group>"; };
+		9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyEventRouterTests.swift; sourceTree = "<group>"; };
+		7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIVerificationTests.swift; sourceTree = "<group>"; };
+		5130A58E2FC5881608127D41 /* AppModel+Hook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Hook.swift"; sourceTree = "<group>"; };
+		61B66760C324727703F07319 /* GhosttyRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyRuntime.swift; sourceTree = "<group>"; };
+		63111BBE479AA199E252A364 /* ProjectCoreClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCoreClient.swift; sourceTree = "<group>"; };
+		6465D8D71A356DB935A2D94C /* GhosttyTerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyTerminalHost.swift; sourceTree = "<group>"; };
+		6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTabBarView.swift; sourceTree = "<group>"; };
+		66BAAF4E673EE8BBBAA95CF7 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
+		68D431120939D317364A97A9 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		6D4B27F8AE7CBF0B33461523 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		6DE9AB7891F06F27BFD3EC90 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
+		6E640D049F79763B0863CD21 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		787ED7070EA378E8B9A0199D /* AddWorktreeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWorktreeSheet.swift; sourceTree = "<group>"; };
+		7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHooksManager.swift; sourceTree = "<group>"; };
+		7D0E3CC9722D71DAF836505B /* CodeSparkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodeSparkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		7DA64F8FB306B85441226CB5 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
+		813E0BA18FE27147BC9B017D /* HookEventProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HookEventProcessor.swift; sourceTree = "<group>"; };
+		84115AE2AA0AA4FE8E41BE9A /* CodeSpark.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeSpark.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		85F9E2DCA6D0CF00B744A92C /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
+		89EFB0B5A4636EDF3FFF91CB /* codespark-hook */ = {isa = PBXFileReference; includeInIndex = 0; path = "codespark-hook"; sourceTree = BUILT_PRODUCTS_DIR; };
+		8CA1F37A49DC57DD259D7C23 /* ProjectFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFlowTests.swift; sourceTree = "<group>"; };
+		1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSelectionTests.swift; sourceTree = "<group>"; };
+		982886C18B94884FEA504409 /* GitWorktreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitWorktreeService.swift; sourceTree = "<group>"; };
+		9FDED25D7FAF92C05A934D97 /* TerminalHostProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostProtocol.swift; sourceTree = "<group>"; };
+		A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSidebarRow.swift; sourceTree = "<group>"; };
+		B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalFontSettings.swift; sourceTree = "<group>"; };
+		BAEC4795D26203BF922A48FF /* CodeSparkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodeSparkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		BDF23B602753F8B2AC6D2D29 /* GhosttyTerminalSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyTerminalSurfaceView.swift; sourceTree = "<group>"; };
+		BE51452DABDDDB623C9F8A37 /* MainContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainContentView.swift; sourceTree = "<group>"; };
+		C84785B7B190829BA72AF822 /* GitBranchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitBranchService.swift; sourceTree = "<group>"; };
+		CBE1DCBDAC0F1AD453524CED /* NoOpTerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoOpTerminalHost.swift; sourceTree = "<group>"; };
+		CCF0F453E12289D6DA055C7A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		D401BB4E2423695AD5030BA7 /* TerminalSurfaceHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurfaceHostView.swift; sourceTree = "<group>"; };
+		E11516437F9C0FF1FF85D2DE /* GhosttyKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = GhosttyKit.xcframework; path = ../../vendor/ghostty/macos/GhosttyKit.xcframework; sourceTree = "<group>"; };
+		E2E88E37B7F37CF55D219D6B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F3450FDDB010612C39DC6A6B /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostFactory.swift; sourceTree = "<group>"; };
+		F6AB5E91D161AAA64F9501C4 /* AppModel+Monitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Monitor.swift"; sourceTree = "<group>"; };
+		8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionInfo.swift; sourceTree = "<group>"; };
+		A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSSHProjectSheet.swift; sourceTree = "<group>"; };
+		105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionInfoTests.swift; sourceTree = "<group>"; };
+		A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHIntegrationTests.swift; sourceTree = "<group>"; };
+		257D067859E4ABC83E423AF3 /* ClipboardImageHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardImageHandler.swift; sourceTree = "<group>"; };
+		82CF9045C1A9AED8862C73FD /* ClipboardImageHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardImageHandlerTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		34E16C43B362353B10DC387C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6EDDCB3536F1F90C00DEC640 /* GhosttyKit.xcframework in Frameworks */,
+				5A9644496F341ACE93AF9035 /* AppKit.framework in Frameworks */,
+				DBD9D0371990E75C385225FB /* Carbon.framework in Frameworks */,
+				0294F8F39ABCFF8882C78A35 /* CoreFoundation.framework in Frameworks */,
+				3F0129AAAF55357541A4D8B6 /* CoreGraphics.framework in Frameworks */,
+				A8AC8F45878B94C9B42EF42E /* CoreText.framework in Frameworks */,
+				DDD0640824A174AFD49933F8 /* IOKit.framework in Frameworks */,
+				4E5838C30942E3A4EAC8B3B2 /* Metal.framework in Frameworks */,
+				DD3E928B9A32C6150663F8D8 /* QuartzCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		003142DBC9E0BC6D466F64AA /* Bridge */ = {
+			isa = PBXGroup;
+			children = (
+				381AF8F6420D8B1CC3F1D29A /* CodeSpark-Bridging-Header.h */,
+				63111BBE479AA199E252A364 /* ProjectCoreClient.swift */,
+			);
+			path = Bridge;
+			sourceTree = "<group>";
+		};
+		329CE2F0B9AFB2180562F875 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7DA64F8FB306B85441226CB5 /* AppKit.framework */,
+				66BAAF4E673EE8BBBAA95CF7 /* Carbon.framework */,
+				6DE9AB7891F06F27BFD3EC90 /* CoreFoundation.framework */,
+				68D431120939D317364A97A9 /* CoreGraphics.framework */,
+				18CA500C962BD0EB2F45C89C /* CoreText.framework */,
+				E11516437F9C0FF1FF85D2DE /* GhosttyKit.xcframework */,
+				85F9E2DCA6D0CF00B744A92C /* IOKit.framework */,
+				17158E6BF62F75313B1E9B2F /* Metal.framework */,
+				6E640D049F79763B0863CD21 /* QuartzCore.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		3599B143BF621B59F3A84E65 /* CLI */ = {
+			isa = PBXGroup;
+			children = (
+				1981A49E44F4D3FD21B52B2F /* main.swift */,
+			);
+			path = CLI;
+			sourceTree = "<group>";
+		};
+		38FB42A4FD142433C498A9F1 /* CodeSparkTests */ = {
+			isa = PBXGroup;
+			children = (
+				34B3EF915455EE5A5AEFAE01 /* AppModelTests.swift */,
+				82CF9045C1A9AED8862C73FD /* ClipboardImageHandlerTests.swift */,
+				9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */,
+				105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */,
+				A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */,
+				23C1F099F0619FDF11DD53CF /* MockProjectCoreClient.swift */,
+				48CA429791ED61F383243326 /* MockTerminalHost.swift */,
+				8CA1F37A49DC57DD259D7C23 /* ProjectFlowTests.swift */,
+				1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */,
+				7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */,
+				1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */,
+			);
+			path = CodeSparkTests;
+			sourceTree = "<group>";
+		};
+		5ABBBB834E3488F442614934 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */,
+				C84785B7B190829BA72AF822 /* GitBranchService.swift */,
+				8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */,
+				982886C18B94884FEA504409 /* GitWorktreeService.swift */,
+				813E0BA18FE27147BC9B017D /* HookEventProcessor.swift */,
+				3A611C18C82E4858E7E1A2B3 /* HookSocketServer.swift */,
+				B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		5F6A9769AA74128980885847 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				787ED7070EA378E8B9A0199D /* AddWorktreeSheet.swift */,
+				A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */,
+				BE51452DABDDDB623C9F8A37 /* MainContentView.swift */,
+				F3450FDDB010612C39DC6A6B /* OnboardingView.swift */,
+				A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */,
+				6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */,
+				E2E88E37B7F37CF55D219D6B /* SettingsView.swift */,
+				13C9EBA2F1A781BC47810CD2 /* SidebarView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		777DD9D97F6579E6E22A4061 /* CodeSpark */ = {
+			isa = PBXGroup;
+			children = (
+				CCF0F453E12289D6DA055C7A /* Assets.xcassets */,
+				BC41946E808A6117628F00FC /* App */,
+				003142DBC9E0BC6D466F64AA /* Bridge */,
+				9E29F8DC1C08077549415B5F /* Models */,
+				5ABBBB834E3488F442614934 /* Services */,
+				93D62B78FDD0C92C09A47DC1 /* Terminal */,
+				FE13F7FAAC8D3F5153388CD2 /* Theme */,
+				5F6A9769AA74128980885847 /* Views */,
+			);
+			path = CodeSpark;
+			sourceTree = "<group>";
+		};
+		93D62B78FDD0C92C09A47DC1 /* Terminal */ = {
+			isa = PBXGroup;
+			children = (
+				257D067859E4ABC83E423AF3 /* ClipboardImageHandler.swift */,
+				61B66760C324727703F07319 /* GhosttyRuntime.swift */,
+				6465D8D71A356DB935A2D94C /* GhosttyTerminalHost.swift */,
+				BDF23B602753F8B2AC6D2D29 /* GhosttyTerminalSurfaceView.swift */,
+				5EBC0F80B881E43ADC44ABFA /* KeyEventRouter.swift */,
+				CBE1DCBDAC0F1AD453524CED /* NoOpTerminalHost.swift */,
+				F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */,
+				9FDED25D7FAF92C05A934D97 /* TerminalHostProtocol.swift */,
+				D401BB4E2423695AD5030BA7 /* TerminalSurfaceHostView.swift */,
+			);
+			path = Terminal;
+			sourceTree = "<group>";
+		};
+		9E29F8DC1C08077549415B5F /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				6D4B27F8AE7CBF0B33461523 /* AppModel.swift */,
+				5130A58E2FC5881608127D41 /* AppModel+Hook.swift */,
+				F6AB5E91D161AAA64F9501C4 /* AppModel+Monitor.swift */,
+				372FF5235CD476B7A3D7D120 /* ProjectViewData.swift */,
+				32DD666C1E320049CFEF78CE /* StorageKeys.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		BC41946E808A6117628F00FC /* App */ = {
+			isa = PBXGroup;
+			children = (
+				11CCE58232FA2D383F208923 /* CodeSparkApp.swift */,
+				2E0D94021E6A37AA34942EED /* CodeSparkWindow.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		CDA365527906F6E3AAF82D8F /* CodeSparkUITests */ = {
+			isa = PBXGroup;
+			children = (
+				0D1E03959DA8A839A6A0BDA5 /* CodeSparkUITests.swift */,
+			);
+			path = CodeSparkUITests;
+			sourceTree = "<group>";
+		};
+		D613F442A461099B9892C00B = {
+			isa = PBXGroup;
+			children = (
+				3599B143BF621B59F3A84E65 /* CLI */,
+				777DD9D97F6579E6E22A4061 /* CodeSpark */,
+				38FB42A4FD142433C498A9F1 /* CodeSparkTests */,
+				CDA365527906F6E3AAF82D8F /* CodeSparkUITests */,
+				329CE2F0B9AFB2180562F875 /* Frameworks */,
+				F32C6BF7E0302B619E889A2C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		F32C6BF7E0302B619E889A2C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				89EFB0B5A4636EDF3FFF91CB /* codespark-hook */,
+				84115AE2AA0AA4FE8E41BE9A /* CodeSpark.app */,
+				BAEC4795D26203BF922A48FF /* CodeSparkTests.xctest */,
+				7D0E3CC9722D71DAF836505B /* CodeSparkUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		FE13F7FAAC8D3F5153388CD2 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				1188AFD5C69D085D60330D02 /* AppTheme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		2263AD2F95218B1DF797CA6C /* CodeSpark */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A25EA5C181B08C9B27615552 /* Build configuration list for PBXNativeTarget "CodeSpark" */;
+			buildPhases = (
+				299E152222E9766898AB81DB /* Build workspace-core (Zig) */,
+				EFA6F634A150CF143B22983A /* Sources */,
+				C17E8870134F39DF9DFB380A /* Resources */,
+				34E16C43B362353B10DC387C /* Frameworks */,
+				95E5C0B0987A8AF10E817869 /* Bundle codespark-hook CLI */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D6EE85430A4DA6B4350F1BED /* PBXTargetDependency */,
+			);
+			name = CodeSpark;
+			packageProductDependencies = (
+			);
+			productName = CodeSpark;
+			productReference = 84115AE2AA0AA4FE8E41BE9A /* CodeSpark.app */;
+			productType = "com.apple.product-type.application";
+		};
+		59B016AE83A719EC5EF1DDC2 /* CodeSparkTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 12A6C285147BEE0C3EC7322F /* Build configuration list for PBXNativeTarget "CodeSparkTests" */;
+			buildPhases = (
+				114EAA907523A0E4B4B1620E /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DAFF45537389257A88081F68 /* PBXTargetDependency */,
+			);
+			name = CodeSparkTests;
+			packageProductDependencies = (
+			);
+			productName = CodeSparkTests;
+			productReference = BAEC4795D26203BF922A48FF /* CodeSparkTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		9F1ECF6F384D1FB661B8D7D2 /* codespark-hook */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C857333AB977A2B41E4C130D /* Build configuration list for PBXNativeTarget "codespark-hook" */;
+			buildPhases = (
+				7BAD6E277FF085EB6D187675 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "codespark-hook";
+			packageProductDependencies = (
+			);
+			productName = "codespark-hook";
+			productReference = 89EFB0B5A4636EDF3FFF91CB /* codespark-hook */;
+			productType = "com.apple.product-type.tool";
+		};
+		F06C3E5A2662563413BCCFFA /* CodeSparkUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 92F60A2738FF71C880C0FA72 /* Build configuration list for PBXNativeTarget "CodeSparkUITests" */;
+			buildPhases = (
+				E028E73F09DE203B35788F5A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				198B556D0EFE83525A47F679 /* PBXTargetDependency */,
+			);
+			name = CodeSparkUITests;
+			packageProductDependencies = (
+			);
+			productName = CodeSparkUITests;
+			productReference = 7D0E3CC9722D71DAF836505B /* CodeSparkUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		1DB8162BC007CAA3AE103925 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					F06C3E5A2662563413BCCFFA = {
+						TestTargetID = 2263AD2F95218B1DF797CA6C;
+					};
+				};
+			};
+			buildConfigurationList = 63A4DCCEF31084F87FE186E2 /* Build configuration list for PBXProject "CodeSpark" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = D613F442A461099B9892C00B;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				2263AD2F95218B1DF797CA6C /* CodeSpark */,
+				59B016AE83A719EC5EF1DDC2 /* CodeSparkTests */,
+				F06C3E5A2662563413BCCFFA /* CodeSparkUITests */,
+				9F1ECF6F384D1FB661B8D7D2 /* codespark-hook */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C17E8870134F39DF9DFB380A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2AD588B127E8EA9EA6EBD176 /* Assets.xcassets in Resources */,
+				BA5F43C11DAFD8871379D34B /* codespark-hook in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		299E152222E9766898AB81DB /* Build workspace-core (Zig) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build workspace-core (Zig)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "export ZIG_GLOBAL_CACHE_DIR=\"$SRCROOT/../../libs/workspace-core/.zig-global-cache\"\nexport ZIG_LOCAL_CACHE_DIR=\"$SRCROOT/../../libs/workspace-core/.zig-cache\"\ncd \"$SRCROOT/../../libs/workspace-core\"\nif [ \"$CONFIGURATION\" = \"Release\" ]; then\n  zig build -Doptimize=ReleaseFast\nelse\n  zig build -Doptimize=Debug\nfi\n# Re-archive with Apple libtool to fix Zig archive alignment\nLIBPATH=\"zig-out/lib/libworkspace-core.a\"\nTMPDIR=$(mktemp -d)\ncd \"$TMPDIR\"\nar x \"$OLDPWD/$LIBPATH\"\nchmod 644 *.o\nlibtool -static -o \"$OLDPWD/$LIBPATH\" *.o\nrm -rf \"$TMPDIR\"\n";
+		};
+		95E5C0B0987A8AF10E817869 /* Bundle codespark-hook CLI */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle codespark-hook CLI";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "CLI_BIN=\"${BUILT_PRODUCTS_DIR}/codespark-hook\"\nDEST=\"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/bin\"\nif [ -f \"$CLI_BIN\" ]; then\n  mkdir -p \"$DEST\"\n  cp \"$CLI_BIN\" \"$DEST/codespark-hook\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		114EAA907523A0E4B4B1620E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0453F36CBDA670D2FF405A59 /* AppModelTests.swift in Sources */,
+				9F862F9EEFF5775836F6DA22 /* ClipboardImageHandlerTests.swift in Sources */,
+				9ED695B19FC93D927CBF1CBD /* KeyEventRouterTests.swift in Sources */,
+				7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */,
+				450EF5449C0B78E86452B863 /* SSHIntegrationTests.swift in Sources */,
+				A3C9A10ACAD571C82C1DCB74 /* MockProjectCoreClient.swift in Sources */,
+				3389CBD887323FCBA7DD452F /* MockTerminalHost.swift in Sources */,
+				05775B2732E4FEE5DF603358 /* ProjectFlowTests.swift in Sources */,
+				C99241FBDBBE4B339BFDFFBC /* TerminalHostFactoryTests.swift in Sources */,
+				B4F28A6E1D93C7520EAF6D91 /* UIVerificationTests.swift in Sources */,
+				3D0FEFA3FAB6C31107E3A49C /* WorkspaceSelectionTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7BAD6E277FF085EB6D187675 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0F224C4752D7879585179923 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E028E73F09DE203B35788F5A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55DF7F1F76B8385AE01FBEB5 /* CodeSparkUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EFA6F634A150CF143B22983A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				296B053DAC2476A9C82A1570 /* AddWorktreeSheet.swift in Sources */,
+				93FAA0C0CD93FC076C934EB3 /* ClipboardImageHandler.swift in Sources */,
+				F42B900FB3E9710ABADC4D48 /* AppModel+Hook.swift in Sources */,
+				C32074958E57BD4DEAFFCCC1 /* AppModel+Monitor.swift in Sources */,
+				566296EC328127177468735C /* AppModel.swift in Sources */,
+				EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */,
+				F47361B02296F2A523F06A08 /* ClaudeHooksManager.swift in Sources */,
+				E1275E7403FDD3DEE3FB06A2 /* CodeSparkApp.swift in Sources */,
+				5066F54CBC80078498D6B71E /* CodeSparkWindow.swift in Sources */,
+				A014AF3F565FAEE68A6AF58D /* GhosttyRuntime.swift in Sources */,
+				ADC7C90A0E6B40786204C136 /* GhosttyTerminalHost.swift in Sources */,
+				4F7109283E67CEE1A8CA7425 /* GhosttyTerminalSurfaceView.swift in Sources */,
+				A1A3C945D732C2265CE7F237 /* GitBranchService.swift in Sources */,
+				60C7CF3D0995795AD79893D3 /* GitWorktreeService.swift in Sources */,
+				07F78497934AA2ABB909879A /* HookEventProcessor.swift in Sources */,
+				D6FB9049A77D020BD711EB57 /* HookSocketServer.swift in Sources */,
+				2CE4832E1EECF0838626509C /* KeyEventRouter.swift in Sources */,
+				8562620D298BE43C1FD7FF4F /* MainContentView.swift in Sources */,
+				8434723ACD950CD31779E3C5 /* NoOpTerminalHost.swift in Sources */,
+				63F552917CA547901266483B /* OnboardingView.swift in Sources */,
+				99172E1EB5C2AE4793F3C31E /* ProjectCoreClient.swift in Sources */,
+				E0A153DE5FCE17D9559AC0C3 /* ProjectViewData.swift in Sources */,
+				E8CF80B13D9BFCC8278965D6 /* SessionSidebarRow.swift in Sources */,
+				47E722B3A80D8F6EA4095FAA /* SessionTabBarView.swift in Sources */,
+				4A72F1CFFEF80585ED500C3F /* SettingsView.swift in Sources */,
+				366A365CFA1EFA718DEF53C6 /* SidebarView.swift in Sources */,
+				0EEC708F84CF823A8E360EC4 /* NewSSHProjectSheet.swift in Sources */,
+				552061F050EC181BD64E2449 /* SSHConnectionInfo.swift in Sources */,
+				E898DEED2F56E2BA70A0166F /* StorageKeys.swift in Sources */,
+				17F6D4887541BEBCDD9EBD85 /* TerminalFontSettings.swift in Sources */,
+				EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */,
+				2A53F0D0BC3764E0C66B0969 /* TerminalHostProtocol.swift in Sources */,
+				127138BC65ACF5F05A0DD540 /* TerminalSurfaceHostView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		198B556D0EFE83525A47F679 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2263AD2F95218B1DF797CA6C /* CodeSpark */;
+			targetProxy = E343C6367A850C12BC39CBBF /* PBXContainerItemProxy */;
+		};
+		D6EE85430A4DA6B4350F1BED /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9F1ECF6F384D1FB661B8D7D2 /* codespark-hook */;
+			targetProxy = 4B7D860ED7239D33360EBA8B /* PBXContainerItemProxy */;
+		};
+		DAFF45537389257A88081F68 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2263AD2F95218B1DF797CA6C /* CodeSpark */;
+			targetProxy = 41377E75767FA521E141E882 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		1074C727312626FE0E50A6C1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.1;
+			};
+			name = Release;
+		};
+		64EAEB55DE9BF9B245AF335C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = CodeSpark;
+			};
+			name = Debug;
+		};
+		67622EE00067105B22DBC7A0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/../../libs/workspace-core/include",
+				);
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CodeSpark.app/Contents/MacOS/CodeSpark";
+			};
+			name = Release;
+		};
+		881BB3501816B0F5F60C039E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/../../libs/workspace-core/include",
+				);
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CodeSpark.app/Contents/MacOS/CodeSpark";
+			};
+			name = Debug;
+		};
+		8EDA015B8A5615CB34E1739F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../../vendor/ghostty/macos\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/../../libs/workspace-core/include",
+				);
+				INFOPLIST_KEY_CFBundleDisplayName = CodeSpark;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(SRCROOT)/../../libs/workspace-core/zig-out/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lworkspace-core",
+					"-lsqlite3",
+					"-lc++",
+				);
+				OTHER_SWIFT_FLAGS = (
+					"$(inherited)",
+					"-D",
+					GHOSTTY_FIRST,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.jinto.codespark.dev;
+				PRODUCT_NAME = CodeSpark;
+				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "CodeSpark/Bridge/CodeSpark-Bridging-Header.h";
+			};
+			name = Debug;
+		};
+		9F0B9C41EB9CCA36A139E525 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"../../vendor/ghostty/macos\"",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(SRCROOT)/../../libs/workspace-core/include",
+				);
+				INFOPLIST_KEY_CFBundleDisplayName = CodeSpark;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(SRCROOT)/../../libs/workspace-core/zig-out/lib",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lworkspace-core",
+					"-lsqlite3",
+					"-lc++",
+				);
+				OTHER_SWIFT_FLAGS = (
+					"$(inherited)",
+					"-D",
+					GHOSTTY_FIRST,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.jinto.codespark;
+				PRODUCT_NAME = CodeSpark;
+				SDKROOT = macosx;
+				SWIFT_OBJC_BRIDGING_HEADER = "CodeSpark/Bridge/CodeSpark-Bridging-Header.h";
+			};
+			name = Release;
+		};
+		C7007B5C437D630D3A4505DF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_NAME = "codespark-hook";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		DA0941C0E40DC8F89B381BE2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_NAME = "codespark-hook";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		DB2B304090C1CE840A98382E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.1;
+			};
+			name = Debug;
+		};
+		E2E8AE1AECBB378609ACC45E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = CodeSpark;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		12A6C285147BEE0C3EC7322F /* Build configuration list for PBXNativeTarget "CodeSparkTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				881BB3501816B0F5F60C039E /* Debug */,
+				67622EE00067105B22DBC7A0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		63A4DCCEF31084F87FE186E2 /* Build configuration list for PBXProject "CodeSpark" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DB2B304090C1CE840A98382E /* Debug */,
+				1074C727312626FE0E50A6C1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		92F60A2738FF71C880C0FA72 /* Build configuration list for PBXNativeTarget "CodeSparkUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				64EAEB55DE9BF9B245AF335C /* Debug */,
+				E2E8AE1AECBB378609ACC45E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A25EA5C181B08C9B27615552 /* Build configuration list for PBXNativeTarget "CodeSpark" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8EDA015B8A5615CB34E1739F /* Debug */,
+				9F0B9C41EB9CCA36A139E525 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C857333AB977A2B41E4C130D /* Build configuration list for PBXNativeTarget "codespark-hook" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DA0941C0E40DC8F89B381BE2 /* Debug */,
+				C7007B5C437D630D3A4505DF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 1DB8162BC007CAA3AE103925 /* Project object */;
+}

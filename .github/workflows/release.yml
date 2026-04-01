@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
+      - name: Cache GhosttyKit xcframework
+        id: ghostty-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor/ghostty/macos/GhosttyKit.xcframework
+          key: ghosttykit-relfast-${{ hashFiles('.ghostty-version') }}
+          restore-keys: ghosttykit-relfast-
+
+      - name: Build GhosttyKit (ReleaseFast)
+        if: steps.ghostty-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 https://github.com/ghostty-org/ghostty.git vendor/ghostty
+          cd vendor/ghostty
+          zig build -Doptimize=ReleaseFast -Demit-xcframework=true -Dxcframework-target=native -Demit-macos-app=false
+
+      - name: Clone Ghostty headers (cache hit)
+        if: steps.ghostty-cache.outputs.cache-hit == 'true'
+        run: |
+          # Preserve cached xcframework, clone headers into temp, then merge
+          mv vendor/ghostty/macos/GhosttyKit.xcframework /tmp/ghosttykit-cached
+          rm -rf vendor/ghostty
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/ghostty-org/ghostty.git vendor/ghostty
+          cd vendor/ghostty
+          git sparse-checkout set include macos/Sources
+          # Restore cached xcframework
+          mv /tmp/ghosttykit-cached macos/GhosttyKit.xcframework
+
+      - name: Setup signing keychain
+        env:
+          CERT_BASE64: ${{ secrets.DEVELOPER_ID_CERT_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.DEVELOPER_ID_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/signing.keychain-db
+          security create-keychain -p "" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "" $KEYCHAIN_PATH
+          echo "$CERT_BASE64" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security import $RUNNER_TEMP/cert.p12 -k $KEYCHAIN_PATH -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" $KEYCHAIN_PATH
+          security list-keychains -d user -s $KEYCHAIN_PATH login.keychain-db
+
+      - name: Build Release
+        run: |
+          xcodebuild -project apps/macos/CodeSpark.xcodeproj \
+            -scheme CodeSpark \
+            -configuration Release \
+            -derivedDataPath build \
+            -destination "platform=macOS,arch=arm64" \
+            CODE_SIGN_IDENTITY="Developer ID Application: JAE KWON PARK (QN9P7KSSMU)" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGN_STYLE=Manual \
+            DEVELOPMENT_TEAM=QN9P7KSSMU \
+            ENABLE_HARDENED_RUNTIME=YES \
+            OTHER_CODE_SIGN_FLAGS="--options=runtime --timestamp" \
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+            build
+
+      - name: Notarize app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          APP_PATH="build/Build/Products/Release/CodeSpark.app"
+          ditto -c -k --keepParent "$APP_PATH" /tmp/CodeSpark.zip
+          SUBMIT_OUT=$(xcrun notarytool submit /tmp/CodeSpark.zip \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$TEAM_ID" \
+            --wait 2>&1) || true
+          echo "$SUBMIT_OUT"
+          SUBMISSION_ID=$(echo "$SUBMIT_OUT" | grep "id:" | head -1 | awk '{print $2}')
+          if echo "$SUBMIT_OUT" | grep -q "Invalid"; then
+            echo "--- Notarization log ---"
+            xcrun notarytool log "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_PASSWORD" \
+              --team-id "$TEAM_ID" || true
+            exit 1
+          fi
+          xcrun stapler staple "$APP_PATH"
+
+      - name: Create DMG
+        run: |
+          brew install create-dmg
+          APP_PATH="build/Build/Products/Release/CodeSpark.app"
+          create-dmg \
+            --volname "CodeSpark" \
+            --volicon "$APP_PATH/Contents/Resources/AppIcon.icns" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "CodeSpark.app" 150 185 \
+            --app-drop-link 450 185 \
+            --no-internet-enable \
+            "CodeSpark-${GITHUB_REF_NAME}.dmg" \
+            "$APP_PATH" || true
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: CodeSpark-*.dmg
+          generate_release_notes: true
+
+      - name: Cleanup keychain
+        if: always()
+        run: security delete-keychain $RUNNER_TEMP/signing.keychain-db 2>/dev/null || true

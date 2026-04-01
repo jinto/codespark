@@ -1,0 +1,109 @@
+# Tasks
+
+## M7: Project UX 개선 (실사용 피드백)
+
+- [x] **새 프로젝트 생성 위치** — 액티브 프로젝트 바로 아래에 삽입 (현재: 목록 끝에 추가)
+- [x] **닫기 확인 (Cmd+W)** — 터미널/프로젝트 닫을 때 confirm dialog 표시. Cmd+W가 현재 동작하지 않는 버그 수정 포함
+- [x] **닫힌 탭 복원 UX** — closed sessions를 하단에 모아두지 않고, 프로젝트를 다시 열 때 "이전 세션을 다시 열까요?" 프롬프트
+- [x] **자동 복원** — SSH 등 복원 가능한 세션은 프롬프트 없이 최대한 자동 복원
+
+## M9: 알림 시스템
+
+- [x] **사이드바 정렬** — Needs input 프로젝트를 상단으로 자동 정렬
+- [x] **사이드바 벨 아이콘** — unread count 뱃지
+- [x] **macOS 데스크톱 알림** — idle 전환 시 알림 (다른 프로젝트 보고 있을 때)
+- [x] **알림 스니펫** — 프로젝트 카드에 마지막 출력 요약
+
+## M10: 터미널 성능 + 너비 + Ctrl 키 수정
+
+- [x] **터미널 너비** — `convertToBacking`으로 physical pixels 전달 + `autoresizingMask` 추가
+- [x] **터미널 성능** — GhosttyKit ReleaseFast 빌드 (debug allocator 제거) + wakeup coalescing + run loop yield
+- [x] **Ctrl+C/D/Z** — `performKeyEquivalent` override + control char text 재계산 (공식 Ghostty 패턴)
+- [x] **비활성 세션** — opacity → `isHidden` 전환
+- [x] **Timer guard** — background 시 idle/git 타이머 skip
+- [x] **Running 상태 표시** — wakeup→tick 시 active session의 lastOutputTime 갱신, 사이드바에 Running/Idle 정확히 반영
+
+## M10.5: Workspace → Project 리네이밍
+
+- [x] **모델 리네이밍** — ProjectViewData.swift, 모든 Project* 타입
+- [x] **AppModel 리네이밍** — projects, selectedProjectID, 모든 메서드명
+- [x] **뷰 리네이밍** — SidebarView, MainContentView, CodeSparkApp의 변수명 + UI 텍스트
+- [x] **Zig/C 리네이밍** — project_service_*, project_core.h의 모든 타입/함수명, DB 테이블명
+- [x] **브릿지 리네이밍** — ProjectCoreClient, project_core.swift, C API 호출 전부 갱신
+- [x] **AppStorage 마이그레이션** — 키 변경 + 마이그레이션 코드 (기존 사용자 설정 보존)
+- [x] **문서 업데이트** — CLAUDE.md, TASKS.md, PRD.md
+
+## M10.7: 코드 리뷰 기반 리팩토링
+
+### Critical
+- [x] **DB 마이그레이션 시스템** — schema_version 테이블 + 버전별 ALTER TABLE 체인 (store.zig)
+- [x] **C API line_count 검증** — 범위 체크 추가, 비정상 값 방어 (c_api.zig)
+- [x] **ProjectCoreClient unsafe pointer 수정** — baseAddress 강제 언래핑 제거, 포인터 수명 보장
+
+### Major
+- [x] **AppModel 분리** — Extension 파일 분리: AppModel+Hook.swift (105줄), AppModel+Monitor.swift (90줄), AppModel.swift (511줄)
+- [x] **에러 삼킴 수정** — try? → do/catch + NSLog (AppModel 4곳)
+- [x] **세션 복구 코드 통합** — recoverSession(from:) 하나로 통합
+- [x] **프로젝트 닫기/삭제 중복 제거** — teardownProject(id:) 공통 함수 추출
+- [x] **타임라인 이벤트 에러 처리** — catch {} → std.log.warn (store.zig 6곳)
+
+### Design
+- [x] **Hook 시스템 분리** — HookEventProcessor 순수 로직 타입 추출, AppModel은 결과만 적용
+- [x] **AppStorage 키 상수화** — StorageKeys enum으로 8개 키 상수화
+- [x] **비즈니스 로직 Zig 이동** — 미사용 모델 삭제, findProjectByCwd DB 쿼리 추가, restore.zig 삭제
+
+## M11: Project = 폴더 경로 단순화
+
+- [x] **Zig/C: DB 마이그레이션 v2** — path, transport 컬럼 추가, 노트/복원 관련 코드 삭제
+- [x] **Swift Bridge** — ProjectViewData/ProjectCoreClient 변경, 삭제된 타입/메서드 정리
+- [x] **AppModel 정리** — closedSessions, noteDraft, recoveryActions 등 삭제, createProject(path:transport:)
+- [x] **Views 정리** — 복원 프롬프트/노트 UI 삭제, reopenLastClosedSession 메뉴 삭제
+- [x] **테스트 업데이트** — RecoveryActionsTests 삭제, 기존 테스트 조정
+- [x] **문서 업데이트** — CLAUDE.md, PRD.md
+
+## M12: Project > Workspace > Terminal
+
+- [x] **Workspace 계층** — GitWorktreeService로 worktree 자동 발견, 3레벨 사이드바 (Project > Workspace > Terminal)
+- [x] **세션 그루핑** — session.initial_cwd 기반 workspace 매칭, 단일 workspace 시 플래튼
+- [x] **workspace 경로 터미널** — newSession()이 $HOME 대신 workspace 경로에서 열림
+- [x] **worktree 관리 UI** — Add Worktree 시트 (.worktrees/<name>/) + Remove Worktree context menu
+- [ ] **내장 Diff 뷰어** — 프로젝트 내 코드 변경사항 검토 (git diff 시각화)
+
+## M12.1: Workspace-First Sidebar
+
+### Model Layer
+- [x] **groupSessions 항상 반환** — 단일 worktree에서도 workspace 반환 (guard 제거). 테스트: 단일 worktree 프로젝트에서 workspaces.count == 1
+- [x] **workspaceSelectedSessions 추가** — AppModel에 [workspacePath: sessionID] 딕셔너리 추가. 테스트: workspace 전환 시 각각 다른 selectedSession 유지
+- [x] **activeSessionID computed** — getter: workspaceSelectedSessions[activeWorkspacePath], setter: 역방향 저장. 테스트: 기존 ProjectFlowTests 전부 통과
+- [x] **세션 닫기 fallback** — selected session 닫히면 같은 workspace의 다른 세션 자동 선택. 테스트: 선택된 세션 닫기 → 같은 workspace의 남은 세션 선택됨
+
+### Sidebar Redesign
+- [x] **ProjectSidebarRow 그룹 스타일** — 확장/축소 가능한 그룹 헤더로 변경 (핫키 제거). 테스트: 빌드 + 렌더링 확인
+- [x] **WorkspaceSidebarRow 주인공** — active(●)/inactive(○) 상태, 브랜치명 강조. 테스트: 터미널 유무에 따른 상태 표시
+- [x] **핫키 overlay** — Cmd 홀드 시 active workspace에 z-index overlay로 ⌘1~⌘9 표시 (레이아웃 불변). 테스트: overlay 표시 전후 parent frame 동일
+
+### Hotkey Routing
+- [x] **Cmd+N workspace 전환** — CodeSparkApp의 Cmd+1~9를 active workspace 기반으로 변경. 테스트: Cmd+1 → 첫 번째 active workspace의 selected terminal 활성화
+
+## M12.5: SSH 원격 세션 상태 파악
+
+- [ ] **SSH 소켓 포워딩** — CodeSpark 터미널에서 SSH 접속 시 Unix 소켓을 `-R` 옵션으로 원격에 자동 포워딩, 원격에 경량 codespark-hook 배포
+- [ ] **PTY 출력 파싱 대안** — hook 없이 터미널 출력 패턴 분석으로 Claude Code 상태 감지 (대기/실행/완료)
+- [ ] **원격 상태 미지원 표시** — SSH 세션에서 hooks 미작동 시 사이드바에 "Remote (no hooks)" 표시
+
+## M13: 외부 통합
+
+- [ ] **포트 모니터링** — 프로젝트별 활성 포트 감지 및 표시
+- [ ] **앱 내 브라우저** — 활성 포트의 웹 서비스를 인앱 프리뷰
+
+## M14: 프로젝트 자동화
+
+- [ ] **프리셋** — 터미널 설정(셸, cwd, 초기 명령어)을 프리셋으로 저장/재사용
+- [ ] **설정/해제 스크립트** — 프로젝트 생성/삭제 시 자동 실행되는 스크립트 (.codespark/setup.sh, teardown.sh)
+- [ ] **크로스 프로젝트 검색** — 모든 열린 프로젝트의 터미널 출력을 한번에 검색
+
+## M15: 다중 에이전트 지원
+
+- [ ] **에이전트 타입 감지** — 터미널에서 실행 중인 AI CLI 종류 자동 감지 (Claude Code, Codex, Gemini CLI 등)
+- [ ] **에이전트별 상태 표시** — 각 에이전트의 실행 상태를 사이드바에 아이콘으로 구분
+- [ ] **에이전트 대시보드** — 모든 에이전트의 상태를 한 화면에서 모니터링

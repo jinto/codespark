@@ -1,0 +1,16 @@
+/.worktrees/
+/.superpowers/
+/target
+/.build
+/DerivedData
+/.swiftpm
+/apps/macos/StatefulTerminal.xcodeproj
+/vendor/
+/libs/workspace-core/.zig-cache/
+/libs/workspace-core/.zig-global-cache/
+/libs/workspace-core/zig-out/
+/libs/workspace-core/vendor/
+*.profraw
+/.omc/
+apps/macos/.omc/
+apps/macos/build/

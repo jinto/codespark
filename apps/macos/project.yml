@@ -1,0 +1,115 @@
+name: CodeSpark
+options:
+  minimumXcodeGenVersion: 2.38.0
+settings:
+  base:
+    SWIFT_VERSION: 5.10
+targets:
+  CodeSpark:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - CodeSpark
+    preBuildScripts:
+      - name: Build workspace-core (Zig)
+        basedOnDependencyAnalysis: false
+        script: |
+          export ZIG_GLOBAL_CACHE_DIR="$SRCROOT/../../libs/workspace-core/.zig-global-cache"
+          export ZIG_LOCAL_CACHE_DIR="$SRCROOT/../../libs/workspace-core/.zig-cache"
+          cd "$SRCROOT/../../libs/workspace-core"
+          if [ "$CONFIGURATION" = "Release" ]; then
+            zig build -Doptimize=ReleaseFast
+          else
+            zig build -Doptimize=Debug
+          fi
+          # Re-archive with Apple libtool to fix Zig archive alignment
+          LIBPATH="zig-out/lib/libworkspace-core.a"
+          TMPDIR=$(mktemp -d)
+          cd "$TMPDIR"
+          ar x "$OLDPWD/$LIBPATH"
+          chmod 644 *.o
+          libtool -static -o "$OLDPWD/$LIBPATH" *.o
+          rm -rf "$TMPDIR"
+    postBuildScripts:
+      - name: Bundle codespark-hook CLI
+        basedOnDependencyAnalysis: false
+        script: |
+          CLI_BIN="${BUILT_PRODUCTS_DIR}/codespark-hook"
+          DEST="${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/bin"
+          if [ -f "$CLI_BIN" ]; then
+            mkdir -p "$DEST"
+            cp "$CLI_BIN" "$DEST/codespark-hook"
+          fi
+    dependencies:
+      - target: codespark-hook
+      - framework: ../../vendor/ghostty/macos/GhosttyKit.xcframework
+        embed: false
+      - sdk: AppKit.framework
+      - sdk: Carbon.framework
+      - sdk: CoreFoundation.framework
+      - sdk: CoreGraphics.framework
+      - sdk: CoreText.framework
+      - sdk: IOKit.framework
+      - sdk: Metal.framework
+      - sdk: QuartzCore.framework
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jinto.codespark
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: CodeSpark
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/../../libs/workspace-core/include
+        LIBRARY_SEARCH_PATHS:
+          - $(SRCROOT)/../../libs/workspace-core/zig-out/lib
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lworkspace-core
+          - -lsqlite3
+          - -lc++
+        OTHER_SWIFT_FLAGS:
+          - $(inherited)
+          - -D
+          - GHOSTTY_FIRST
+        SWIFT_OBJC_BRIDGING_HEADER: CodeSpark/Bridge/CodeSpark-Bridging-Header.h
+      configs:
+        Debug:
+          PRODUCT_NAME: CodeSpark Dev
+          PRODUCT_BUNDLE_IDENTIFIER: com.jinto.codespark.dev
+          INFOPLIST_KEY_CFBundleDisplayName: CodeSpark Dev
+        Release:
+          PRODUCT_NAME: CodeSpark
+  codespark-hook:
+    type: tool
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - CLI
+    settings:
+      base:
+        PRODUCT_NAME: codespark-hook
+        GENERATE_INFOPLIST_FILE: YES
+  CodeSparkTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - CodeSparkTests
+    dependencies:
+      - target: CodeSpark
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/../../libs/workspace-core/include
+  CodeSparkUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - CodeSparkUITests
+    dependencies:
+      - target: CodeSpark
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
