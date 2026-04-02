@@ -2,19 +2,67 @@ namespace workspace_ffi {};
 
 [Error]
 enum WorkspaceServiceError {
-    "OperationFailed",
+    "OpenStoreFailed",
+    "CreateWorkspaceFailed",
+    "UpdateWorkspaceNoteFailed",
+    "WorkspaceDetailFailed",
     "PoisonedState",
+};
+
+enum SessionTransport {
+    "Local",
+    "Ssh",
+};
+
+enum CloseReason {
+    "UserClosed",
+    "ProcessExited",
+    "SshDisconnected",
+    "AppCrashed",
+    "HostQuit",
+};
+
+dictionary TerminalGrid {
+    u16 cols;
+    u16 rows;
+    sequence<string> lines;
+};
+
+dictionary RestoreRecipe {
+    string launch_command;
+};
+
+dictionary WorkspaceSessionSummary {
+    string id;
+    string title;
+    SessionTransport transport;
+    string target_label;
+    string? last_cwd;
+    CloseReason close_reason;
+};
+
+dictionary WorkspaceClosedSessionSummary {
+    string id;
+    string title;
+    SessionTransport transport;
+    string target_label;
+    string? last_cwd;
+    CloseReason close_reason;
+    TerminalGrid snapshot_preview;
+    RestoreRecipe restore_recipe;
 };
 
 dictionary WorkspaceDetail {
     string id;
     string name;
     string note_body;
+    sequence<WorkspaceSessionSummary> live_sessions;
+    sequence<WorkspaceClosedSessionSummary> closed_sessions;
 };
 
 interface WorkspaceService {
     [Throws=WorkspaceServiceError]
-    constructor();
+    constructor(string store_path);
 
     [Throws=WorkspaceServiceError]
     string create_workspace(string name);

@@ -419,6 +419,22 @@ fileprivate final class UniffiHandleMap<T>: @unchecked Sendable {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
+    typealias FfiType = UInt16
+    typealias SwiftType = UInt16
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt16 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
@@ -508,10 +524,11 @@ open class WorkspaceService: WorkspaceServiceProtocol, @unchecked Sendable {
     public func uniffiCloneHandle() -> UInt64 {
         return try! rustCall { uniffi_workspace_ffi_fn_clone_workspaceservice(self.handle, $0) }
     }
-public convenience init()throws  {
+public convenience init(storePath: String)throws  {
     let handle =
         try rustCallWithError(FfiConverterTypeWorkspaceServiceError_lift) {
-    uniffi_workspace_ffi_fn_constructor_workspaceservice_new($0
+    uniffi_workspace_ffi_fn_constructor_workspaceservice_new(
+        FfiConverterString.lower(storePath),$0
     )
 }
     self.init(unsafeFromHandle: handle)
@@ -604,17 +621,207 @@ public func FfiConverterTypeWorkspaceService_lower(_ value: WorkspaceService) ->
 
 
 
+public struct RestoreRecipe: Equatable, Hashable {
+    public var launchCommand: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(launchCommand: String) {
+        self.launchCommand = launchCommand
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RestoreRecipe: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRestoreRecipe: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RestoreRecipe {
+        return
+            try RestoreRecipe(
+                launchCommand: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RestoreRecipe, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.launchCommand, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRestoreRecipe_lift(_ buf: RustBuffer) throws -> RestoreRecipe {
+    return try FfiConverterTypeRestoreRecipe.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRestoreRecipe_lower(_ value: RestoreRecipe) -> RustBuffer {
+    return FfiConverterTypeRestoreRecipe.lower(value)
+}
+
+
+public struct TerminalGrid: Equatable, Hashable {
+    public var cols: UInt16
+    public var rows: UInt16
+    public var lines: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(cols: UInt16, rows: UInt16, lines: [String]) {
+        self.cols = cols
+        self.rows = rows
+        self.lines = lines
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TerminalGrid: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTerminalGrid: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TerminalGrid {
+        return
+            try TerminalGrid(
+                cols: FfiConverterUInt16.read(from: &buf), 
+                rows: FfiConverterUInt16.read(from: &buf), 
+                lines: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TerminalGrid, into buf: inout [UInt8]) {
+        FfiConverterUInt16.write(value.cols, into: &buf)
+        FfiConverterUInt16.write(value.rows, into: &buf)
+        FfiConverterSequenceString.write(value.lines, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTerminalGrid_lift(_ buf: RustBuffer) throws -> TerminalGrid {
+    return try FfiConverterTypeTerminalGrid.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTerminalGrid_lower(_ value: TerminalGrid) -> RustBuffer {
+    return FfiConverterTypeTerminalGrid.lower(value)
+}
+
+
+public struct WorkspaceClosedSessionSummary: Equatable, Hashable {
+    public var id: String
+    public var title: String
+    public var transport: SessionTransport
+    public var targetLabel: String
+    public var lastCwd: String?
+    public var closeReason: CloseReason
+    public var snapshotPreview: TerminalGrid
+    public var restoreRecipe: RestoreRecipe
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, title: String, transport: SessionTransport, targetLabel: String, lastCwd: String?, closeReason: CloseReason, snapshotPreview: TerminalGrid, restoreRecipe: RestoreRecipe) {
+        self.id = id
+        self.title = title
+        self.transport = transport
+        self.targetLabel = targetLabel
+        self.lastCwd = lastCwd
+        self.closeReason = closeReason
+        self.snapshotPreview = snapshotPreview
+        self.restoreRecipe = restoreRecipe
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension WorkspaceClosedSessionSummary: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWorkspaceClosedSessionSummary: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WorkspaceClosedSessionSummary {
+        return
+            try WorkspaceClosedSessionSummary(
+                id: FfiConverterString.read(from: &buf), 
+                title: FfiConverterString.read(from: &buf), 
+                transport: FfiConverterTypeSessionTransport.read(from: &buf), 
+                targetLabel: FfiConverterString.read(from: &buf), 
+                lastCwd: FfiConverterOptionString.read(from: &buf), 
+                closeReason: FfiConverterTypeCloseReason.read(from: &buf), 
+                snapshotPreview: FfiConverterTypeTerminalGrid.read(from: &buf), 
+                restoreRecipe: FfiConverterTypeRestoreRecipe.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WorkspaceClosedSessionSummary, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterTypeSessionTransport.write(value.transport, into: &buf)
+        FfiConverterString.write(value.targetLabel, into: &buf)
+        FfiConverterOptionString.write(value.lastCwd, into: &buf)
+        FfiConverterTypeCloseReason.write(value.closeReason, into: &buf)
+        FfiConverterTypeTerminalGrid.write(value.snapshotPreview, into: &buf)
+        FfiConverterTypeRestoreRecipe.write(value.restoreRecipe, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWorkspaceClosedSessionSummary_lift(_ buf: RustBuffer) throws -> WorkspaceClosedSessionSummary {
+    return try FfiConverterTypeWorkspaceClosedSessionSummary.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWorkspaceClosedSessionSummary_lower(_ value: WorkspaceClosedSessionSummary) -> RustBuffer {
+    return FfiConverterTypeWorkspaceClosedSessionSummary.lower(value)
+}
+
+
 public struct WorkspaceDetail: Equatable, Hashable {
     public var id: String
     public var name: String
     public var noteBody: String
+    public var liveSessions: [WorkspaceSessionSummary]
+    public var closedSessions: [WorkspaceClosedSessionSummary]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, name: String, noteBody: String) {
+    public init(id: String, name: String, noteBody: String, liveSessions: [WorkspaceSessionSummary], closedSessions: [WorkspaceClosedSessionSummary]) {
         self.id = id
         self.name = name
         self.noteBody = noteBody
+        self.liveSessions = liveSessions
+        self.closedSessions = closedSessions
     }
 
     
@@ -635,7 +842,9 @@ public struct FfiConverterTypeWorkspaceDetail: FfiConverterRustBuffer {
             try WorkspaceDetail(
                 id: FfiConverterString.read(from: &buf), 
                 name: FfiConverterString.read(from: &buf), 
-                noteBody: FfiConverterString.read(from: &buf)
+                noteBody: FfiConverterString.read(from: &buf), 
+                liveSessions: FfiConverterSequenceTypeWorkspaceSessionSummary.read(from: &buf), 
+                closedSessions: FfiConverterSequenceTypeWorkspaceClosedSessionSummary.read(from: &buf)
         )
     }
 
@@ -643,6 +852,8 @@ public struct FfiConverterTypeWorkspaceDetail: FfiConverterRustBuffer {
         FfiConverterString.write(value.id, into: &buf)
         FfiConverterString.write(value.name, into: &buf)
         FfiConverterString.write(value.noteBody, into: &buf)
+        FfiConverterSequenceTypeWorkspaceSessionSummary.write(value.liveSessions, into: &buf)
+        FfiConverterSequenceTypeWorkspaceClosedSessionSummary.write(value.closedSessions, into: &buf)
     }
 }
 
@@ -662,11 +873,242 @@ public func FfiConverterTypeWorkspaceDetail_lower(_ value: WorkspaceDetail) -> R
 }
 
 
+public struct WorkspaceSessionSummary: Equatable, Hashable {
+    public var id: String
+    public var title: String
+    public var transport: SessionTransport
+    public var targetLabel: String
+    public var lastCwd: String?
+    public var closeReason: CloseReason
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, title: String, transport: SessionTransport, targetLabel: String, lastCwd: String?, closeReason: CloseReason) {
+        self.id = id
+        self.title = title
+        self.transport = transport
+        self.targetLabel = targetLabel
+        self.lastCwd = lastCwd
+        self.closeReason = closeReason
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension WorkspaceSessionSummary: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWorkspaceSessionSummary: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WorkspaceSessionSummary {
+        return
+            try WorkspaceSessionSummary(
+                id: FfiConverterString.read(from: &buf), 
+                title: FfiConverterString.read(from: &buf), 
+                transport: FfiConverterTypeSessionTransport.read(from: &buf), 
+                targetLabel: FfiConverterString.read(from: &buf), 
+                lastCwd: FfiConverterOptionString.read(from: &buf), 
+                closeReason: FfiConverterTypeCloseReason.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WorkspaceSessionSummary, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.title, into: &buf)
+        FfiConverterTypeSessionTransport.write(value.transport, into: &buf)
+        FfiConverterString.write(value.targetLabel, into: &buf)
+        FfiConverterOptionString.write(value.lastCwd, into: &buf)
+        FfiConverterTypeCloseReason.write(value.closeReason, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWorkspaceSessionSummary_lift(_ buf: RustBuffer) throws -> WorkspaceSessionSummary {
+    return try FfiConverterTypeWorkspaceSessionSummary.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWorkspaceSessionSummary_lower(_ value: WorkspaceSessionSummary) -> RustBuffer {
+    return FfiConverterTypeWorkspaceSessionSummary.lower(value)
+}
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum CloseReason: Equatable, Hashable {
+    
+    case userClosed
+    case processExited
+    case sshDisconnected
+    case appCrashed
+    case hostQuit
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension CloseReason: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCloseReason: FfiConverterRustBuffer {
+    typealias SwiftType = CloseReason
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CloseReason {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .userClosed
+        
+        case 2: return .processExited
+        
+        case 3: return .sshDisconnected
+        
+        case 4: return .appCrashed
+        
+        case 5: return .hostQuit
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CloseReason, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .userClosed:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .processExited:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .sshDisconnected:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .appCrashed:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .hostQuit:
+            writeInt(&buf, Int32(5))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCloseReason_lift(_ buf: RustBuffer) throws -> CloseReason {
+    return try FfiConverterTypeCloseReason.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCloseReason_lower(_ value: CloseReason) -> RustBuffer {
+    return FfiConverterTypeCloseReason.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum SessionTransport: Equatable, Hashable {
+    
+    case local
+    case ssh
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension SessionTransport: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSessionTransport: FfiConverterRustBuffer {
+    typealias SwiftType = SessionTransport
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SessionTransport {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .local
+        
+        case 2: return .ssh
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: SessionTransport, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .local:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .ssh:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionTransport_lift(_ buf: RustBuffer) throws -> SessionTransport {
+    return try FfiConverterTypeSessionTransport.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSessionTransport_lower(_ value: SessionTransport) -> RustBuffer {
+    return FfiConverterTypeSessionTransport.lower(value)
+}
+
+
+
 public enum WorkspaceServiceError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
     
     
-    case OperationFailed(message: String)
+    case OpenStoreFailed(message: String)
+    
+    case CreateWorkspaceFailed(message: String)
+    
+    case UpdateWorkspaceNoteFailed(message: String)
+    
+    case WorkspaceDetailFailed(message: String)
     
     case PoisonedState(message: String)
     
@@ -699,11 +1141,23 @@ public struct FfiConverterTypeWorkspaceServiceError: FfiConverterRustBuffer {
         
 
         
-        case 1: return .OperationFailed(
+        case 1: return .OpenStoreFailed(
             message: try FfiConverterString.read(from: &buf)
         )
         
-        case 2: return .PoisonedState(
+        case 2: return .CreateWorkspaceFailed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .UpdateWorkspaceNoteFailed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .WorkspaceDetailFailed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 5: return .PoisonedState(
             message: try FfiConverterString.read(from: &buf)
         )
         
@@ -718,10 +1172,16 @@ public struct FfiConverterTypeWorkspaceServiceError: FfiConverterRustBuffer {
         
 
         
-        case .OperationFailed(_ /* message is ignored*/):
+        case .OpenStoreFailed(_ /* message is ignored*/):
             writeInt(&buf, Int32(1))
-        case .PoisonedState(_ /* message is ignored*/):
+        case .CreateWorkspaceFailed(_ /* message is ignored*/):
             writeInt(&buf, Int32(2))
+        case .UpdateWorkspaceNoteFailed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(3))
+        case .WorkspaceDetailFailed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(4))
+        case .PoisonedState(_ /* message is ignored*/):
+            writeInt(&buf, Int32(5))
 
         
         }
@@ -741,6 +1201,105 @@ public func FfiConverterTypeWorkspaceServiceError_lift(_ buf: RustBuffer) throws
 #endif
 public func FfiConverterTypeWorkspaceServiceError_lower(_ value: WorkspaceServiceError) -> RustBuffer {
     return FfiConverterTypeWorkspaceServiceError.lower(value)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
+    typealias SwiftType = String?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterString.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterString.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
+    typealias SwiftType = [String]
+
+    public static func write(_ value: [String], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterString.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [String] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [String]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterString.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeWorkspaceClosedSessionSummary: FfiConverterRustBuffer {
+    typealias SwiftType = [WorkspaceClosedSessionSummary]
+
+    public static func write(_ value: [WorkspaceClosedSessionSummary], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeWorkspaceClosedSessionSummary.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [WorkspaceClosedSessionSummary] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [WorkspaceClosedSessionSummary]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeWorkspaceClosedSessionSummary.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeWorkspaceSessionSummary: FfiConverterRustBuffer {
+    typealias SwiftType = [WorkspaceSessionSummary]
+
+    public static func write(_ value: [WorkspaceSessionSummary], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeWorkspaceSessionSummary.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [WorkspaceSessionSummary] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [WorkspaceSessionSummary]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeWorkspaceSessionSummary.read(from: &buf))
+        }
+        return seq
+    }
 }
 
 private enum InitializationResult {
@@ -767,7 +1326,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_workspace_ffi_checksum_method_workspaceservice_workspace_detail() != 942) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_workspace_ffi_checksum_constructor_workspaceservice_new() != 26505) {
+    if (uniffi_workspace_ffi_checksum_constructor_workspaceservice_new() != 42942) {
         return InitializationResult.apiChecksumMismatch
     }
 

@@ -255,8 +255,7 @@ void uniffi_workspace_ffi_fn_free_workspaceservice(uint64_t handle, RustCallStat
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_WORKSPACE_FFI_FN_CONSTRUCTOR_WORKSPACESERVICE_NEW
 #define UNIFFI_FFIDEF_UNIFFI_WORKSPACE_FFI_FN_CONSTRUCTOR_WORKSPACESERVICE_NEW
-uint64_t uniffi_workspace_ffi_fn_constructor_workspaceservice_new(RustCallStatus *_Nonnull out_status
-    
+uint64_t uniffi_workspace_ffi_fn_constructor_workspaceservice_new(RustBuffer store_path, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_WORKSPACE_FFI_FN_METHOD_WORKSPACESERVICE_CREATE_WORKSPACE

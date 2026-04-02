@@ -2,17 +2,74 @@ use std::sync::{Mutex, MutexGuard};
 
 use workspace_core::Store;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionTransport {
+    Local,
+    Ssh,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CloseReason {
+    UserClosed,
+    ProcessExited,
+    SshDisconnected,
+    AppCrashed,
+    HostQuit,
+}
+
+#[derive(Debug, Clone)]
+pub struct TerminalGrid {
+    pub cols: u16,
+    pub rows: u16,
+    pub lines: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RestoreRecipe {
+    pub launch_command: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct WorkspaceSessionSummary {
+    pub id: String,
+    pub title: String,
+    pub transport: SessionTransport,
+    pub target_label: String,
+    pub last_cwd: Option<String>,
+    pub close_reason: CloseReason,
+}
+
+#[derive(Debug, Clone)]
+pub struct WorkspaceClosedSessionSummary {
+    pub id: String,
+    pub title: String,
+    pub transport: SessionTransport,
+    pub target_label: String,
+    pub last_cwd: Option<String>,
+    pub close_reason: CloseReason,
+    pub snapshot_preview: TerminalGrid,
+    pub restore_recipe: RestoreRecipe,
+}
+
 #[derive(Debug, Clone)]
 pub struct WorkspaceDetail {
     pub id: String,
     pub name: String,
     pub note_body: String,
+    pub live_sessions: Vec<WorkspaceSessionSummary>,
+    pub closed_sessions: Vec<WorkspaceClosedSessionSummary>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum WorkspaceServiceError {
-    #[error("workspace service operation failed")]
-    OperationFailed,
+    #[error("workspace service failed to open the store")]
+    OpenStoreFailed,
+    #[error("workspace service failed to create a workspace")]
+    CreateWorkspaceFailed,
+    #[error("workspace service failed to update the workspace note")]
+    UpdateWorkspaceNoteFailed,
+    #[error("workspace service failed to load workspace detail")]
+    WorkspaceDetailFailed,
     #[error("workspace service lock poisoned")]
     PoisonedState,
 }
@@ -22,8 +79,8 @@ pub struct WorkspaceService {
 }
 
 impl WorkspaceService {
-    pub fn new() -> Result<Self, WorkspaceServiceError> {
-        let store = Store::open(":memory:").map_err(|_| WorkspaceServiceError::OperationFailed)?;
+    pub fn new(store_path: String) -> Result<Self, WorkspaceServiceError> {
+        let store = Store::open(&store_path).map_err(|_| WorkspaceServiceError::OpenStoreFailed)?;
         Ok(Self {
             store: Mutex::new(store),
         })
@@ -33,7 +90,7 @@ impl WorkspaceService {
         let store = self.store()?;
         store
             .create_workspace(&name)
-            .map_err(|_| WorkspaceServiceError::OperationFailed)
+            .map_err(|_| WorkspaceServiceError::CreateWorkspaceFailed)
     }
 
     pub fn update_workspace_note(
@@ -44,7 +101,7 @@ impl WorkspaceService {
         let store = self.store()?;
         store
             .update_workspace_note(&workspace_id, &note_body)
-            .map_err(|_| WorkspaceServiceError::OperationFailed)
+            .map_err(|_| WorkspaceServiceError::UpdateWorkspaceNoteFailed)
     }
 
     pub fn workspace_detail(
@@ -55,7 +112,7 @@ impl WorkspaceService {
         store
             .workspace_detail(&workspace_id)
             .map(Into::into)
-            .map_err(|_| WorkspaceServiceError::OperationFailed)
+            .map_err(|_| WorkspaceServiceError::WorkspaceDetailFailed)
     }
 
     fn store(&self) -> Result<MutexGuard<'_, Store>, WorkspaceServiceError> {
@@ -65,12 +122,81 @@ impl WorkspaceService {
     }
 }
 
+impl From<workspace_core::SessionTransport> for SessionTransport {
+    fn from(value: workspace_core::SessionTransport) -> Self {
+        match value {
+            workspace_core::SessionTransport::Local => Self::Local,
+            workspace_core::SessionTransport::Ssh => Self::Ssh,
+        }
+    }
+}
+
+impl From<workspace_core::CloseReason> for CloseReason {
+    fn from(value: workspace_core::CloseReason) -> Self {
+        match value {
+            workspace_core::CloseReason::UserClosed => Self::UserClosed,
+            workspace_core::CloseReason::ProcessExited => Self::ProcessExited,
+            workspace_core::CloseReason::SshDisconnected => Self::SshDisconnected,
+            workspace_core::CloseReason::AppCrashed => Self::AppCrashed,
+            workspace_core::CloseReason::HostQuit => Self::HostQuit,
+        }
+    }
+}
+
+impl From<workspace_core::TerminalGrid> for TerminalGrid {
+    fn from(value: workspace_core::TerminalGrid) -> Self {
+        Self {
+            cols: value.cols,
+            rows: value.rows,
+            lines: value.lines,
+        }
+    }
+}
+
+impl From<workspace_core::RestoreRecipe> for RestoreRecipe {
+    fn from(value: workspace_core::RestoreRecipe) -> Self {
+        Self {
+            launch_command: value.launch_command,
+        }
+    }
+}
+
+impl From<workspace_core::SessionSummary> for WorkspaceSessionSummary {
+    fn from(value: workspace_core::SessionSummary) -> Self {
+        Self {
+            id: value.id,
+            title: value.title,
+            transport: value.transport.into(),
+            target_label: value.target_label,
+            last_cwd: value.last_cwd,
+            close_reason: value.close_reason.into(),
+        }
+    }
+}
+
+impl From<workspace_core::ClosedSessionSummary> for WorkspaceClosedSessionSummary {
+    fn from(value: workspace_core::ClosedSessionSummary) -> Self {
+        Self {
+            id: value.id,
+            title: value.title,
+            transport: value.transport.into(),
+            target_label: value.target_label,
+            last_cwd: value.last_cwd,
+            close_reason: value.close_reason.into(),
+            snapshot_preview: value.snapshot_preview.into(),
+            restore_recipe: value.restore_recipe.into(),
+        }
+    }
+}
+
 impl From<workspace_core::WorkspaceDetail> for WorkspaceDetail {
     fn from(value: workspace_core::WorkspaceDetail) -> Self {
         Self {
             id: value.id,
             name: value.name,
             note_body: value.note_body,
+            live_sessions: value.live_sessions.into_iter().map(Into::into).collect(),
+            closed_sessions: value.closed_sessions.into_iter().map(Into::into).collect(),
         }
     }
 }
