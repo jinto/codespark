@@ -6,10 +6,6 @@ edition = "2021"
 [lib]
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-[[bin]]
-name = "uniffi-bindgen"
-path = "src/bin/uniffi-bindgen.rs"
-
 [dependencies]
 thiserror = "2"
 uniffi = { version = "0.31.0", features = ["cli"] }
