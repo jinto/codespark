@@ -5,18 +5,20 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Image(systemName: "terminal.fill")
-                    .font(.title2)
-                    .foregroundStyle(AppTheme.accent)
-                Text("Spark")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                Spacer()
+            WindowDragArea {
+                HStack {
+                    Image(systemName: "terminal.fill")
+                        .font(.title2)
+                        .foregroundStyle(AppTheme.accent)
+                    Text("Spark")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 20)
+                .padding(.bottom, 12)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 20)
-            .padding(.bottom, 12)
 
             Divider().background(AppTheme.divider)
 

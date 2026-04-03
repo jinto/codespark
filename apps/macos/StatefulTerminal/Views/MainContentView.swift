@@ -3,6 +3,7 @@ import SwiftUI
 struct MainContentView: View {
     @ObservedObject var model: AppModel
     @State private var showNote = false
+    @State private var activePopoverSessionID: String?
 
     var body: some View {
         if let workspace = model.selectedWorkspace {
@@ -111,6 +112,17 @@ struct MainContentView: View {
                         ForEach(model.closedSessions) { session in
                             RecentlyClosedSessionCardView(session: session)
                                 .frame(width: 260)
+                                .popover(isPresented: Binding(
+                                    get: { activePopoverSessionID == session.id },
+                                    set: { if !$0 { activePopoverSessionID = nil } }
+                                )) {
+                                    ClosedSessionInspectorView(
+                                        session: session,
+                                        actions: model.recoveryActions(for: session)
+                                    )
+                                    .frame(width: 300)
+                                }
+                                .onTapGesture { activePopoverSessionID = session.id }
                         }
                     }
                     .padding(.horizontal, 16)

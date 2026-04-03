@@ -59,6 +59,18 @@ class GhosttyTerminalSurfaceView: NSView {
 
     override func keyDown(with event: NSEvent) {
         guard let surface else { return }
+
+        // Cmd+V: paste from system clipboard
+        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "v" {
+            if let str = NSPasteboard.general.string(forType: .string) {
+                let data = Array(str.utf8)
+                data.withUnsafeBufferPointer { buf in
+                    ghostty_surface_text(surface, buf.baseAddress, UInt(buf.count))
+                }
+            }
+            return
+        }
+
         if let chars = event.characters, !chars.isEmpty {
             chars.withCString { ptr in
                 var key = makeKeyInput(event, action: GHOSTTY_ACTION_PRESS)
