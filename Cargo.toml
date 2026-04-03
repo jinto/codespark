@@ -1,6 +1,0 @@
-[workspace]
-members = [
-    "crates/workspace-core",
-    "crates/workspace-ffi",
-]
-resolver = "2"

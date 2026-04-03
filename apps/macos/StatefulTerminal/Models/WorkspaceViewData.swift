@@ -39,13 +39,24 @@ enum CloseReasonViewData: Equatable {
         }
     }
 
-    func toFfi() -> CloseReason {
+    static func from(cReason: workspace_close_reason_t) -> Self {
+        switch cReason {
+        case WORKSPACE_CLOSE_REASON_USER_CLOSED: return .userClosed
+        case WORKSPACE_CLOSE_REASON_PROCESS_EXITED: return .processExited
+        case WORKSPACE_CLOSE_REASON_SSH_DISCONNECTED: return .sshDisconnected
+        case WORKSPACE_CLOSE_REASON_APP_CRASHED: return .appCrashed
+        case WORKSPACE_CLOSE_REASON_HOST_QUIT: return .hostQuit
+        default: return .userClosed
+        }
+    }
+
+    func toCReason() -> workspace_close_reason_t {
         switch self {
-        case .userClosed: return .userClosed
-        case .processExited: return .processExited
-        case .sshDisconnected: return .sshDisconnected
-        case .appCrashed: return .appCrashed
-        case .hostQuit: return .hostQuit
+        case .userClosed: return WORKSPACE_CLOSE_REASON_USER_CLOSED
+        case .processExited: return WORKSPACE_CLOSE_REASON_PROCESS_EXITED
+        case .sshDisconnected: return WORKSPACE_CLOSE_REASON_SSH_DISCONNECTED
+        case .appCrashed: return WORKSPACE_CLOSE_REASON_APP_CRASHED
+        case .hostQuit: return WORKSPACE_CLOSE_REASON_HOST_QUIT
         }
     }
 }

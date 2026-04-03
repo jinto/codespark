@@ -12,14 +12,25 @@ targets:
     sources:
       - StatefulTerminal
     preBuildScripts:
-      - name: Build workspace-ffi (Rust)
+      - name: Build workspace-core (Zig)
         basedOnDependencyAnalysis: false
         script: |
+          export ZIG_GLOBAL_CACHE_DIR="$SRCROOT/../../libs/workspace-core/.zig-global-cache"
+          export ZIG_LOCAL_CACHE_DIR="$SRCROOT/../../libs/workspace-core/.zig-cache"
+          cd "$SRCROOT/../../libs/workspace-core"
           if [ "$CONFIGURATION" = "Release" ]; then
-            cargo build -p workspace-ffi --release
+            zig build -Doptimize=ReleaseFast
           else
-            cargo build -p workspace-ffi
+            zig build -Doptimize=Debug
           fi
+          # Re-archive with Apple libtool to fix Zig archive alignment
+          LIBPATH="zig-out/lib/libworkspace-core.a"
+          TMPDIR=$(mktemp -d)
+          cd "$TMPDIR"
+          ar x "$OLDPWD/$LIBPATH"
+          chmod 644 *.o
+          libtool -static -o "$OLDPWD/$LIBPATH" *.o
+          rm -rf "$TMPDIR"
     dependencies:
       - framework: ../../vendor/ghostty/macos/GhosttyKit.xcframework
         embed: false
@@ -35,22 +46,20 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jinto.stateful-terminal
         GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/../../libs/workspace-core/include
+        LIBRARY_SEARCH_PATHS:
+          - $(SRCROOT)/../../libs/workspace-core/zig-out/lib
         OTHER_LDFLAGS:
           - $(inherited)
-          - -lworkspace_ffi
+          - -lworkspace-core
+          - -lsqlite3
           - -lc++
         OTHER_SWIFT_FLAGS:
           - $(inherited)
           - -D
           - GHOSTTY_FIRST
         SWIFT_OBJC_BRIDGING_HEADER: StatefulTerminal/Bridge/StatefulTerminal-Bridging-Header.h
-      configs:
-        Debug:
-          LIBRARY_SEARCH_PATHS:
-            - $(SRCROOT)/../../target/debug/deps
-        Release:
-          LIBRARY_SEARCH_PATHS:
-            - $(SRCROOT)/../../target/release/deps
   StatefulTerminalTests:
     type: bundle.unit-test
     platform: macOS
@@ -62,3 +71,5 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/../../libs/workspace-core/include
