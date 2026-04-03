@@ -6,7 +6,7 @@ final class AppModelTests: XCTestCase {
     func test_loads_workspace_summaries_and_the_selected_note() async {
         let client = MockWorkspaceCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false)
+                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
             details: [WorkspaceDetailViewData(
                 id: "ws-release",
@@ -30,8 +30,8 @@ final class AppModelTests: XCTestCase {
     func test_select_workspace_loads_requested_detail() async {
         let client = MockWorkspaceCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 0, hasInterruptedSessions: false),
-                WorkspaceSummaryViewData(id: "ws-spark3", name: "spark3", liveSessions: 0, recentlyClosedSessions: 1, hasInterruptedSessions: true)
+                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
+                WorkspaceSummaryViewData(id: "ws-spark3", name: "spark3", liveSessions: 0, recentlyClosedSessions: 1, hasInterruptedSessions: true, liveSessionDetails: [])
             ],
             details: [
                 WorkspaceDetailViewData(
@@ -65,8 +65,8 @@ final class AppModelTests: XCTestCase {
     func test_latest_workspace_selection_wins_when_detail_requests_finish_out_of_order() async {
         let client = MockWorkspaceCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 0, hasInterruptedSessions: false),
-                WorkspaceSummaryViewData(id: "ws-spark3", name: "spark3", liveSessions: 0, recentlyClosedSessions: 1, hasInterruptedSessions: true)
+                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
+                WorkspaceSummaryViewData(id: "ws-spark3", name: "spark3", liveSessions: 0, recentlyClosedSessions: 1, hasInterruptedSessions: true, liveSessionDetails: [])
             ],
             details: [
                 WorkspaceDetailViewData(
@@ -104,7 +104,7 @@ final class AppModelTests: XCTestCase {
     func test_detail_fetch_failure_clears_stale_detail_state() async {
         let client = MockWorkspaceCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false)
+                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
             details: [WorkspaceDetailViewData(
                 id: "ws-release",
@@ -153,7 +153,7 @@ final class AppModelTests: XCTestCase {
     func test_save_note_failure_surfaces_an_error() async {
         let client = MockWorkspaceCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false)
+                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
             details: [WorkspaceDetailViewData(
                 id: "ws-release",
@@ -178,8 +178,8 @@ final class AppModelTests: XCTestCase {
     func test_save_note_does_not_overwrite_when_workspace_switches_during_save() async {
         let client = MockWorkspaceCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-A", name: "Workspace A", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false),
-                WorkspaceSummaryViewData(id: "ws-B", name: "Workspace B", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false)
+                WorkspaceSummaryViewData(id: "ws-A", name: "Workspace A", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
+                WorkspaceSummaryViewData(id: "ws-B", name: "Workspace B", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
             details: [
                 WorkspaceDetailViewData(

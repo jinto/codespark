@@ -13,6 +13,7 @@ protocol WorkspaceCoreClientProtocol {
         snapshot: TerminalSnapshotViewData,
         closeReason: CloseReasonViewData
     ) async throws
+    func updateSessionTitle(sessionId: String, newTitle: String) async throws
     func openLocalShellHere(sessionID: String) async throws
     func reconnectSSH(sessionID: String, cdIntoDirectory: Bool) async throws
 }
@@ -108,12 +109,22 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
 
         return (0..<Int(count)).map { i in
             let s = summaries![i]
+            let details = (0..<Int(s.live_session_detail_count)).map { j in
+                let d = s.live_session_details![j]
+                return SessionSummary(
+                    id: String(cString: d.id),
+                    title: String(cString: d.title),
+                    targetLabel: String(cString: d.target_label),
+                    lastCwd: d.last_cwd != nil ? String(cString: d.last_cwd) : nil
+                )
+            }
             return WorkspaceSummaryViewData(
                 id: String(cString: s.id),
                 name: String(cString: s.name),
                 liveSessions: Int(s.live_sessions),
                 recentlyClosedSessions: Int(s.recently_closed_sessions),
-                hasInterruptedSessions: s.has_interrupted_sessions
+                hasInterruptedSessions: s.has_interrupted_sessions,
+                liveSessionDetails: details
             )
         }
     }
@@ -170,6 +181,15 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
         let status = id.withCString { idPtr in
             noteBody.withCString { bodyPtr in
                 workspace_service_update_workspace_note(service, idPtr, bodyPtr)
+            }
+        }
+        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
+    }
+
+    func updateSessionTitle(sessionId: String, newTitle: String) async throws {
+        let status = sessionId.withCString { idPtr in
+            newTitle.withCString { titlePtr in
+                workspace_service_update_session_title(service, idPtr, titlePtr)
             }
         }
         guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }

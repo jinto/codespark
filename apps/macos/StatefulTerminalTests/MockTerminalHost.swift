@@ -3,6 +3,7 @@ import Foundation
 
 final class MockTerminalHost: TerminalHostProtocol {
     weak var delegate: (any TerminalHostDelegate)?
+    var lastOutputTime: Date? { nil }
 
     func attach(sessionID: String) {}
     func close(sessionID: String) {}

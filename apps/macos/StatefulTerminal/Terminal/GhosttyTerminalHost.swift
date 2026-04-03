@@ -4,6 +4,7 @@ import GhosttyKit
 
 final class GhosttyTerminalHost: TerminalHostProtocol {
     weak var delegate: (any TerminalHostDelegate)?
+    var lastOutputTime: Date? = nil
     private var surfaceView: GhosttyTerminalSurfaceView?
     private let app: ghostty_app_t
     private let session: SessionViewData

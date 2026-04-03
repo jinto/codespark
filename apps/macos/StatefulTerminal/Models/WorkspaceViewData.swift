@@ -1,11 +1,19 @@
 import Foundation
 
+struct SessionSummary: Identifiable, Equatable {
+    let id: String
+    var title: String
+    let targetLabel: String
+    let lastCwd: String?
+}
+
 struct WorkspaceSummaryViewData: Identifiable, Equatable {
     let id: String
     let name: String
     let liveSessions: Int
     let recentlyClosedSessions: Int
     let hasInterruptedSessions: Bool
+    let liveSessionDetails: [SessionSummary]
 }
 
 struct RestoreRecipeViewData: Equatable {

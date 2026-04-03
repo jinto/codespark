@@ -7,6 +7,7 @@ protocol TerminalHostDelegate: AnyObject {
 
 protocol TerminalHostProtocol: AnyObject {
     var delegate: (any TerminalHostDelegate)? { get set }
+    var lastOutputTime: Date? { get }
     func attach(sessionID: String)
     func close(sessionID: String)
 }

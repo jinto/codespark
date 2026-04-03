@@ -84,6 +84,8 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
         lastRecoveryAction = "open-local:\(sessionID)"
     }
 
+    func updateSessionTitle(sessionId: String, newTitle: String) async throws { }
+
     func reconnectSSH(sessionID: String, cdIntoDirectory: Bool) async throws {
         lastRecoveryAction = cdIntoDirectory ? "reconnect-ssh-cd:\(sessionID)" : "reconnect-ssh:\(sessionID)"
     }
@@ -102,7 +104,8 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
                     name: "release",
                     liveSessions: 1,
                     recentlyClosedSessions: 0,
-                    hasInterruptedSessions: false
+                    hasInterruptedSessions: false,
+                    liveSessionDetails: []
                 )
             ],
             details: [WorkspaceDetailViewData(
@@ -133,7 +136,8 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
                     name: "spark3",
                     liveSessions: 0,
                     recentlyClosedSessions: 1,
-                    hasInterruptedSessions: true
+                    hasInterruptedSessions: true,
+                    liveSessionDetails: []
                 )
             ],
             details: [WorkspaceDetailViewData(
