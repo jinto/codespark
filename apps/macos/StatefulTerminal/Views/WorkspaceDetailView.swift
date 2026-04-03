@@ -7,12 +7,19 @@ struct WorkspaceDetailView: View {
         Group {
             if let workspace = model.selectedWorkspace {
                 HStack(alignment: .top, spacing: 24) {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 16) {
                         Text(workspace.name)
                             .font(.largeTitle)
-                        Text("Workspace overview")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
+
+                        ForEach(model.liveSessions) { session in
+                            TerminalSurfaceHostView(session: session)
+                                .frame(height: 180)
+                        }
+
+                        ForEach(model.closedSessions) { session in
+                            RecentlyClosedSessionCardView(session: session)
+                        }
+
                         Spacer()
                     }
 

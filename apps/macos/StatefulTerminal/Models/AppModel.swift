@@ -13,11 +13,29 @@ final class AppModel: ObservableObject {
     @Published var noteSaveErrorMessage: String?
 
     private let core: WorkspaceCoreClientProtocol
+    private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
+    private var hosts: [String: any TerminalHostProtocol] = [:]
     private var detailTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
 
-    init(core: WorkspaceCoreClientProtocol) {
+    init(
+        core: WorkspaceCoreClientProtocol,
+        terminalFactory: @escaping (SessionViewData) -> any TerminalHostProtocol = { _ in NoOpTerminalHost() }
+    ) {
         self.core = core
+        self.terminalFactory = terminalFactory
+    }
+
+    func attachLiveSessions() async {
+        guard let workspace = selectedWorkspace else { return }
+        liveSessions = workspace.liveSessions
+        closedSessions = workspace.closedSessions
+        for session in liveSessions {
+            var host = terminalFactory(session)
+            host.delegate = self
+            host.attach(sessionID: session.id)
+            hosts[session.id] = host
+        }
     }
 
     func load() async {
@@ -118,5 +136,25 @@ final class AppModel: ObservableObject {
         liveSessions = []
         closedSessions = []
         noteSaveErrorMessage = nil
+    }
+}
+
+extension AppModel: TerminalHostDelegate {
+    func terminalHostDidClose(sessionID: String, snapshot: TerminalSnapshotViewData, closeReason: CloseReasonViewData) {
+        guard let index = liveSessions.firstIndex(where: { $0.id == sessionID }) else { return }
+        let session = liveSessions.remove(at: index)
+        hosts.removeValue(forKey: sessionID)
+        let closed = ClosedSessionViewData(
+            id: session.id,
+            title: session.title,
+            targetLabel: session.targetLabel,
+            lastCwd: session.lastCwd,
+            closeReason: closeReason,
+            snapshotPreview: snapshot,
+            restoreRecipe: session.restoreRecipe
+        )
+        closedSessions.insert(closed, at: 0)
+        // Fire-and-forget: persist snapshot and close event to Rust store
+        Task { try? await core.recordFinalSnapshotAndClose(sessionID: sessionID, snapshot: snapshot, closeReason: closeReason) }
     }
 }
