@@ -1,5 +1,23 @@
 import SwiftUI
 
+#if GHOSTTY_FIRST
+import GhosttyKit
+
+struct TerminalSurfaceHostView: NSViewRepresentable {
+    let session: SessionViewData
+    let app: ghostty_app_t
+
+    func makeNSView(context: Context) -> GhosttyTerminalSurfaceView {
+        GhosttyTerminalSurfaceView(
+            app: app,
+            workingDirectory: session.lastCwd,
+            command: nil
+        )
+    }
+
+    func updateNSView(_ nsView: GhosttyTerminalSurfaceView, context: Context) {}
+}
+#else
 struct TerminalSurfaceHostView: View {
     let session: SessionViewData
 
@@ -17,3 +35,4 @@ struct TerminalSurfaceHostView: View {
         }
     }
 }
+#endif

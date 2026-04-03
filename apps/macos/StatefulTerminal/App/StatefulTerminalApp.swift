@@ -13,6 +13,9 @@ struct StatefulTerminalApp: App {
             }
             .frame(minWidth: 1200, minHeight: 760)
             .task {
+                #if GHOSTTY_FIRST
+                GhosttyRuntime.shared.initialize()
+                #endif
                 await model.load()
             }
         }

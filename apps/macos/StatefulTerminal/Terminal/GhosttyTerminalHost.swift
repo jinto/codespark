@@ -1,29 +1,45 @@
+#if GHOSTTY_FIRST
 import Foundation
 import GhosttyKit
 
-#if GHOSTTY_FIRST
 final class GhosttyTerminalHost: TerminalHostProtocol {
     weak var delegate: (any TerminalHostDelegate)?
-    private var surface: ghostty_surface_t?
+    private var surfaceView: GhosttyTerminalSurfaceView?
+    private let app: ghostty_app_t
     private let session: SessionViewData
 
     init(app: ghostty_app_t, session: SessionViewData) {
+        self.app = app
         self.session = session
     }
 
     func attach(sessionID: String) {
-        // Phase 2: wire ghostty_surface_new here
+        surfaceView = GhosttyTerminalSurfaceView(
+            app: app,
+            workingDirectory: session.lastCwd,
+            command: nil
+        )
     }
 
     @MainActor
     func close(sessionID: String) {
-        if let surface {
-            ghostty_surface_free(surface)
-            self.surface = nil
+        let snapshot: TerminalSnapshotViewData
+        if let surfaceView, let surface = surfaceView.surface {
+            let size = ghostty_surface_size(surface)
+            snapshot = TerminalSnapshotViewData(
+                cols: Int(size.columns),
+                rows: Int(size.rows),
+                lines: ["session closed"]
+            )
+        } else {
+            snapshot = TerminalSnapshotViewData(cols: 80, rows: 24, lines: ["session closed"])
         }
+
+        surfaceView = nil
+
         delegate?.terminalHostDidClose(
             sessionID: sessionID,
-            snapshot: TerminalSnapshotViewData(cols: 80, rows: 24, lines: ["ghostty session closed"]),
+            snapshot: snapshot,
             closeReason: .userClosed
         )
     }

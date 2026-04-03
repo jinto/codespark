@@ -12,8 +12,15 @@ struct WorkspaceDetailView: View {
                             .font(.largeTitle)
 
                         ForEach(model.liveSessions) { session in
+                            #if GHOSTTY_FIRST
+                            if let app = GhosttyRuntime.shared.app {
+                                TerminalSurfaceHostView(session: session, app: app)
+                                    .frame(height: 300)
+                            }
+                            #else
                             TerminalSurfaceHostView(session: session)
                                 .frame(height: 180)
+                            #endif
                         }
 
                         ForEach(model.closedSessions) { session in
