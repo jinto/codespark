@@ -9,6 +9,9 @@ enum WorkspaceServiceError {
     "PoisonedState",
     "ListWorkspacesFailed",
     "ReconcileInterruptedFailed",
+    "StartSessionFailed",
+    "RecordSnapshotFailed",
+    "CloseSessionFailed",
 };
 
 enum SessionTransport {
@@ -74,6 +77,15 @@ dictionary WorkspaceDetail {
 interface WorkspaceService {
     [Throws=WorkspaceServiceError]
     constructor(string store_path);
+
+    [Throws=WorkspaceServiceError]
+    string start_session(string workspace_id, SessionTransport transport, string target_label, string title, string shell, string? initial_cwd);
+
+    [Throws=WorkspaceServiceError]
+    void record_snapshot(string session_id, string kind, string? cwd, u16 cols, u16 rows, sequence<string> lines);
+
+    [Throws=WorkspaceServiceError]
+    void close_session(string session_id, CloseReason reason, string? last_cwd);
 
     [Throws=WorkspaceServiceError]
     void reconcile_interrupted_sessions();

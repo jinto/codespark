@@ -23,17 +23,8 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
 
     @MainActor
     func close(sessionID: String) {
-        let snapshot: TerminalSnapshotViewData
-        if let surfaceView, let surface = surfaceView.surface {
-            let size = ghostty_surface_size(surface)
-            snapshot = TerminalSnapshotViewData(
-                cols: Int(size.columns),
-                rows: Int(size.rows),
-                lines: ["session closed"]
-            )
-        } else {
-            snapshot = TerminalSnapshotViewData(cols: 80, rows: 24, lines: ["session closed"])
-        }
+        let snapshot = surfaceView?.extractSnapshot()
+            ?? TerminalSnapshotViewData(cols: 0, rows: 0, lines: [])
 
         surfaceView = nil
 

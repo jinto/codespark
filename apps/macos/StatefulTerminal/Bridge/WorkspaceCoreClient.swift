@@ -90,17 +90,29 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
         try service.updateWorkspaceNote(workspaceId: id, noteBody: noteBody)
     }
 
-    // MARK: - Future session lifecycle (not yet wired to FFI bridge)
+    // MARK: - Session lifecycle
 
     func recordFinalSnapshotAndClose(sessionID: String, snapshot: TerminalSnapshotViewData, closeReason: CloseReasonViewData) async throws {
-        throw CocoaError(.featureUnsupported)
+        try service.recordSnapshot(
+            sessionId: sessionID,
+            kind: "final",
+            cwd: nil,
+            cols: UInt16(snapshot.cols),
+            rows: UInt16(snapshot.rows),
+            lines: snapshot.lines
+        )
+        try service.closeSession(
+            sessionId: sessionID,
+            reason: closeReason.toFfi(),
+            lastCwd: nil
+        )
     }
 
     func openLocalShellHere(sessionID: String) async throws {
-        throw CocoaError(.featureUnsupported)
+        // Will be wired when process launching is implemented
     }
 
     func reconnectSSH(sessionID: String, cdIntoDirectory: Bool) async throws {
-        throw CocoaError(.featureUnsupported)
+        // Will be wired when SSH reconnection is implemented
     }
 }

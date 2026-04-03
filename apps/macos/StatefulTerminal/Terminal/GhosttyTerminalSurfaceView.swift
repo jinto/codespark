@@ -117,6 +117,45 @@ class GhosttyTerminalSurfaceView: NSView {
         ))
     }
 
+    // MARK: - Snapshot
+
+    func extractSnapshot() -> TerminalSnapshotViewData {
+        guard let surface else {
+            return TerminalSnapshotViewData(cols: 0, rows: 0, lines: [])
+        }
+
+        let size = ghostty_surface_size(surface)
+
+        // Read the entire viewport
+        let selection = ghostty_selection_s(
+            top_left: ghostty_point_s(
+                tag: GHOSTTY_POINT_VIEWPORT,
+                coord: GHOSTTY_POINT_COORD_TOP_LEFT,
+                x: 0,
+                y: 0
+            ),
+            bottom_right: ghostty_point_s(
+                tag: GHOSTTY_POINT_VIEWPORT,
+                coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT,
+                x: UInt32(size.columns > 0 ? size.columns - 1 : 0),
+                y: UInt32(size.rows > 0 ? size.rows - 1 : 0)
+            ),
+            rectangle: false
+        )
+
+        var text = ghostty_text_s()
+        let ok = ghostty_surface_read_text(surface, selection, &text)
+        guard ok, let cStr = text.text, text.text_len > 0 else {
+            return TerminalSnapshotViewData(cols: Int(size.columns), rows: Int(size.rows), lines: [])
+        }
+
+        let content = String(cString: cStr)
+        ghostty_surface_free_text(surface, &text)
+
+        let lines = content.components(separatedBy: "\n")
+        return TerminalSnapshotViewData(cols: Int(size.columns), rows: Int(size.rows), lines: lines)
+    }
+
     // MARK: - Helpers
 
     private func makeKeyInput(_ event: NSEvent, action: ghostty_input_action_e) -> ghostty_input_key_s {

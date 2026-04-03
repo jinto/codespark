@@ -90,6 +90,12 @@ pub enum WorkspaceServiceError {
     ListWorkspacesFailed,
     #[error("workspace service failed to reconcile interrupted sessions")]
     ReconcileInterruptedFailed,
+    #[error("workspace service failed to start session")]
+    StartSessionFailed,
+    #[error("workspace service failed to record snapshot")]
+    RecordSnapshotFailed,
+    #[error("workspace service failed to close session")]
+    CloseSessionFailed,
 }
 
 pub struct WorkspaceService {
@@ -102,6 +108,79 @@ impl WorkspaceService {
         Ok(Self {
             store: Mutex::new(store),
         })
+    }
+
+    pub fn start_session(
+        &self,
+        workspace_id: String,
+        transport: SessionTransport,
+        target_label: String,
+        title: String,
+        shell: String,
+        initial_cwd: Option<String>,
+    ) -> Result<String, WorkspaceServiceError> {
+        let store = self.store()?;
+        store
+            .start_session(workspace_core::NewSession {
+                workspace_id,
+                transport: match transport {
+                    SessionTransport::Local => workspace_core::SessionTransport::Local,
+                    SessionTransport::Ssh => workspace_core::SessionTransport::Ssh,
+                },
+                target_label,
+                title,
+                shell,
+                initial_cwd,
+            })
+            .map_err(|_| WorkspaceServiceError::StartSessionFailed)
+    }
+
+    pub fn record_snapshot(
+        &self,
+        session_id: String,
+        kind: String,
+        cwd: Option<String>,
+        cols: u16,
+        rows: u16,
+        lines: Vec<String>,
+    ) -> Result<(), WorkspaceServiceError> {
+        let store = self.store()?;
+        let snapshot_kind = if kind == "final" {
+            workspace_core::SnapshotKind::Final
+        } else {
+            workspace_core::SnapshotKind::Checkpoint
+        };
+        store
+            .record_snapshot(workspace_core::NewSnapshot {
+                session_id,
+                kind: snapshot_kind,
+                cwd,
+                grid: workspace_core::TerminalGrid { cols, rows, lines },
+            })
+            .map_err(|_| WorkspaceServiceError::RecordSnapshotFailed)
+    }
+
+    pub fn close_session(
+        &self,
+        session_id: String,
+        reason: CloseReason,
+        last_cwd: Option<String>,
+    ) -> Result<(), WorkspaceServiceError> {
+        let store = self.store()?;
+        store
+            .close_session(
+                &session_id,
+                match reason {
+                    CloseReason::UserClosed => workspace_core::CloseReason::UserClosed,
+                    CloseReason::ProcessExited => workspace_core::CloseReason::ProcessExited,
+                    CloseReason::SshDisconnected => workspace_core::CloseReason::SshDisconnected,
+                    CloseReason::AppCrashed => workspace_core::CloseReason::AppCrashed,
+                    CloseReason::HostQuit => workspace_core::CloseReason::HostQuit,
+                },
+                last_cwd,
+                None,
+            )
+            .map_err(|_| WorkspaceServiceError::CloseSessionFailed)
     }
 
     pub fn reconcile_interrupted_sessions(&self) -> Result<(), WorkspaceServiceError> {

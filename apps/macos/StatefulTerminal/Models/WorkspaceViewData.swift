@@ -38,6 +38,16 @@ enum CloseReasonViewData: Equatable {
         case .hostQuit: return .hostQuit
         }
     }
+
+    func toFfi() -> CloseReason {
+        switch self {
+        case .userClosed: return .userClosed
+        case .processExited: return .processExited
+        case .sshDisconnected: return .sshDisconnected
+        case .appCrashed: return .appCrashed
+        case .hostQuit: return .hostQuit
+        }
+    }
 }
 
 struct SessionViewData: Identifiable, Equatable {

@@ -518,11 +518,17 @@ fileprivate struct FfiConverterString: FfiConverter {
 
 public protocol WorkspaceServiceProtocol: AnyObject, Sendable {
     
+    func closeSession(sessionId: String, reason: CloseReason, lastCwd: String?) throws 
+    
     func createWorkspace(name: String) throws  -> String
     
     func listWorkspaceSummaries() throws  -> [WorkspaceSummary]
     
     func reconcileInterruptedSessions() throws 
+    
+    func recordSnapshot(sessionId: String, kind: String, cwd: String?, cols: UInt16, rows: UInt16, lines: [String]) throws 
+    
+    func startSession(workspaceId: String, transport: SessionTransport, targetLabel: String, title: String, shell: String, initialCwd: String?) throws  -> String
     
     func updateWorkspaceNote(workspaceId: String, noteBody: String) throws 
     
@@ -590,6 +596,16 @@ public convenience init(storePath: String)throws  {
     
 
     
+open func closeSession(sessionId: String, reason: CloseReason, lastCwd: String?)throws   {try rustCallWithError(FfiConverterTypeWorkspaceServiceError_lift) {
+    uniffi_workspace_ffi_fn_method_workspaceservice_close_session(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(sessionId),
+        FfiConverterTypeCloseReason_lower(reason),
+        FfiConverterOptionString.lower(lastCwd),$0
+    )
+}
+}
+    
 open func createWorkspace(name: String)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeWorkspaceServiceError_lift) {
     uniffi_workspace_ffi_fn_method_workspaceservice_create_workspace(
@@ -612,6 +628,33 @@ open func reconcileInterruptedSessions()throws   {try rustCallWithError(FfiConve
             self.uniffiCloneHandle(),$0
     )
 }
+}
+    
+open func recordSnapshot(sessionId: String, kind: String, cwd: String?, cols: UInt16, rows: UInt16, lines: [String])throws   {try rustCallWithError(FfiConverterTypeWorkspaceServiceError_lift) {
+    uniffi_workspace_ffi_fn_method_workspaceservice_record_snapshot(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(sessionId),
+        FfiConverterString.lower(kind),
+        FfiConverterOptionString.lower(cwd),
+        FfiConverterUInt16.lower(cols),
+        FfiConverterUInt16.lower(rows),
+        FfiConverterSequenceString.lower(lines),$0
+    )
+}
+}
+    
+open func startSession(workspaceId: String, transport: SessionTransport, targetLabel: String, title: String, shell: String, initialCwd: String?)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeWorkspaceServiceError_lift) {
+    uniffi_workspace_ffi_fn_method_workspaceservice_start_session(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(workspaceId),
+        FfiConverterTypeSessionTransport_lower(transport),
+        FfiConverterString.lower(targetLabel),
+        FfiConverterString.lower(title),
+        FfiConverterString.lower(shell),
+        FfiConverterOptionString.lower(initialCwd),$0
+    )
+})
 }
     
 open func updateWorkspaceNote(workspaceId: String, noteBody: String)throws   {try rustCallWithError(FfiConverterTypeWorkspaceServiceError_lift) {
@@ -1245,6 +1288,12 @@ public enum WorkspaceServiceError: Swift.Error, Equatable, Hashable, Foundation.
     
     case ReconcileInterruptedFailed(message: String)
     
+    case StartSessionFailed(message: String)
+    
+    case RecordSnapshotFailed(message: String)
+    
+    case CloseSessionFailed(message: String)
+    
 
     
 
@@ -1302,6 +1351,18 @@ public struct FfiConverterTypeWorkspaceServiceError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 8: return .StartSessionFailed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 9: return .RecordSnapshotFailed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 10: return .CloseSessionFailed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -1327,6 +1388,12 @@ public struct FfiConverterTypeWorkspaceServiceError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(6))
         case .ReconcileInterruptedFailed(_ /* message is ignored*/):
             writeInt(&buf, Int32(7))
+        case .StartSessionFailed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(8))
+        case .RecordSnapshotFailed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(9))
+        case .CloseSessionFailed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(10))
 
         
         }
@@ -1487,6 +1554,9 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
+    if (uniffi_workspace_ffi_checksum_method_workspaceservice_close_session() != 19310) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_workspace_ffi_checksum_method_workspaceservice_create_workspace() != 24040) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -1494,6 +1564,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_workspace_ffi_checksum_method_workspaceservice_reconcile_interrupted_sessions() != 53886) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_workspace_ffi_checksum_method_workspaceservice_record_snapshot() != 38692) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_workspace_ffi_checksum_method_workspaceservice_start_session() != 2553) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_workspace_ffi_checksum_method_workspaceservice_update_workspace_note() != 7326) {
