@@ -77,11 +77,22 @@ pub const Store = struct {
         defer items.deinit(allocator);
 
         while (try stmt.step()) {
+            const workspace_id = try stmt.columnOwnedText(allocator, 0);
+            errdefer allocator.free(workspace_id);
+            const name = try stmt.columnOwnedText(allocator, 1);
+            errdefer allocator.free(name);
+            const live_session_details = try self.sessionsForWorkspace(allocator, workspace_id, .live);
+            errdefer {
+                for (live_session_details) |*session| session.deinit(allocator);
+                allocator.free(live_session_details);
+            }
+
             try items.append(allocator, .{
-                .id = try stmt.columnOwnedText(allocator, 0),
-                .name = try stmt.columnOwnedText(allocator, 1),
+                .id = workspace_id,
+                .name = name,
                 .updated_at = stmt.columnInt64(2),
                 .live_sessions = stmt.columnInt64(3),
+                .live_session_details = live_session_details,
                 .recently_closed_sessions = stmt.columnInt64(4),
                 .has_interrupted_sessions = stmt.columnInt64(5) != 0,
             });

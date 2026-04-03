@@ -170,6 +170,7 @@ pub const WorkspaceSummary = struct {
     id: []u8,
     name: []u8,
     live_sessions: i64,
+    live_session_details: []SessionSummary,
     recently_closed_sessions: i64,
     has_interrupted_sessions: bool,
     updated_at: i64,
@@ -177,6 +178,8 @@ pub const WorkspaceSummary = struct {
     pub fn deinit(self: *WorkspaceSummary, allocator: std.mem.Allocator) void {
         allocator.free(self.id);
         allocator.free(self.name);
+        for (self.live_session_details) |*session| session.deinit(allocator);
+        allocator.free(self.live_session_details);
         self.* = undefined;
     }
 };

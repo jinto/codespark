@@ -2,6 +2,14 @@ const std = @import("std");
 const models = @import("models.zig");
 const store_mod = @import("store.zig");
 
+// Re-export internal types for tests
+pub const Store = store_mod.Store;
+pub const StoreError = store_mod.StoreError;
+pub const SessionTransport = models.SessionTransport;
+pub const CloseReason = models.CloseReason;
+pub const WorkspaceSummary = models.WorkspaceSummary;
+pub const SessionSummary = models.SessionSummary;
+
 const c_allocator = std.heap.c_allocator;
 
 pub const workspace_status_t = enum(c_int) {
