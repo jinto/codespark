@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @ObservedObject var model: AppModel
+    @State private var expandedWorkspaceIDs: Set<String> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -25,18 +26,49 @@ struct SidebarView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(model.workspaces) { workspace in
-                        WorkspaceSidebarRow(
-                            workspace: workspace,
-                            isSelected: model.selectedWorkspaceID == workspace.id
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            Task { await model.selectWorkspace(id: workspace.id) }
+                        VStack(alignment: .leading, spacing: 0) {
+                            WorkspaceSidebarRow(
+                                workspace: workspace,
+                                isSelected: model.selectedWorkspaceID == workspace.id,
+                                isExpanded: expandedWorkspaceIDs.contains(workspace.id)
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if expandedWorkspaceIDs.contains(workspace.id) {
+                                    expandedWorkspaceIDs.remove(workspace.id)
+                                } else {
+                                    expandedWorkspaceIDs.insert(workspace.id)
+                                }
+                                Task { await model.selectWorkspace(id: workspace.id) }
+                            }
+
+                            if expandedWorkspaceIDs.contains(workspace.id) {
+                                ForEach(workspace.liveSessionDetails) { session in
+                                    SessionSidebarRow(
+                                        session: session,
+                                        isActive: model.activeSessionID == session.id,
+                                        isIdle: model.idleSessionIDs.contains(session.id),
+                                        onSelect: {
+                                            model.activeSessionID = session.id
+                                            Task { await model.selectWorkspace(id: workspace.id) }
+                                        },
+                                        onRename: { newTitle in
+                                            Task { await model.renameSession(id: session.id, title: newTitle) }
+                                        }
+                                    )
+                                    .padding(.leading, 18)
+                                }
+                            }
                         }
                     }
                 }
                 .padding(.horizontal, 8)
                 .padding(.top, 8)
+            }
+            .onAppear {
+                if let first = model.workspaces.first {
+                    expandedWorkspaceIDs.insert(first.id)
+                }
             }
 
             Spacer()
@@ -61,9 +93,15 @@ struct SidebarView: View {
 struct WorkspaceSidebarRow: View {
     let workspace: WorkspaceSummaryViewData
     let isSelected: Bool
+    let isExpanded: Bool
 
     var body: some View {
         HStack(spacing: 10) {
+            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: 10)
+
             Circle()
                 .fill(statusColor)
                 .frame(width: 8, height: 8)
