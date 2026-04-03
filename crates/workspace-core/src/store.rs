@@ -337,51 +337,7 @@ impl Store {
                and s.state in ('closed', 'exited', 'lost', 'crashed', 'interrupted')
              order by s.updated_at desc, s.rowid desc",
         )?;
-        let rows = stmt.query_map(params![workspace_id], |row| {
-            let id: String = row.get(0)?;
-            let transport = SessionTransport::from_sql_str(&row.get::<_, String>(2)?)?;
-            let initial_cwd: Option<String> = row.get(5)?;
-            let last_cwd: Option<String> = row.get(6)?;
-
-            let snapshot_cwd: Option<String> = row.get(8)?;
-            let snapshot_preview = match row.get::<_, Option<i64>>(9)? {
-                Some(cols) => TerminalGrid {
-                    cols: safe_u16(cols, "cols")?,
-                    rows: safe_u16(row.get::<_, i64>(10)?, "rows")?,
-                    lines: decode_terminal_grid_lines(
-                        row.get(11)?,
-                        row.get::<_, Vec<u8>>(12)?,
-                    )?,
-                },
-                None => TerminalGrid::empty(),
-            };
-
-            let restore_cwd = snapshot_cwd
-                .or_else(|| last_cwd.clone())
-                .or_else(|| initial_cwd.clone());
-            let shell: String = row.get(4)?;
-            let target_label: String = row.get(3)?;
-            let restore_recipe = build_restore_recipe(
-                transport,
-                &target_label,
-                &shell,
-                restore_cwd.as_deref(),
-            );
-
-            Ok(ClosedSessionSummary {
-                id,
-                title: row.get(1)?,
-                transport,
-                target_label,
-                last_cwd: restore_cwd,
-                close_reason: match row.get::<_, Option<String>>(7)? {
-                    Some(ref s) => CloseReason::from_sql_str(s)?,
-                    None => CloseReason::UserClosed,
-                },
-                snapshot_preview,
-                restore_recipe,
-            })
-        })?;
+        let rows = stmt.query_map(params![workspace_id], map_closed_session_row)?;
 
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
@@ -423,6 +379,52 @@ fn now() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .expect("system clock before unix epoch")
         .as_nanos() as i64
+}
+
+fn map_closed_session_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ClosedSessionSummary> {
+    let id: String = row.get(0)?;
+    let transport = SessionTransport::from_sql_str(&row.get::<_, String>(2)?)?;
+    let initial_cwd: Option<String> = row.get(5)?;
+    let last_cwd: Option<String> = row.get(6)?;
+
+    let snapshot_cwd: Option<String> = row.get(8)?;
+    let snapshot_preview = match row.get::<_, Option<i64>>(9)? {
+        Some(cols) => TerminalGrid {
+            cols: safe_u16(cols, "cols")?,
+            rows: safe_u16(row.get::<_, i64>(10)?, "rows")?,
+            lines: decode_terminal_grid_lines(
+                row.get(11)?,
+                row.get::<_, Vec<u8>>(12)?,
+            )?,
+        },
+        None => TerminalGrid::empty(),
+    };
+
+    let restore_cwd = snapshot_cwd
+        .or_else(|| last_cwd.clone())
+        .or_else(|| initial_cwd.clone());
+    let shell: String = row.get(4)?;
+    let target_label: String = row.get(3)?;
+    let restore_recipe = build_restore_recipe(
+        transport,
+        &target_label,
+        &shell,
+        restore_cwd.as_deref(),
+    );
+
+    Ok(ClosedSessionSummary {
+        id,
+        title: row.get(1)?,
+        transport,
+        target_label,
+        last_cwd: restore_cwd,
+        close_reason: match row.get::<_, Option<String>>(7)? {
+            Some(ref s) => CloseReason::from_sql_str(s)?,
+            None => CloseReason::UserClosed,
+        },
+        snapshot_preview,
+        restore_recipe,
+    })
 }
 
 fn encode_terminal_grid_lines(grid: &TerminalGrid) -> Vec<u8> {
