@@ -6,6 +6,9 @@ pub enum SessionTransport {
     Ssh,
 }
 
+/// Session states that may appear in the database.
+/// `Exited`, `Lost`, and `Crashed` are not set by Store methods directly
+/// but may be written by external processes or future session-lifecycle code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionState {
     Live,

@@ -1,8 +1,7 @@
+mod common;
+
 use workspace_core::Store;
 use std::fs;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn creates_and_lists_workspaces_in_recent_order() {
@@ -32,7 +31,7 @@ fn memory_databases_do_not_share_state_across_connections() {
 
 #[test]
 fn file_backed_databases_persist_across_reopen() {
-    let path = unique_db_path();
+    let path = common::unique_db_path("workspace-store");
 
     {
         let store = Store::open(path.to_str().unwrap()).unwrap();
@@ -48,12 +47,3 @@ fn file_backed_databases_persist_across_reopen() {
     let _ = fs::remove_file(path);
 }
 
-fn unique_db_path() -> PathBuf {
-    static NEXT: AtomicU64 = AtomicU64::new(1);
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let suffix = NEXT.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!("workspace-core-{stamp}-{suffix}.sqlite3"))
-}

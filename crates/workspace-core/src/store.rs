@@ -40,23 +40,12 @@ impl Store {
                 w.id,
                 w.name,
                 w.updated_at,
-                coalesce((
-                    select count(*)
-                    from sessions s
-                    where s.workspace_id = w.id and s.state = 'live'
-                ), 0) as live_sessions,
-                coalesce((
-                    select count(*)
-                    from sessions s
-                    where s.workspace_id = w.id
-                      and s.state in ('closed', 'exited', 'lost', 'crashed')
-                ), 0) as recently_closed_sessions,
-                exists(
-                    select 1
-                    from sessions s
-                    where s.workspace_id = w.id and s.state = 'interrupted'
-                ) as has_interrupted_sessions
+                coalesce(sum(case when s.state = 'live' then 1 else 0 end), 0),
+                coalesce(sum(case when s.state in ('closed','exited','lost','crashed') then 1 else 0 end), 0),
+                coalesce(max(case when s.state = 'interrupted' then 1 else 0 end), 0)
              from workspaces w
+             left join sessions s on s.workspace_id = w.id
+             group by w.id, w.name, w.updated_at
              order by w.updated_at desc, w.rowid desc",
         )?;
         let rows = stmt.query_map([], |row| {
@@ -291,7 +280,11 @@ impl Store {
                 line_count integer not null,
                 payload blob not null,
                 created_at integer not null
-            );",
+            );
+
+            create index if not exists idx_sessions_workspace_id on sessions(workspace_id);
+            create index if not exists idx_sessions_state on sessions(state);
+            create index if not exists idx_snapshots_session_id on snapshots(session_id);",
         )
     }
 
@@ -310,14 +303,13 @@ impl Store {
             Ok(SessionSummary {
                 id: row.get(0)?,
                 title: row.get(1)?,
-                transport: session_transport_from_str(&row.get::<_, String>(2)?),
+                transport: session_transport_from_str(&row.get::<_, String>(2)?)?,
                 target_label: row.get(3)?,
                 last_cwd: row.get(4)?,
-                close_reason: row
-                    .get::<_, Option<String>>(5)?
-                    .as_deref()
-                    .map(close_reason_from_str)
-                    .unwrap_or(CloseReason::UserClosed),
+                close_reason: match row.get::<_, Option<String>>(5)? {
+                    Some(ref s) => close_reason_from_str(s)?,
+                    None => CloseReason::UserClosed,
+                },
             })
         })?;
 
@@ -337,7 +329,7 @@ impl Store {
         )?;
         let rows = stmt.query_map(params![workspace_id], |row| {
             let id: String = row.get(0)?;
-            let transport = session_transport_from_str(&row.get::<_, String>(2)?);
+            let transport = session_transport_from_str(&row.get::<_, String>(2)?)?;
             let initial_cwd: Option<String> = row.get(5)?;
             let last_cwd: Option<String> = row.get(6)?;
             let snapshot = self.latest_snapshot_for(&id)?;
@@ -364,11 +356,10 @@ impl Store {
                 transport,
                 target_label: row.get(3)?,
                 last_cwd: restore_cwd,
-                close_reason: row
-                    .get::<_, Option<String>>(7)?
-                    .as_deref()
-                    .map(close_reason_from_str)
-                    .unwrap_or(CloseReason::UserClosed),
+                close_reason: match row.get::<_, Option<String>>(7)? {
+                    Some(ref s) => close_reason_from_str(s)?,
+                    None => CloseReason::UserClosed,
+                },
                 snapshot_preview,
                 restore_recipe,
             })
@@ -387,12 +378,12 @@ impl Store {
                  limit 1",
                 params![session_id],
                 |row| {
+                    let _kind: String = row.get(0)?;
                     Ok(StoredSnapshot {
-                        _kind: snapshot_kind_from_str(&row.get::<_, String>(0)?),
                         cwd: row.get(1)?,
                         grid: TerminalGrid {
-                            cols: row.get::<_, i64>(2)? as u16,
-                            rows: row.get::<_, i64>(3)? as u16,
+                            cols: safe_u16(row.get(2)?, "cols")?,
+                            rows: safe_u16(row.get(3)?, "rows")?,
                             lines: decode_terminal_grid_lines(
                                 row.get(4)?,
                                 row.get::<_, Vec<u8>>(5)?,
@@ -416,13 +407,24 @@ impl Store {
     }
 
     fn touch_workspace_by_session(&self, session_id: &str) -> rusqlite::Result<()> {
-        let workspace_id: String = self.conn.query_row(
-            "select workspace_id from sessions where id = ?1",
-            params![session_id],
-            |row| row.get(0),
+        let updated_at = now();
+        self.conn.execute(
+            "update workspaces set updated_at = ?2
+             where id = (select workspace_id from sessions where id = ?1)",
+            params![session_id, updated_at],
         )?;
-        self.touch_workspace(&workspace_id)
+        Ok(())
     }
+}
+
+fn safe_u16(value: i64, column: &str) -> rusqlite::Result<u16> {
+    u16::try_from(value).map_err(|_| {
+        rusqlite::Error::FromSqlConversionFailure(
+            0,
+            rusqlite::types::Type::Integer,
+            format!("{column} value {value} out of u16 range").into(),
+        )
+    })
 }
 
 fn now() -> i64 {
@@ -439,11 +441,15 @@ fn session_transport_to_str(value: SessionTransport) -> &'static str {
     }
 }
 
-fn session_transport_from_str(value: &str) -> SessionTransport {
+fn session_transport_from_str(value: &str) -> rusqlite::Result<SessionTransport> {
     match value {
-        "local" => SessionTransport::Local,
-        "ssh" => SessionTransport::Ssh,
-        other => panic!("unknown session transport: {other}"),
+        "local" => Ok(SessionTransport::Local),
+        "ssh" => Ok(SessionTransport::Ssh),
+        other => Err(rusqlite::Error::FromSqlConversionFailure(
+            2,
+            rusqlite::types::Type::Text,
+            format!("unknown session transport: {other}").into(),
+        )),
     }
 }
 
@@ -468,14 +474,18 @@ fn close_reason_to_str(value: CloseReason) -> &'static str {
     }
 }
 
-fn close_reason_from_str(value: &str) -> CloseReason {
+fn close_reason_from_str(value: &str) -> rusqlite::Result<CloseReason> {
     match value {
-        "user_closed" => CloseReason::UserClosed,
-        "process_exited" => CloseReason::ProcessExited,
-        "ssh_disconnected" => CloseReason::SshDisconnected,
-        "app_crashed" => CloseReason::AppCrashed,
-        "host_quit" => CloseReason::HostQuit,
-        other => panic!("unknown close reason: {other}"),
+        "user_closed" => Ok(CloseReason::UserClosed),
+        "process_exited" => Ok(CloseReason::ProcessExited),
+        "ssh_disconnected" => Ok(CloseReason::SshDisconnected),
+        "app_crashed" => Ok(CloseReason::AppCrashed),
+        "host_quit" => Ok(CloseReason::HostQuit),
+        other => Err(rusqlite::Error::FromSqlConversionFailure(
+            5,
+            rusqlite::types::Type::Text,
+            format!("unknown close reason: {other}").into(),
+        )),
     }
 }
 
@@ -486,13 +496,6 @@ fn snapshot_kind_to_str(value: SnapshotKind) -> &'static str {
     }
 }
 
-fn snapshot_kind_from_str(value: &str) -> SnapshotKind {
-    match value {
-        "checkpoint" => SnapshotKind::Checkpoint,
-        "final" => SnapshotKind::Final,
-        other => panic!("unknown snapshot kind: {other}"),
-    }
-}
 
 fn encode_terminal_grid_lines(grid: &TerminalGrid) -> Vec<u8> {
     grid.lines.join("\n").into_bytes()
@@ -511,7 +514,6 @@ fn decode_terminal_grid_lines(line_count: i64, payload: Vec<u8>) -> rusqlite::Re
 
 #[derive(Debug, Clone)]
 struct StoredSnapshot {
-    _kind: SnapshotKind,
     cwd: Option<String>,
     grid: TerminalGrid,
 }

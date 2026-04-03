@@ -1,9 +1,8 @@
-use workspace_core::{CloseReason, NewSession, SessionTransport, Store};
+mod common;
+
 use rusqlite::Connection;
 use std::fs;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use workspace_core::{CloseReason, NewSession, SessionTransport, Store};
 
 #[test]
 fn closing_a_session_moves_it_to_recently_closed_and_persists_the_workspace_note() {
@@ -43,7 +42,7 @@ fn closing_a_session_moves_it_to_recently_closed_and_persists_the_workspace_note
 
 #[test]
 fn file_backed_reopen_preserves_workspace_note_and_session_counts() {
-    let path = unique_db_path();
+    let path = common::unique_db_path("session-lifecycle");
 
     {
         let store = Store::open(path.to_str().unwrap()).unwrap();
@@ -126,7 +125,7 @@ fn closing_an_already_closed_session_keeps_existing_recovery_data() {
 
 #[test]
 fn session_activity_updates_workspace_list_recency() {
-    let path = unique_db_path();
+    let path = common::unique_db_path("session-lifecycle");
 
     {
         let store = Store::open(path.to_str().unwrap()).unwrap();
@@ -173,7 +172,7 @@ fn session_activity_updates_workspace_list_recency() {
 
 #[test]
 fn start_session_rejects_missing_workspace_without_creating_orphan_row() {
-    let path = unique_db_path();
+    let path = common::unique_db_path("session-lifecycle");
     let store = Store::open(path.to_str().unwrap()).unwrap();
 
     let result = store.start_session(NewSession {
@@ -196,12 +195,3 @@ fn start_session_rejects_missing_workspace_without_creating_orphan_row() {
     let _ = fs::remove_file(path);
 }
 
-fn unique_db_path() -> PathBuf {
-    static NEXT: AtomicU64 = AtomicU64::new(1);
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let suffix = NEXT.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!("workspace-core-session-{stamp}-{suffix}.sqlite3"))
-}

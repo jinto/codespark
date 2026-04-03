@@ -2,7 +2,7 @@ mod models;
 mod restore;
 mod snapshot;
 mod store;
-mod timeline;
+
 
 pub use models::CloseReason;
 pub use models::ClosedSessionSummary;
@@ -18,4 +18,4 @@ pub use snapshot::NewSnapshot;
 pub use snapshot::SnapshotKind;
 pub use snapshot::TerminalGrid;
 pub use store::Store;
-pub use timeline::TimelineEventKind;
+

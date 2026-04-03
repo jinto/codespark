@@ -4,6 +4,8 @@ protocol WorkspaceCoreClientProtocol {
     func listWorkspaceSummaries() async throws -> [WorkspaceSummaryViewData]
     func workspaceDetail(id: String) async throws -> WorkspaceDetailViewData
     func updateWorkspaceNote(id: String, noteBody: String) async throws
+
+    // MARK: - Future session lifecycle (not yet wired to FFI bridge)
     func recordFinalSnapshotAndClose(
         sessionID: String,
         snapshot: TerminalSnapshotViewData,

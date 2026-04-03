@@ -2,7 +2,6 @@ import SwiftUI
 
 @main
 struct StatefulTerminalApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel(core: WorkspaceCoreClient.live)
 
     var body: some Scene {

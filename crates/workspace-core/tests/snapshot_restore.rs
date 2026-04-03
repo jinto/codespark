@@ -1,8 +1,7 @@
+mod common;
+
 use rusqlite::Connection;
 use std::fs;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 use workspace_core::{
     CloseReason, NewSession, NewSnapshot, SessionTransport, SnapshotKind, Store, TerminalGrid,
 };
@@ -95,7 +94,7 @@ fn restore_recipe_prefers_latest_snapshot_cwd_over_stale_session_paths() {
 
 #[test]
 fn finalized_non_closed_states_are_hydrated_as_closed_session_summaries() {
-    let path = unique_db_path();
+    let path = common::unique_db_path("snapshot-restore");
 
     {
         let store = Store::open(path.to_str().unwrap()).unwrap();
@@ -147,14 +146,3 @@ fn finalized_non_closed_states_are_hydrated_as_closed_session_summaries() {
     let _ = fs::remove_file(path);
 }
 
-fn unique_db_path() -> PathBuf {
-    static NEXT: AtomicU64 = AtomicU64::new(1);
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let suffix = NEXT.fetch_add(1, Ordering::Relaxed);
-    std::env::temp_dir().join(format!(
-        "workspace-core-snapshot-restore-{stamp}-{suffix}.sqlite3"
-    ))
-}
