@@ -5,11 +5,10 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Header
             HStack {
                 Image(systemName: "terminal.fill")
                     .font(.title2)
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(AppTheme.accent)
                 Text("Spark")
                     .font(.title2)
                     .fontWeight(.bold)
@@ -19,10 +18,8 @@ struct SidebarView: View {
             .padding(.top, 20)
             .padding(.bottom, 12)
 
-            Divider()
-                .background(Color.white.opacity(0.06))
+            Divider().background(AppTheme.divider)
 
-            // Workspace list
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     ForEach(model.workspaces) { workspace in
@@ -42,9 +39,7 @@ struct SidebarView: View {
 
             Spacer()
 
-            // Footer
-            Divider()
-                .background(Color.white.opacity(0.06))
+            Divider().background(AppTheme.divider)
             HStack {
                 Circle()
                     .fill(.green)
@@ -57,7 +52,7 @@ struct SidebarView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .background(Color(nsColor: .init(red: 0.06, green: 0.06, blue: 0.08, alpha: 1)))
+        .background(AppTheme.sidebarBackground)
     }
 }
 
@@ -67,7 +62,6 @@ struct WorkspaceSidebarRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            // Status indicator
             Circle()
                 .fill(statusColor)
                 .frame(width: 8, height: 8)
@@ -102,7 +96,7 @@ struct WorkspaceSidebarRow: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.purple.opacity(0.25) : Color.clear)
+                .fill(isSelected ? AppTheme.accent.opacity(0.25) : Color.clear)
         )
     }
 

@@ -10,6 +10,7 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
     private let noteUpdateLatency: UInt64?
     private(set) var lastRecoveryAction: String?
     private(set) var closedSessionIDs: [String] = []
+    private var sessionCounter = 0
 
     init(
         summaries: [WorkspaceSummaryViewData],
@@ -32,7 +33,8 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
     }
 
     func startSession(workspaceId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String {
-        "mock-session-id"
+        sessionCounter += 1
+        return "mock-session-\(sessionCounter)"
     }
 
     func listWorkspaceSummaries() async throws -> [WorkspaceSummaryViewData] {

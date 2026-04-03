@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct StatefulTerminalApp: App {
     @StateObject private var model = AppModel(core: WorkspaceCoreClient.live)
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -14,7 +15,7 @@ struct StatefulTerminalApp: App {
 
                 MainContentView(model: model)
             }
-            .background(Color(nsColor: .init(red: 0.08, green: 0.08, blue: 0.10, alpha: 1)))
+            .background(AppTheme.toolbarBackground)
             .preferredColorScheme(.dark)
             .frame(minWidth: 1200, minHeight: 760)
             .task {
@@ -25,5 +26,39 @@ struct StatefulTerminalApp: App {
             }
         }
         .windowStyle(.hiddenTitleBar)
+        .commands {
+            CommandGroup(replacing: .newItem) {
+                Button("New Session") {
+                    Task { await model.newSession() }
+                }
+                .keyboardShortcut("t", modifiers: .command)
+
+                Divider()
+
+                Button("Close Session") {
+                    if let id = model.activeSessionID {
+                        model.closeSession(id: id)
+                    }
+                }
+                .keyboardShortcut("w", modifiers: .command)
+                .disabled(model.activeSessionID == nil)
+            }
+            CommandGroup(after: .windowArrangement) {
+                Button("Select Next Tab") {
+                    model.selectNextSession()
+                }
+                .keyboardShortcut("]", modifiers: [.command, .shift])
+
+                Button("Select Previous Tab") {
+                    model.selectPreviousSession()
+                }
+                .keyboardShortcut("[", modifiers: [.command, .shift])
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background {
+                model.saveAllSessionsAndClose()
+            }
+        }
     }
 }

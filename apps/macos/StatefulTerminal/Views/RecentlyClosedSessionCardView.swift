@@ -29,7 +29,7 @@ struct RecentlyClosedSessionCardView: View {
             }
         }
         .padding(10)
-        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.06), lineWidth: 1))
+        .background(AppTheme.cardBackground, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(AppTheme.divider, lineWidth: 1))
     }
 }
