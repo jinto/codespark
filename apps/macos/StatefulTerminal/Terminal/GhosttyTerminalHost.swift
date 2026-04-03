@@ -15,11 +15,16 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
     }
 
     func attach(sessionID: String) {
+        lastOutputTime = Date()
         surfaceView = GhosttyTerminalSurfaceView(
             app: app,
             workingDirectory: session.lastCwd,
             command: nil
         )
+    }
+
+    func markOutput() {
+        lastOutputTime = Date()
     }
 
     @MainActor
