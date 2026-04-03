@@ -82,13 +82,16 @@ final class AppModel: ObservableObject {
         guard var workspace = selectedWorkspace else {
             return
         }
+        let requestID = selectionRequestID
 
         do {
             try await core.updateWorkspaceNote(id: workspace.id, noteBody: noteDraft)
+            guard requestID == selectionRequestID else { return }
             workspace.noteBody = noteDraft
             selectedWorkspace = workspace
             noteSaveErrorMessage = nil
         } catch {
+            guard requestID == selectionRequestID else { return }
             noteSaveErrorMessage = error.localizedDescription
         }
     }

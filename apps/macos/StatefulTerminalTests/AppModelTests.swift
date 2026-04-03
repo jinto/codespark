@@ -8,13 +8,13 @@ final class AppModelTests: XCTestCase {
             summaries: [
                 WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false)
             ],
-            detail: WorkspaceDetailViewData(
+            details: [WorkspaceDetailViewData(
                 id: "ws-release",
                 name: "release",
                 noteBody: "check prod logs",
                 liveSessions: [],
                 closedSessions: []
-            )
+            )]
         )
         let model = AppModel(core: client)
 
@@ -106,13 +106,13 @@ final class AppModelTests: XCTestCase {
             summaries: [
                 WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false)
             ],
-            detail: WorkspaceDetailViewData(
+            details: [WorkspaceDetailViewData(
                 id: "ws-release",
                 name: "release",
                 noteBody: "check prod logs",
                 liveSessions: [],
                 closedSessions: []
-            ),
+            )],
             detailErrorsByID: ["ws-release": CocoaError(.fileReadUnknown)]
         )
         let model = AppModel(core: client)
@@ -156,13 +156,13 @@ final class AppModelTests: XCTestCase {
             summaries: [
                 WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false)
             ],
-            detail: WorkspaceDetailViewData(
+            details: [WorkspaceDetailViewData(
                 id: "ws-release",
                 name: "release",
                 noteBody: "check prod logs",
                 liveSessions: [],
                 closedSessions: []
-            ),
+            )],
             noteUpdateError: CocoaError(.fileWriteUnknown)
         )
         let model = AppModel(core: client)
@@ -173,5 +173,51 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.selectedWorkspace?.noteBody, "check prod logs")
         XCTAssertNotNil(model.noteSaveErrorMessage)
+    }
+
+    @MainActor
+    func test_save_note_does_not_overwrite_when_workspace_switches_during_save() async {
+        let client = MockWorkspaceCoreClient(
+            summaries: [
+                WorkspaceSummaryViewData(id: "ws-A", name: "Workspace A", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false),
+                WorkspaceSummaryViewData(id: "ws-B", name: "Workspace B", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false)
+            ],
+            details: [
+                WorkspaceDetailViewData(
+                    id: "ws-A",
+                    name: "Workspace A",
+                    noteBody: "original A note",
+                    liveSessions: [],
+                    closedSessions: []
+                ),
+                WorkspaceDetailViewData(
+                    id: "ws-B",
+                    name: "Workspace B",
+                    noteBody: "original B note",
+                    liveSessions: [],
+                    closedSessions: []
+                )
+            ],
+            noteUpdateLatency: 200_000_000
+        )
+        let model = AppModel(core: client)
+
+        await model.load()
+        XCTAssertEqual(model.selectedWorkspace?.id, "ws-A")
+
+        model.noteDraft = "updated A note"
+        let saveTask = Task { await model.saveNote() }
+        await Task.yield()
+
+        await model.selectWorkspace(id: "ws-B")
+        XCTAssertEqual(model.selectedWorkspace?.id, "ws-B")
+        XCTAssertEqual(model.noteDraft, "original B note")
+
+        await saveTask.value
+
+        XCTAssertEqual(model.selectedWorkspace?.id, "ws-B")
+        XCTAssertEqual(model.selectedWorkspace?.noteBody, "original B note")
+        XCTAssertEqual(model.noteDraft, "original B note")
+        XCTAssertNil(model.noteSaveErrorMessage)
     }
 }

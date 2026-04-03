@@ -15,8 +15,7 @@ protocol WorkspaceCoreClientProtocol {
 
 enum WorkspaceCoreClient {
     static let live: WorkspaceCoreClientProtocol = MockWorkspaceCoreClient(
-        summaries: [],
-        detail: nil
+        summaries: []
     )
 }
 
@@ -26,35 +25,24 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
     private let detailErrorsByID: [String: Error]
     private let detailLatencyByID: [String: UInt64]
     private let noteUpdateError: Error?
+    private let noteUpdateLatency: UInt64?
     private(set) var lastRecoveryAction: String?
     private(set) var closedSessionIDs: [String] = []
 
     init(
         summaries: [WorkspaceSummaryViewData],
-        detail: WorkspaceDetailViewData?,
+        details: [WorkspaceDetailViewData] = [],
         detailErrorsByID: [String: Error] = [:],
         detailLatencyByID: [String: UInt64] = [:],
-        noteUpdateError: Error? = nil
-    ) {
-        self.summaries = summaries
-        self.detailsByID = Self.makeDetailsMap(detail.map { [$0] } ?? [])
-        self.detailErrorsByID = detailErrorsByID
-        self.detailLatencyByID = detailLatencyByID
-        self.noteUpdateError = noteUpdateError
-    }
-
-    init(
-        summaries: [WorkspaceSummaryViewData],
-        details: [WorkspaceDetailViewData],
-        detailErrorsByID: [String: Error] = [:],
-        detailLatencyByID: [String: UInt64] = [:],
-        noteUpdateError: Error? = nil
+        noteUpdateError: Error? = nil,
+        noteUpdateLatency: UInt64? = nil
     ) {
         self.summaries = summaries
         self.detailsByID = Self.makeDetailsMap(details)
         self.detailErrorsByID = detailErrorsByID
         self.detailLatencyByID = detailLatencyByID
         self.noteUpdateError = noteUpdateError
+        self.noteUpdateLatency = noteUpdateLatency
     }
 
     func listWorkspaceSummaries() async throws -> [WorkspaceSummaryViewData] {
@@ -77,6 +65,10 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
     }
 
     func updateWorkspaceNote(id: String, noteBody: String) async throws {
+        if let noteUpdateLatency {
+            try? await Task.sleep(nanoseconds: noteUpdateLatency)
+        }
+
         if let noteUpdateError {
             throw noteUpdateError
         }
@@ -121,7 +113,7 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
                     hasInterruptedSessions: false
                 )
             ],
-            detail: WorkspaceDetailViewData(
+            details: [WorkspaceDetailViewData(
                 id: "ws-release",
                 name: "release",
                 noteBody: "check prod logs",
@@ -137,7 +129,7 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
                     )
                 ],
                 closedSessions: []
-            )
+            )]
         )
     }
 
@@ -152,7 +144,7 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
                     hasInterruptedSessions: true
                 )
             ],
-            detail: WorkspaceDetailViewData(
+            details: [WorkspaceDetailViewData(
                 id: "ws-spark3",
                 name: "spark3",
                 noteBody: "resume after crash",
@@ -173,7 +165,7 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
                         )
                     )
                 ]
-            )
+            )]
         )
     }
 }

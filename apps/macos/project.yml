@@ -11,16 +11,30 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - StatefulTerminal
+    preBuildScripts:
+      - name: Build workspace-ffi (Rust)
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "$CONFIGURATION" = "Release" ]; then
+            cargo build -p workspace-ffi --release
+          else
+            cargo build -p workspace-ffi
+          fi
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jinto.stateful-terminal
         GENERATE_INFOPLIST_FILE: YES
-        LIBRARY_SEARCH_PATHS:
-          - $(SRCROOT)/../../target/debug/deps
         OTHER_LDFLAGS:
           - $(inherited)
           - -lworkspace_ffi
         SWIFT_OBJC_BRIDGING_HEADER: StatefulTerminal/Bridge/StatefulTerminal-Bridging-Header.h
+      configs:
+        Debug:
+          LIBRARY_SEARCH_PATHS:
+            - $(SRCROOT)/../../target/debug/deps
+        Release:
+          LIBRARY_SEARCH_PATHS:
+            - $(SRCROOT)/../../target/release/deps
   StatefulTerminalTests:
     type: bundle.unit-test
     platform: macOS
