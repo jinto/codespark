@@ -120,3 +120,43 @@ fn oversized_snapshot_cols_returns_error_instead_of_truncating() {
 
     let _ = std::fs::remove_file(&path);
 }
+
+#[test]
+fn many_closed_sessions_return_correct_snapshots() {
+    let store = Store::open(":memory:").unwrap();
+    let ws_id = store.create_workspace("bench").unwrap();
+
+    for i in 0..20 {
+        let sid = store
+            .start_session(NewSession {
+                workspace_id: ws_id.clone(),
+                transport: SessionTransport::Local,
+                target_label: "local".into(),
+                title: format!("session-{i}"),
+                shell: "zsh".into(),
+                initial_cwd: Some(format!("/tmp/{i}")),
+            })
+            .unwrap();
+
+        store
+            .record_snapshot(NewSnapshot {
+                session_id: sid.clone(),
+                kind: SnapshotKind::Final,
+                cwd: Some(format!("/tmp/{i}")),
+                grid: TerminalGrid::from_lines(80, 24, &[&format!("output-{i}")]),
+            })
+            .unwrap();
+
+        store
+            .close_session(&sid, CloseReason::UserClosed, Some(format!("/tmp/{i}")), None)
+            .unwrap();
+    }
+
+    let detail = store.workspace_detail(&ws_id).unwrap();
+    assert_eq!(detail.closed_sessions.len(), 20);
+    assert_eq!(detail.closed_sessions[0].title, "session-19");
+    assert_eq!(detail.closed_sessions[0].snapshot_preview.lines[0], "output-19");
+    assert_eq!(detail.closed_sessions[0].last_cwd.as_deref(), Some("/tmp/19"));
+    assert_eq!(detail.closed_sessions[19].title, "session-0");
+    assert_eq!(detail.closed_sessions[19].snapshot_preview.lines[0], "output-0");
+}

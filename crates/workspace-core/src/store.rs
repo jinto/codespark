@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 
 use crate::{
     build_restore_recipe, CloseReason, ClosedSessionSummary, NewSession, NewSnapshot, SessionState,
@@ -322,31 +322,48 @@ impl Store {
         workspace_id: &str,
     ) -> Result<Vec<ClosedSessionSummary>, StoreError> {
         let mut stmt = self.conn.prepare(
-            "select id, title, transport, target_label, shell, initial_cwd, last_cwd, close_reason
-             from sessions
-             where workspace_id = ?1
-               and state in ('closed', 'exited', 'lost', 'crashed', 'interrupted')
-             order by updated_at desc, rowid desc",
+            "select
+                s.id, s.title, s.transport, s.target_label, s.shell,
+                s.initial_cwd, s.last_cwd, s.close_reason,
+                snap.cwd as snap_cwd, snap.cols, snap.rows, snap.line_count, snap.payload
+             from sessions s
+             left join snapshots snap on snap.id = (
+                 select id from snapshots
+                 where session_id = s.id
+                 order by created_at desc, rowid desc
+                 limit 1
+             )
+             where s.workspace_id = ?1
+               and s.state in ('closed', 'exited', 'lost', 'crashed', 'interrupted')
+             order by s.updated_at desc, s.rowid desc",
         )?;
         let rows = stmt.query_map(params![workspace_id], |row| {
             let id: String = row.get(0)?;
             let transport = SessionTransport::from_sql_str(&row.get::<_, String>(2)?)?;
             let initial_cwd: Option<String> = row.get(5)?;
             let last_cwd: Option<String> = row.get(6)?;
-            let snapshot = self.latest_snapshot_for(&id)?;
-            let snapshot_preview = snapshot
-                .as_ref()
-                .map(|snapshot| snapshot.grid.clone())
-                .unwrap_or_else(TerminalGrid::empty);
-            let restore_cwd = snapshot
-                .as_ref()
-                .and_then(|snapshot| snapshot.cwd.clone())
+
+            let snapshot_cwd: Option<String> = row.get(8)?;
+            let snapshot_preview = match row.get::<_, Option<i64>>(9)? {
+                Some(cols) => TerminalGrid {
+                    cols: safe_u16(cols, "cols")?,
+                    rows: safe_u16(row.get::<_, i64>(10)?, "rows")?,
+                    lines: decode_terminal_grid_lines(
+                        row.get(11)?,
+                        row.get::<_, Vec<u8>>(12)?,
+                    )?,
+                },
+                None => TerminalGrid::empty(),
+            };
+
+            let restore_cwd = snapshot_cwd
                 .or_else(|| last_cwd.clone())
                 .or_else(|| initial_cwd.clone());
             let shell: String = row.get(4)?;
+            let target_label: String = row.get(3)?;
             let restore_recipe = build_restore_recipe(
                 transport,
-                &row.get::<_, String>(3)?,
+                &target_label,
                 &shell,
                 restore_cwd.as_deref(),
             );
@@ -355,7 +372,7 @@ impl Store {
                 id,
                 title: row.get(1)?,
                 transport,
-                target_label: row.get(3)?,
+                target_label,
                 last_cwd: restore_cwd,
                 close_reason: match row.get::<_, Option<String>>(7)? {
                     Some(ref s) => CloseReason::from_sql_str(s)?,
@@ -367,33 +384,6 @@ impl Store {
         })?;
 
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
-    }
-
-    fn latest_snapshot_for(&self, session_id: &str) -> rusqlite::Result<Option<StoredSnapshot>> {
-        self.conn
-            .query_row(
-                "select kind, cwd, cols, rows, line_count, payload
-                 from snapshots
-                 where session_id = ?1
-                 order by created_at desc, rowid desc
-                 limit 1",
-                params![session_id],
-                |row| {
-                    let _kind: String = row.get(0)?;
-                    Ok(StoredSnapshot {
-                        cwd: row.get(1)?,
-                        grid: TerminalGrid {
-                            cols: safe_u16(row.get(2)?, "cols")?,
-                            rows: safe_u16(row.get(3)?, "rows")?,
-                            lines: decode_terminal_grid_lines(
-                                row.get(4)?,
-                                row.get::<_, Vec<u8>>(5)?,
-                            )?,
-                        },
-                    })
-                },
-            )
-            .optional()
     }
 
     fn touch_workspace(&self, workspace_id: &str) -> Result<(), StoreError> {
@@ -458,8 +448,3 @@ fn decode_terminal_grid_lines(line_count: i64, payload: Vec<u8>) -> rusqlite::Re
     Ok(text.split('\n').map(str::to_owned).collect())
 }
 
-#[derive(Debug, Clone)]
-struct StoredSnapshot {
-    cwd: Option<String>,
-    grid: TerminalGrid,
-}
