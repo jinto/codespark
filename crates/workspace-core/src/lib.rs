@@ -1,9 +1,10 @@
+mod error;
 mod models;
 mod restore;
 mod snapshot;
 mod store;
 
-
+pub use error::StoreError;
 pub use models::CloseReason;
 pub use models::ClosedSessionSummary;
 pub use models::NewSession;

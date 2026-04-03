@@ -2,7 +2,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 
 use crate::{
     build_restore_recipe, CloseReason, ClosedSessionSummary, NewSession, NewSnapshot, SessionState,
-    SessionSummary, SessionTransport, SnapshotKind, TerminalGrid, WorkspaceDetail,
+    SessionSummary, SessionTransport, SnapshotKind, StoreError, TerminalGrid, WorkspaceDetail,
     WorkspaceSummary,
 };
 
@@ -11,7 +11,7 @@ pub struct Store {
 }
 
 impl Store {
-    pub fn open(path: &str) -> rusqlite::Result<Self> {
+    pub fn open(path: &str) -> Result<Self, StoreError> {
         let conn = Connection::open(path)?;
         conn.execute_batch("pragma foreign_keys = on;")?;
         let store = Self { conn };
@@ -19,7 +19,7 @@ impl Store {
         Ok(store)
     }
 
-    pub fn create_workspace(&self, name: &str) -> rusqlite::Result<String> {
+    pub fn create_workspace(&self, name: &str) -> Result<String, StoreError> {
         let updated_at = now();
         self.conn.execute(
             "insert into workspaces (id, name, note_body, updated_at, last_opened_at)
@@ -27,14 +27,14 @@ impl Store {
             params![name, updated_at],
         )?;
 
-        self.conn.query_row(
+        Ok(self.conn.query_row(
             "select id from workspaces where rowid = last_insert_rowid()",
             [],
             |row| row.get(0),
-        )
+        )?)
     }
 
-    pub fn list_workspace_summaries(&self) -> rusqlite::Result<Vec<WorkspaceSummary>> {
+    pub fn list_workspace_summaries(&self) -> Result<Vec<WorkspaceSummary>, StoreError> {
         let mut stmt = self.conn.prepare(
             "select
                 w.id,
@@ -59,14 +59,14 @@ impl Store {
             })
         })?;
 
-        rows.collect()
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     pub fn update_workspace_note(
         &self,
         workspace_id: &str,
         note_body: &str,
-    ) -> rusqlite::Result<()> {
+    ) -> Result<(), StoreError> {
         let updated_at = now();
         self.conn.execute(
             "update workspaces
@@ -77,7 +77,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn start_session(&self, input: NewSession) -> rusqlite::Result<String> {
+    pub fn start_session(&self, input: NewSession) -> Result<String, StoreError> {
         let updated_at = now();
         self.conn.execute(
             "insert into sessions (
@@ -112,7 +112,7 @@ impl Store {
         Ok(session_id)
     }
 
-    pub fn record_snapshot(&self, input: NewSnapshot) -> rusqlite::Result<()> {
+    pub fn record_snapshot(&self, input: NewSnapshot) -> Result<(), StoreError> {
         let created_at = now();
         self.conn.execute(
             "insert into snapshots (
@@ -143,7 +143,7 @@ impl Store {
         reason: CloseReason,
         last_cwd: Option<String>,
         exit_status: Option<i64>,
-    ) -> rusqlite::Result<()> {
+    ) -> Result<(), StoreError> {
         let updated_at = now();
         let changed = self.conn.execute(
             "update sessions
@@ -175,7 +175,7 @@ impl Store {
                 return Ok(());
             }
 
-            return Err(rusqlite::Error::QueryReturnedNoRows);
+            return Err(rusqlite::Error::QueryReturnedNoRows.into());
         }
 
         self.touch_workspace_by_session(session_id)?;
@@ -183,7 +183,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn reconcile_interrupted_sessions(&self) -> rusqlite::Result<()> {
+    pub fn reconcile_interrupted_sessions(&self) -> Result<(), StoreError> {
         let updated_at = now();
         let mut stmt = self.conn.prepare(
             "select id
@@ -217,7 +217,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn workspace_detail(&self, workspace_id: &str) -> rusqlite::Result<WorkspaceDetail> {
+    pub fn workspace_detail(&self, workspace_id: &str) -> Result<WorkspaceDetail, StoreError> {
         let workspace = self.conn.query_row(
             "select id, name, note_body
              from workspaces
@@ -244,7 +244,7 @@ impl Store {
         })
     }
 
-    fn migrate(&self) -> rusqlite::Result<()> {
+    fn migrate(&self) -> Result<(), StoreError> {
         self.conn.execute_batch(
             "create table if not exists workspaces (
                 id text primary key not null,
@@ -285,14 +285,15 @@ impl Store {
             create index if not exists idx_sessions_workspace_id on sessions(workspace_id);
             create index if not exists idx_sessions_state on sessions(state);
             create index if not exists idx_snapshots_session_id on snapshots(session_id);",
-        )
+        )?;
+        Ok(())
     }
 
     fn sessions_for_workspace(
         &self,
         workspace_id: &str,
         state: SessionState,
-    ) -> rusqlite::Result<Vec<SessionSummary>> {
+    ) -> Result<Vec<SessionSummary>, StoreError> {
         let mut stmt = self.conn.prepare(
             "select id, title, transport, target_label, last_cwd, close_reason
              from sessions
@@ -313,13 +314,13 @@ impl Store {
             })
         })?;
 
-        rows.collect()
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     fn closed_sessions_for_workspace(
         &self,
         workspace_id: &str,
-    ) -> rusqlite::Result<Vec<ClosedSessionSummary>> {
+    ) -> Result<Vec<ClosedSessionSummary>, StoreError> {
         let mut stmt = self.conn.prepare(
             "select id, title, transport, target_label, shell, initial_cwd, last_cwd, close_reason
              from sessions
@@ -365,7 +366,7 @@ impl Store {
             })
         })?;
 
-        rows.collect()
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
     fn latest_snapshot_for(&self, session_id: &str) -> rusqlite::Result<Option<StoredSnapshot>> {
@@ -395,7 +396,7 @@ impl Store {
             .optional()
     }
 
-    fn touch_workspace(&self, workspace_id: &str) -> rusqlite::Result<()> {
+    fn touch_workspace(&self, workspace_id: &str) -> Result<(), StoreError> {
         let updated_at = now();
         self.conn.execute(
             "update workspaces
@@ -406,7 +407,7 @@ impl Store {
         Ok(())
     }
 
-    fn touch_workspace_by_session(&self, session_id: &str) -> rusqlite::Result<()> {
+    fn touch_workspace_by_session(&self, session_id: &str) -> Result<(), StoreError> {
         let updated_at = now();
         self.conn.execute(
             "update workspaces set updated_at = ?2
@@ -446,7 +447,7 @@ fn session_transport_from_str(value: &str) -> rusqlite::Result<SessionTransport>
         "local" => Ok(SessionTransport::Local),
         "ssh" => Ok(SessionTransport::Ssh),
         other => Err(rusqlite::Error::FromSqlConversionFailure(
-            2,
+            0,
             rusqlite::types::Type::Text,
             format!("unknown session transport: {other}").into(),
         )),
@@ -482,7 +483,7 @@ fn close_reason_from_str(value: &str) -> rusqlite::Result<CloseReason> {
         "app_crashed" => Ok(CloseReason::AppCrashed),
         "host_quit" => Ok(CloseReason::HostQuit),
         other => Err(rusqlite::Error::FromSqlConversionFailure(
-            5,
+            0,
             rusqlite::types::Type::Text,
             format!("unknown close reason: {other}").into(),
         )),
@@ -498,7 +499,15 @@ fn snapshot_kind_to_str(value: SnapshotKind) -> &'static str {
 
 
 fn encode_terminal_grid_lines(grid: &TerminalGrid) -> Vec<u8> {
-    grid.lines.join("\n").into_bytes()
+    let capacity: usize = grid.lines.iter().map(|l| l.len() + 1).sum();
+    let mut buf = Vec::with_capacity(capacity);
+    for (i, line) in grid.lines.iter().enumerate() {
+        if i > 0 {
+            buf.push(b'\n');
+        }
+        buf.extend_from_slice(line.as_bytes());
+    }
+    buf
 }
 
 fn decode_terminal_grid_lines(line_count: i64, payload: Vec<u8>) -> rusqlite::Result<Vec<String>> {
