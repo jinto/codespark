@@ -59,8 +59,16 @@ class GhosttyTerminalSurfaceView: NSView {
 
     override func keyDown(with event: NSEvent) {
         guard let surface else { return }
-        let key = makeKeyInput(event, action: GHOSTTY_ACTION_PRESS)
-        ghostty_surface_key(surface, key)
+        if let chars = event.characters, !chars.isEmpty {
+            chars.withCString { ptr in
+                var key = makeKeyInput(event, action: GHOSTTY_ACTION_PRESS)
+                key.text = ptr
+                ghostty_surface_key(surface, key)
+            }
+        } else {
+            let key = makeKeyInput(event, action: GHOSTTY_ACTION_PRESS)
+            ghostty_surface_key(surface, key)
+        }
     }
 
     override func keyUp(with event: NSEvent) {
