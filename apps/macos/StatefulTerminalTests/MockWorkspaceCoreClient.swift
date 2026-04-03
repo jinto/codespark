@@ -27,6 +27,14 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
         self.noteUpdateLatency = noteUpdateLatency
     }
 
+    func createWorkspace(name: String) async throws -> String {
+        "mock-workspace-id"
+    }
+
+    func startSession(workspaceId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String {
+        "mock-session-id"
+    }
+
     func listWorkspaceSummaries() async throws -> [WorkspaceSummaryViewData] {
         summaries
     }

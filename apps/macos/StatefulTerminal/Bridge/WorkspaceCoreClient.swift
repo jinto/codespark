@@ -1,9 +1,11 @@
 import Foundation
 
 protocol WorkspaceCoreClientProtocol {
+    func createWorkspace(name: String) async throws -> String
     func listWorkspaceSummaries() async throws -> [WorkspaceSummaryViewData]
     func workspaceDetail(id: String) async throws -> WorkspaceDetailViewData
     func updateWorkspaceNote(id: String, noteBody: String) async throws
+    func startSession(workspaceId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String
 
     // MARK: - Session lifecycle
     func recordFinalSnapshotAndClose(
@@ -50,6 +52,51 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
 
     deinit {
         workspace_service_free(service)
+    }
+
+    func createWorkspace(name: String) async throws -> String {
+        var outId: UnsafeMutablePointer<CChar>?
+        let status = name.withCString { namePtr in
+            workspace_service_create_workspace(service, namePtr, &outId)
+        }
+        guard status == WORKSPACE_STATUS_OK, let outId else { throw workspaceError(status) }
+        defer { workspace_free_string(outId) }
+        return String(cString: outId)
+    }
+
+    func startSession(workspaceId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String {
+        var input = workspace_new_session_t(
+            workspace_id: nil,
+            transport: transport == "ssh" ? WORKSPACE_SESSION_TRANSPORT_SSH : WORKSPACE_SESSION_TRANSPORT_LOCAL,
+            target_label: nil,
+            title: nil,
+            shell: nil,
+            initial_cwd: nil
+        )
+        var outId: UnsafeMutablePointer<CChar>?
+        let status = workspaceId.withCString { wsPtr in
+            targetLabel.withCString { tlPtr in
+                title.withCString { titlePtr in
+                    shell.withCString { shellPtr in
+                        input.workspace_id = wsPtr
+                        input.target_label = tlPtr
+                        input.title = titlePtr
+                        input.shell = shellPtr
+                        if let cwd = initialCwd {
+                            return cwd.withCString { cwdPtr in
+                                input.initial_cwd = cwdPtr
+                                return workspace_service_start_session(service, &input, &outId)
+                            }
+                        } else {
+                            return workspace_service_start_session(service, &input, &outId)
+                        }
+                    }
+                }
+            }
+        }
+        guard status == WORKSPACE_STATUS_OK, let outId else { throw workspaceError(status) }
+        defer { workspace_free_string(outId) }
+        return String(cString: outId)
     }
 
     func listWorkspaceSummaries() async throws -> [WorkspaceSummaryViewData] {

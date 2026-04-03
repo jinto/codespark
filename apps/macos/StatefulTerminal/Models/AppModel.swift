@@ -44,6 +44,22 @@ final class AppModel: ObservableObject {
             let workspaces = try await core.listWorkspaceSummaries()
             self.workspaces = workspaces
 
+            if workspaces.isEmpty {
+                let wsId = try await core.createWorkspace(name: "Default")
+                let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+                let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+                _ = try await core.startSession(
+                    workspaceId: wsId,
+                    transport: "local",
+                    targetLabel: "local",
+                    title: "Terminal",
+                    shell: shell,
+                    initialCwd: homeDir
+                )
+                let refreshed = try await core.listWorkspaceSummaries()
+                self.workspaces = refreshed
+            }
+
             guard !workspaces.isEmpty else {
                 cancelInflightWork()
                 selectedWorkspaceID = nil
