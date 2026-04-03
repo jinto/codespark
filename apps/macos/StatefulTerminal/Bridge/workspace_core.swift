@@ -11,6 +11,8 @@ enum WorkspaceServiceError: Error, Equatable {
     case startSessionFailed
     case recordSnapshotFailed
     case closeSessionFailed
+    case renameWorkspaceFailed
+    case deleteWorkspaceFailed
 
     init(status: workspace_status_t) {
         switch status {
@@ -34,6 +36,10 @@ enum WorkspaceServiceError: Error, Equatable {
             self = .recordSnapshotFailed
         case WORKSPACE_STATUS_CLOSE_SESSION_FAILED:
             self = .closeSessionFailed
+        case WORKSPACE_STATUS_RENAME_WORKSPACE_FAILED:
+            self = .renameWorkspaceFailed
+        case WORKSPACE_STATUS_DELETE_WORKSPACE_FAILED:
+            self = .deleteWorkspaceFailed
         case WORKSPACE_STATUS_OK:
             self = .workspaceDetailFailed
         default:
@@ -158,6 +164,8 @@ protocol WorkspaceServiceProtocol: AnyObject, Sendable {
     func recordSnapshot(sessionId: String, kind: String, cwd: String?, cols: UInt16, rows: UInt16, lines: [String]) throws
     func startSession(workspaceId: String, transport: SessionTransport, targetLabel: String, title: String, shell: String, initialCwd: String?) throws -> String
     func updateWorkspaceNote(workspaceId: String, noteBody: String) throws
+    func renameWorkspace(workspaceId: String, newName: String) throws
+    func deleteWorkspace(workspaceId: String) throws
     func workspaceDetail(workspaceId: String) throws -> WorkspaceDetail
 }
 
@@ -278,6 +286,20 @@ final class WorkspaceService: WorkspaceServiceProtocol, @unchecked Sendable {
         try throwIfNeeded(
             workspace_service_update_workspace_note(handle, workspaceId, noteBody),
             defaultError: .updateWorkspaceNoteFailed
+        )
+    }
+
+    func renameWorkspace(workspaceId: String, newName: String) throws {
+        try throwIfNeeded(
+            workspace_service_rename_workspace(handle, workspaceId, newName),
+            defaultError: .renameWorkspaceFailed
+        )
+    }
+
+    func deleteWorkspace(workspaceId: String) throws {
+        try throwIfNeeded(
+            workspace_service_delete_workspace(handle, workspaceId),
+            defaultError: .deleteWorkspaceFailed
         )
     }
 

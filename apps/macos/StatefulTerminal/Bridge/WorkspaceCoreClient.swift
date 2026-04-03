@@ -5,6 +5,8 @@ protocol WorkspaceCoreClientProtocol {
     func listWorkspaceSummaries() async throws -> [WorkspaceSummaryViewData]
     func workspaceDetail(id: String) async throws -> WorkspaceDetailViewData
     func updateWorkspaceNote(id: String, noteBody: String) async throws
+    func renameWorkspace(id: String, newName: String) async throws
+    func deleteWorkspace(id: String) async throws
     func startSession(workspaceId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String
 
     // MARK: - Session lifecycle
@@ -191,6 +193,22 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
             newTitle.withCString { titlePtr in
                 workspace_service_update_session_title(service, idPtr, titlePtr)
             }
+        }
+        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
+    }
+
+    func renameWorkspace(id: String, newName: String) async throws {
+        let status = id.withCString { idPtr in
+            newName.withCString { namePtr in
+                workspace_service_rename_workspace(service, idPtr, namePtr)
+            }
+        }
+        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
+    }
+
+    func deleteWorkspace(id: String) async throws {
+        let status = id.withCString { idPtr in
+            workspace_service_delete_workspace(service, idPtr)
         }
         guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
     }

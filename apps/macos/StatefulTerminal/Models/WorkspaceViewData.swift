@@ -9,7 +9,7 @@ struct SessionSummary: Identifiable, Equatable {
 
 struct WorkspaceSummaryViewData: Identifiable, Equatable {
     let id: String
-    let name: String
+    var name: String
     let liveSessions: Int
     let recentlyClosedSessions: Int
     let hasInterruptedSessions: Bool

@@ -28,6 +28,13 @@ struct StatefulTerminalApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {
+                Button("New Workspace") {
+                    Task { await model.createWorkspace(name: "New Workspace") }
+                }
+                .keyboardShortcut("n", modifiers: .command)
+
+                Divider()
+
                 Button("New Session") {
                     Task { await model.newSession() }
                 }

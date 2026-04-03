@@ -24,6 +24,8 @@ pub const workspace_status_t = enum(c_int) {
     WORKSPACE_STATUS_START_SESSION_FAILED = 8,
     WORKSPACE_STATUS_RECORD_SNAPSHOT_FAILED = 9,
     WORKSPACE_STATUS_CLOSE_SESSION_FAILED = 10,
+    WORKSPACE_STATUS_RENAME_WORKSPACE_FAILED = 11,
+    WORKSPACE_STATUS_DELETE_WORKSPACE_FAILED = 12,
 };
 
 pub const workspace_session_transport_t = enum(c_int) {
@@ -542,6 +544,36 @@ pub export fn workspace_service_update_workspace_note(
     defer ptr.mutex.unlock();
 
     ptr.store.updateWorkspaceNote(workspace, note) catch return .WORKSPACE_STATUS_UPDATE_WORKSPACE_NOTE_FAILED;
+    return .WORKSPACE_STATUS_OK;
+}
+
+pub export fn workspace_service_rename_workspace(
+    service: ?*workspace_service,
+    workspace_id: ?[*:0]const u8,
+    new_name: ?[*:0]const u8,
+) workspace_status_t {
+    const ptr = service orelse return .WORKSPACE_STATUS_RENAME_WORKSPACE_FAILED;
+    const workspace = spanRequired(workspace_id) orelse return .WORKSPACE_STATUS_RENAME_WORKSPACE_FAILED;
+    const name = spanRequired(new_name) orelse return .WORKSPACE_STATUS_RENAME_WORKSPACE_FAILED;
+
+    ptr.mutex.lock();
+    defer ptr.mutex.unlock();
+
+    ptr.store.renameWorkspace(workspace, name) catch return .WORKSPACE_STATUS_RENAME_WORKSPACE_FAILED;
+    return .WORKSPACE_STATUS_OK;
+}
+
+pub export fn workspace_service_delete_workspace(
+    service: ?*workspace_service,
+    workspace_id: ?[*:0]const u8,
+) workspace_status_t {
+    const ptr = service orelse return .WORKSPACE_STATUS_DELETE_WORKSPACE_FAILED;
+    const workspace = spanRequired(workspace_id) orelse return .WORKSPACE_STATUS_DELETE_WORKSPACE_FAILED;
+
+    ptr.mutex.lock();
+    defer ptr.mutex.unlock();
+
+    ptr.store.deleteWorkspace(workspace) catch return .WORKSPACE_STATUS_DELETE_WORKSPACE_FAILED;
     return .WORKSPACE_STATUS_OK;
 }
 

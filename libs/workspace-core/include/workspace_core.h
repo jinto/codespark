@@ -22,6 +22,8 @@ typedef enum workspace_status_t {
     WORKSPACE_STATUS_START_SESSION_FAILED = 8,
     WORKSPACE_STATUS_RECORD_SNAPSHOT_FAILED = 9,
     WORKSPACE_STATUS_CLOSE_SESSION_FAILED = 10,
+    WORKSPACE_STATUS_RENAME_WORKSPACE_FAILED = 11,
+    WORKSPACE_STATUS_DELETE_WORKSPACE_FAILED = 12,
 } workspace_status_t;
 
 typedef enum workspace_session_transport_t {
@@ -154,6 +156,15 @@ workspace_status_t workspace_service_update_workspace_note(
     workspace_service_t *service,
     const char *workspace_id,
     const char *note_body
+);
+workspace_status_t workspace_service_rename_workspace(
+    workspace_service_t *service,
+    const char *workspace_id,
+    const char *new_name
+);
+workspace_status_t workspace_service_delete_workspace(
+    workspace_service_t *service,
+    const char *workspace_id
 );
 workspace_status_t workspace_service_workspace_detail(
     workspace_service_t *service,

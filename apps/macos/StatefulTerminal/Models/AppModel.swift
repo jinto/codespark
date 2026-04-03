@@ -175,6 +175,44 @@ final class AppModel: ObservableObject {
         ]
     }
 
+    // MARK: - Workspace lifecycle
+
+    func createWorkspace(name: String) async {
+        do {
+            let newID = try await core.createWorkspace(name: name)
+            await load()
+            await selectWorkspace(id: newID)
+        } catch {
+            loadErrorMessage = error.localizedDescription
+        }
+    }
+
+    func renameWorkspace(id: String, newName: String) async {
+        if let index = workspaces.firstIndex(where: { $0.id == id }) {
+            workspaces[index].name = newName
+        }
+        try? await core.renameWorkspace(id: id, newName: newName)
+    }
+
+    func deleteWorkspace(id: String) async {
+        if selectedWorkspaceID == id {
+            for session in liveSessions {
+                closeSession(id: session.id)
+            }
+        }
+
+        workspaces.removeAll(where: { $0.id == id })
+        try? await core.deleteWorkspace(id: id)
+
+        if selectedWorkspaceID == id {
+            if let next = workspaces.first {
+                await selectWorkspace(id: next.id)
+            } else {
+                await selectWorkspace(id: nil)
+            }
+        }
+    }
+
     // MARK: - Session lifecycle
 
     func newSession() async {

@@ -404,6 +404,69 @@ test "updateSessionTitle changes the session title" {
     try std.testing.expectEqualStrings("Renamed", detail.live_sessions[0].title);
 }
 
+test "renameWorkspace changes the workspace name" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const workspace_id = try store.createWorkspace(std.testing.allocator, "Original");
+    defer std.testing.allocator.free(workspace_id);
+
+    try store.renameWorkspace(workspace_id, "Renamed");
+
+    const summaries = try store.listWorkspaceSummaries(std.testing.allocator);
+    defer freeWorkspaceSummaries(summaries);
+
+    try std.testing.expectEqual(@as(usize, 1), summaries.len);
+    try std.testing.expectEqualStrings("Renamed", summaries[0].name);
+}
+
+test "deleteWorkspace removes the workspace from the list" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const alpha_id = try store.createWorkspace(std.testing.allocator, "alpha");
+    defer std.testing.allocator.free(alpha_id);
+    const beta_id = try store.createWorkspace(std.testing.allocator, "beta");
+    defer std.testing.allocator.free(beta_id);
+
+    try store.deleteWorkspace(alpha_id);
+
+    const summaries = try store.listWorkspaceSummaries(std.testing.allocator);
+    defer freeWorkspaceSummaries(summaries);
+
+    try std.testing.expectEqual(@as(usize, 1), summaries.len);
+    try std.testing.expectEqualStrings("beta", summaries[0].name);
+}
+
+test "deleteWorkspace cascades to sessions and snapshots" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const workspace_id = try store.createWorkspace(std.testing.allocator, "doomed");
+    defer std.testing.allocator.free(workspace_id);
+
+    const session_id = try store.startSession(std.testing.allocator, .{
+        .workspace_id = workspace_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "shell",
+        .shell = "zsh",
+        .initial_cwd = "/tmp",
+    });
+    defer std.testing.allocator.free(session_id);
+
+    try store.recordSnapshot(.{
+        .session_id = session_id,
+        .kind = .final,
+        .cwd = "/tmp",
+        .grid = .{ .cols = 80, .rows = 24, .lines = &.{"hello"} },
+    });
+
+    try store.deleteWorkspace(workspace_id);
+
+    const summaries = try store.listWorkspaceSummaries(std.testing.allocator);
+    defer freeWorkspaceSummaries(summaries);
+
+    try std.testing.expectEqual(@as(usize, 0), summaries.len);
+}
+
 test "corrupt transport returns error instead of panic" {
     const path = try uniqueDbPath("corrupt-transport");
     defer std.testing.allocator.free(path);
@@ -660,6 +723,56 @@ test "workspace detail reports which operation failed" {
         core.workspace_status_t.WORKSPACE_STATUS_WORKSPACE_DETAIL_FAILED,
         core.workspace_service_workspace_detail(service, "missing-workspace", &detail),
     );
+}
+
+test "workspace service renames and deletes a workspace via C API" {
+    var status: core.workspace_status_t = .WORKSPACE_STATUS_OK;
+    const service = core.workspace_service_new(":memory:", &status);
+    defer core.workspace_service_free(service);
+    try std.testing.expectEqual(core.workspace_status_t.WORKSPACE_STATUS_OK, status);
+
+    var workspace_id: ?[*:0]u8 = null;
+    try std.testing.expectEqual(
+        core.workspace_status_t.WORKSPACE_STATUS_OK,
+        core.workspace_service_create_workspace(service, "Original", &workspace_id),
+    );
+    defer core.workspace_free_string(workspace_id);
+    try std.testing.expect(workspace_id != null);
+
+    try std.testing.expectEqual(
+        core.workspace_status_t.WORKSPACE_STATUS_OK,
+        core.workspace_service_rename_workspace(service, workspace_id.?, "Renamed"),
+    );
+
+    {
+        var summaries: ?[*]core.workspace_summary_t = null;
+        var count: i32 = 0;
+        try std.testing.expectEqual(
+            core.workspace_status_t.WORKSPACE_STATUS_OK,
+            core.workspace_service_list_workspace_summaries(service, &summaries, &count),
+        );
+        defer core.workspace_free_summaries(summaries, count);
+        try std.testing.expectEqual(@as(i32, 1), count);
+        try std.testing.expect(summaries != null);
+        try std.testing.expectEqualStrings("Renamed", std.mem.span(summaries.?[0].name.?));
+    }
+
+    try std.testing.expectEqual(
+        core.workspace_status_t.WORKSPACE_STATUS_OK,
+        core.workspace_service_delete_workspace(service, workspace_id.?),
+    );
+
+    {
+        var summaries: ?[*]core.workspace_summary_t = null;
+        var count: i32 = 0;
+        try std.testing.expectEqual(
+            core.workspace_status_t.WORKSPACE_STATUS_OK,
+            core.workspace_service_list_workspace_summaries(service, &summaries, &count),
+        );
+        defer core.workspace_free_summaries(summaries, count);
+        try std.testing.expectEqual(@as(i32, 0), count);
+        try std.testing.expect(summaries == null);
+    }
 }
 
 fn freeWorkspaceSummaries(items: []core.WorkspaceSummary) void {

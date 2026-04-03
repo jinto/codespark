@@ -10,6 +10,8 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
     private let noteUpdateLatency: UInt64?
     private(set) var lastRecoveryAction: String?
     private(set) var closedSessionIDs: [String] = []
+    private(set) var renamedWorkspaces: [(id: String, newName: String)] = []
+    private(set) var deletedWorkspaceIDs: [String] = []
     private var sessionCounter = 0
 
     init(
@@ -85,6 +87,14 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
     }
 
     func updateSessionTitle(sessionId: String, newTitle: String) async throws { }
+
+    func renameWorkspace(id: String, newName: String) async throws {
+        renamedWorkspaces.append((id: id, newName: newName))
+    }
+
+    func deleteWorkspace(id: String) async throws {
+        deletedWorkspaceIDs.append(id)
+    }
 
     func reconnectSSH(sessionID: String, cdIntoDirectory: Bool) async throws {
         lastRecoveryAction = cdIntoDirectory ? "reconnect-ssh-cd:\(sessionID)" : "reconnect-ssh:\(sessionID)"

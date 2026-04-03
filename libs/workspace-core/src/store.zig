@@ -116,6 +116,31 @@ pub const Store = struct {
         try stmt.expectDone();
     }
 
+    pub fn renameWorkspace(self: *Store, workspace_id: []const u8, new_name: []const u8) StoreError!void {
+        const updated_at = now();
+        var stmt = try Statement.init(
+            self.db,
+            "update workspaces\n" ++
+                " set name = ?2, updated_at = ?3\n" ++
+                " where id = ?1",
+        );
+        defer stmt.deinit();
+        try stmt.bindText(1, workspace_id);
+        try stmt.bindText(2, new_name);
+        try stmt.bindInt64(3, updated_at);
+        try stmt.expectDone();
+    }
+
+    pub fn deleteWorkspace(self: *Store, workspace_id: []const u8) StoreError!void {
+        var stmt = try Statement.init(
+            self.db,
+            "delete from workspaces where id = ?1",
+        );
+        defer stmt.deinit();
+        try stmt.bindText(1, workspace_id);
+        try stmt.expectDone();
+    }
+
     pub fn updateSessionTitle(self: *Store, session_id: []const u8, new_title: []const u8) StoreError!void {
         var stmt = try Statement.init(
             self.db,
