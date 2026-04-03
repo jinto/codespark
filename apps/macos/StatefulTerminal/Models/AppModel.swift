@@ -202,7 +202,13 @@ final class AppModel: ObservableObject {
         }
 
         workspaces.removeAll(where: { $0.id == id })
-        try? await core.deleteWorkspace(id: id)
+
+        var deleteError: String?
+        do {
+            try await core.deleteWorkspace(id: id)
+        } catch {
+            deleteError = error.localizedDescription
+        }
 
         if selectedWorkspaceID == id {
             if let next = workspaces.first {
@@ -210,6 +216,10 @@ final class AppModel: ObservableObject {
             } else {
                 await selectWorkspace(id: nil)
             }
+        }
+
+        if let deleteError {
+            loadErrorMessage = deleteError
         }
     }
 
