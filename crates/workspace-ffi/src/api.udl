@@ -7,6 +7,7 @@ enum WorkspaceServiceError {
     "UpdateWorkspaceNoteFailed",
     "WorkspaceDetailFailed",
     "PoisonedState",
+    "ListWorkspacesFailed",
 };
 
 enum SessionTransport {
@@ -52,6 +53,15 @@ dictionary WorkspaceClosedSessionSummary {
     RestoreRecipe restore_recipe;
 };
 
+dictionary WorkspaceSummary {
+    string id;
+    string name;
+    i64 live_sessions;
+    i64 recently_closed_sessions;
+    boolean has_interrupted_sessions;
+    i64 updated_at;
+};
+
 dictionary WorkspaceDetail {
     string id;
     string name;
@@ -63,6 +73,9 @@ dictionary WorkspaceDetail {
 interface WorkspaceService {
     [Throws=WorkspaceServiceError]
     constructor(string store_path);
+
+    [Throws=WorkspaceServiceError]
+    sequence<WorkspaceSummary> list_workspace_summaries();
 
     [Throws=WorkspaceServiceError]
     string create_workspace(string name);

@@ -2,6 +2,10 @@ use std::sync::{Mutex, MutexGuard};
 
 use workspace_core::Store;
 
+// FFI boundary types: these mirror workspace_core types intentionally.
+// UniFFI requires owned types defined in the FFI crate for code generation.
+// Changes to core types must be reflected here and in api.udl.
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionTransport {
     Local,
@@ -52,6 +56,16 @@ pub struct WorkspaceClosedSessionSummary {
 }
 
 #[derive(Debug, Clone)]
+pub struct WorkspaceSummary {
+    pub id: String,
+    pub name: String,
+    pub live_sessions: i64,
+    pub recently_closed_sessions: i64,
+    pub has_interrupted_sessions: bool,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone)]
 pub struct WorkspaceDetail {
     pub id: String,
     pub name: String,
@@ -72,6 +86,8 @@ pub enum WorkspaceServiceError {
     WorkspaceDetailFailed,
     #[error("workspace service lock poisoned")]
     PoisonedState,
+    #[error("workspace service failed to list workspaces")]
+    ListWorkspacesFailed,
 }
 
 pub struct WorkspaceService {
@@ -84,6 +100,14 @@ impl WorkspaceService {
         Ok(Self {
             store: Mutex::new(store),
         })
+    }
+
+    pub fn list_workspace_summaries(&self) -> Result<Vec<WorkspaceSummary>, WorkspaceServiceError> {
+        let store = self.store()?;
+        store
+            .list_workspace_summaries()
+            .map(|v| v.into_iter().map(Into::into).collect())
+            .map_err(|_| WorkspaceServiceError::ListWorkspacesFailed)
     }
 
     pub fn create_workspace(&self, name: String) -> Result<String, WorkspaceServiceError> {
@@ -119,6 +143,19 @@ impl WorkspaceService {
         self.store
             .lock()
             .map_err(|_| WorkspaceServiceError::PoisonedState)
+    }
+}
+
+impl From<workspace_core::WorkspaceSummary> for WorkspaceSummary {
+    fn from(value: workspace_core::WorkspaceSummary) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            live_sessions: value.live_sessions,
+            recently_closed_sessions: value.recently_closed_sessions,
+            has_interrupted_sessions: value.has_interrupted_sessions,
+            updated_at: value.updated_at,
+        }
     }
 }
 

@@ -435,6 +435,46 @@ fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt64: FfiConverterPrimitive {
+    typealias FfiType = Int64
+    typealias SwiftType = Int64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int64, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterBool : FfiConverter {
+    typealias FfiType = Int8
+    typealias SwiftType = Bool
+
+    public static func lift(_ value: Int8) throws -> Bool {
+        return value != 0
+    }
+
+    public static func lower(_ value: Bool) -> Int8 {
+        return value ? 1 : 0
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Bool {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Bool, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterString: FfiConverter {
     typealias SwiftType = String
     typealias FfiType = RustBuffer
@@ -479,6 +519,8 @@ fileprivate struct FfiConverterString: FfiConverter {
 public protocol WorkspaceServiceProtocol: AnyObject, Sendable {
     
     func createWorkspace(name: String) throws  -> String
+    
+    func listWorkspaceSummaries() throws  -> [WorkspaceSummary]
     
     func updateWorkspaceNote(workspaceId: String, noteBody: String) throws 
     
@@ -551,6 +593,14 @@ open func createWorkspace(name: String)throws  -> String  {
     uniffi_workspace_ffi_fn_method_workspaceservice_create_workspace(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(name),$0
+    )
+})
+}
+    
+open func listWorkspaceSummaries()throws  -> [WorkspaceSummary]  {
+    return try  FfiConverterSequenceTypeWorkspaceSummary.lift(try rustCallWithError(FfiConverterTypeWorkspaceServiceError_lift) {
+    uniffi_workspace_ffi_fn_method_workspaceservice_list_workspace_summaries(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -942,6 +992,76 @@ public func FfiConverterTypeWorkspaceSessionSummary_lower(_ value: WorkspaceSess
     return FfiConverterTypeWorkspaceSessionSummary.lower(value)
 }
 
+
+public struct WorkspaceSummary: Equatable, Hashable {
+    public var id: String
+    public var name: String
+    public var liveSessions: Int64
+    public var recentlyClosedSessions: Int64
+    public var hasInterruptedSessions: Bool
+    public var updatedAt: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, name: String, liveSessions: Int64, recentlyClosedSessions: Int64, hasInterruptedSessions: Bool, updatedAt: Int64) {
+        self.id = id
+        self.name = name
+        self.liveSessions = liveSessions
+        self.recentlyClosedSessions = recentlyClosedSessions
+        self.hasInterruptedSessions = hasInterruptedSessions
+        self.updatedAt = updatedAt
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension WorkspaceSummary: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWorkspaceSummary: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WorkspaceSummary {
+        return
+            try WorkspaceSummary(
+                id: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                liveSessions: FfiConverterInt64.read(from: &buf), 
+                recentlyClosedSessions: FfiConverterInt64.read(from: &buf), 
+                hasInterruptedSessions: FfiConverterBool.read(from: &buf), 
+                updatedAt: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WorkspaceSummary, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterInt64.write(value.liveSessions, into: &buf)
+        FfiConverterInt64.write(value.recentlyClosedSessions, into: &buf)
+        FfiConverterBool.write(value.hasInterruptedSessions, into: &buf)
+        FfiConverterInt64.write(value.updatedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWorkspaceSummary_lift(_ buf: RustBuffer) throws -> WorkspaceSummary {
+    return try FfiConverterTypeWorkspaceSummary.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWorkspaceSummary_lower(_ value: WorkspaceSummary) -> RustBuffer {
+    return FfiConverterTypeWorkspaceSummary.lower(value)
+}
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
@@ -1112,6 +1232,8 @@ public enum WorkspaceServiceError: Swift.Error, Equatable, Hashable, Foundation.
     
     case PoisonedState(message: String)
     
+    case ListWorkspacesFailed(message: String)
+    
 
     
 
@@ -1161,6 +1283,10 @@ public struct FfiConverterTypeWorkspaceServiceError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 6: return .ListWorkspacesFailed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -1182,6 +1308,8 @@ public struct FfiConverterTypeWorkspaceServiceError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(4))
         case .PoisonedState(_ /* message is ignored*/):
             writeInt(&buf, Int32(5))
+        case .ListWorkspacesFailed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(6))
 
         
         }
@@ -1302,6 +1430,31 @@ fileprivate struct FfiConverterSequenceTypeWorkspaceSessionSummary: FfiConverter
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeWorkspaceSummary: FfiConverterRustBuffer {
+    typealias SwiftType = [WorkspaceSummary]
+
+    public static func write(_ value: [WorkspaceSummary], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeWorkspaceSummary.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [WorkspaceSummary] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [WorkspaceSummary]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeWorkspaceSummary.read(from: &buf))
+        }
+        return seq
+    }
+}
+
 private enum InitializationResult {
     case ok
     case contractVersionMismatch
@@ -1318,6 +1471,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.contractVersionMismatch
     }
     if (uniffi_workspace_ffi_checksum_method_workspaceservice_create_workspace() != 24040) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_workspace_ffi_checksum_method_workspaceservice_list_workspace_summaries() != 3972) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_workspace_ffi_checksum_method_workspaceservice_update_workspace_note() != 7326) {
