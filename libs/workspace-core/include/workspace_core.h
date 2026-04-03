@@ -80,6 +80,8 @@ typedef struct workspace_summary_t {
     int64_t recently_closed_sessions;
     bool has_interrupted_sessions;
     int64_t updated_at;
+    workspace_session_summary_t *live_session_details;
+    int32_t live_session_detail_count;
 } workspace_summary_t;
 
 typedef struct workspace_detail_t {
@@ -132,6 +134,11 @@ workspace_status_t workspace_service_close_session(
     const char *last_cwd
 );
 
+workspace_status_t workspace_service_update_session_title(
+    workspace_service_t *service,
+    const char *session_id,
+    const char *new_title
+);
 workspace_status_t workspace_service_reconcile_interrupted_sessions(workspace_service_t *service);
 workspace_status_t workspace_service_list_workspace_summaries(
     workspace_service_t *service,

@@ -82,6 +82,8 @@ pub const workspace_summary_t = extern struct {
     recently_closed_sessions: i64,
     has_interrupted_sessions: bool,
     updated_at: i64,
+    live_session_details: ?[*]workspace_session_summary_t,
+    live_session_detail_count: i32,
 };
 
 pub const workspace_detail_t = extern struct {
@@ -259,12 +261,36 @@ fn freeClosedSessionSummary(value: *workspace_closed_session_summary_t) void {
 fn fillWorkspaceSummary(out: *workspace_summary_t, value: models.WorkspaceSummary) !void {
     out.* = std.mem.zeroes(workspace_summary_t);
     out.id = try dupCString(value.id);
-    errdefer workspace_free_string(out.id);
+    errdefer freeWorkspaceSummary(out);
     out.name = try dupCString(value.name);
     out.live_sessions = value.live_sessions;
     out.recently_closed_sessions = value.recently_closed_sessions;
     out.has_interrupted_sessions = value.has_interrupted_sessions;
     out.updated_at = value.updated_at;
+
+    if (value.live_session_details.len > 0) {
+        const details = try c_allocator.alloc(workspace_session_summary_t, value.live_session_details.len);
+        errdefer c_allocator.free(details);
+        for (details) |*d| d.* = std.mem.zeroes(workspace_session_summary_t);
+        errdefer for (details) |*d| freeSessionSummary(d);
+
+        for (value.live_session_details, 0..) |session, index| {
+            try fillSessionSummary(&details[index], session);
+        }
+        out.live_session_details = details.ptr;
+        out.live_session_detail_count = @intCast(details.len);
+    }
+}
+
+fn freeWorkspaceSummary(summary: *workspace_summary_t) void {
+    workspace_free_string(summary.id);
+    workspace_free_string(summary.name);
+    if (summary.live_session_details) |details| {
+        const slice = details[0..@intCast(summary.live_session_detail_count)];
+        for (slice) |*session| freeSessionSummary(session);
+        c_allocator.free(slice);
+    }
+    summary.* = std.mem.zeroes(workspace_summary_t);
 }
 
 fn fillWorkspaceDetail(out: *workspace_detail_t, value: models.WorkspaceDetail) !void {
@@ -419,6 +445,22 @@ pub export fn workspace_service_close_session(
     return .WORKSPACE_STATUS_OK;
 }
 
+pub export fn workspace_service_update_session_title(
+    ptr: ?*workspace_service,
+    session_id: ?[*:0]const u8,
+    new_title: ?[*:0]const u8,
+) workspace_status_t {
+    const svc = ptr orelse return .WORKSPACE_STATUS_POISONED_STATE;
+    svc.mutex.lock();
+    defer svc.mutex.unlock();
+
+    const sid = spanOrNull(session_id) orelse return .WORKSPACE_STATUS_CLOSE_SESSION_FAILED;
+    const title = spanOrNull(new_title) orelse return .WORKSPACE_STATUS_CLOSE_SESSION_FAILED;
+
+    svc.store.updateSessionTitle(sid, title) catch return .WORKSPACE_STATUS_CLOSE_SESSION_FAILED;
+    return .WORKSPACE_STATUS_OK;
+}
+
 pub export fn workspace_service_reconcile_interrupted_sessions(
     service: ?*workspace_service,
 ) workspace_status_t {
@@ -453,10 +495,7 @@ pub export fn workspace_service_list_workspace_summaries(
 
     const output = c_allocator.alloc(workspace_summary_t, summaries.len) catch return .WORKSPACE_STATUS_LIST_WORKSPACES_FAILED;
     errdefer {
-        for (output) |*summary| {
-            workspace_free_string(summary.id);
-            workspace_free_string(summary.name);
-        }
+        for (output) |*summary| freeWorkspaceSummary(summary);
         c_allocator.free(output);
     }
 
@@ -538,10 +577,7 @@ pub export fn workspace_free_summaries(
 ) void {
     if (summaries) |ptr| {
         const slice = ptr[0..@intCast(count)];
-        for (slice) |*summary| {
-            workspace_free_string(summary.id);
-            workspace_free_string(summary.name);
-        }
+        for (slice) |*summary| freeWorkspaceSummary(summary);
         c_allocator.free(slice);
     }
 }
