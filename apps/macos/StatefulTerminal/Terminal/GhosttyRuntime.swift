@@ -13,6 +13,13 @@ final class GhosttyRuntime {
         // Skip Ghostty initialization in unit test environment
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
 
+        // Must call ghostty_init before any other API
+        let initResult = ghostty_init(0, nil)
+        guard initResult == 0 else {
+            NSLog("GhosttyRuntime: ghostty_init failed with code \(initResult)")
+            return
+        }
+
         let config = ghostty_config_new()
         defer { ghostty_config_free(config) }
 
