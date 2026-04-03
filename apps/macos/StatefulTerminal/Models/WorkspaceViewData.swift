@@ -71,7 +71,7 @@ enum CloseReasonViewData: Equatable {
 
 struct SessionViewData: Identifiable, Equatable {
     let id: String
-    let title: String
+    var title: String
     let targetLabel: String
     let lastCwd: String?
     let restoreRecipe: RestoreRecipeViewData

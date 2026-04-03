@@ -66,7 +66,7 @@ struct SidebarView: View {
                 .padding(.top, 8)
             }
             .onAppear {
-                if let first = model.workspaces.first {
+                if expandedWorkspaceIDs.isEmpty, let first = model.workspaces.first {
                     expandedWorkspaceIDs.insert(first.id)
                 }
             }

@@ -215,13 +215,9 @@ final class AppModel: ObservableObject {
 
     func renameSession(id: String, title: String) async {
         if let index = liveSessions.firstIndex(where: { $0.id == id }) {
-            liveSessions[index] = SessionViewData(
-                id: liveSessions[index].id,
-                title: title,
-                targetLabel: liveSessions[index].targetLabel,
-                lastCwd: liveSessions[index].lastCwd,
-                restoreRecipe: liveSessions[index].restoreRecipe
-            )
+            var updated = liveSessions[index]
+            updated.title = title
+            liveSessions[index] = updated
         }
         try? await core.updateSessionTitle(sessionId: id, newTitle: title)
     }
@@ -243,13 +239,15 @@ final class AppModel: ObservableObject {
     }
 
     private func updateIdleStates() {
+        guard !hosts.isEmpty else { return }
         let threshold = Date().addingTimeInterval(-10)
-        idleSessionIDs = Set(
+        let newSet = Set(
             hosts.compactMap { (id, host) in
                 guard let lastOutput = host.lastOutputTime else { return id }
                 return lastOutput < threshold ? id : nil
             }
         )
+        if newSet != idleSessionIDs { idleSessionIDs = newSet }
     }
 
     private func clearDetailState() {
