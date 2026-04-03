@@ -13,7 +13,8 @@ final class AppModel: ObservableObject {
     @Published var noteSaveErrorMessage: String?
 
     private let core: WorkspaceCoreClientProtocol
-    private var selectionRequestID = 0
+    private var detailTask: Task<Void, Never>?
+    private var saveTask: Task<Void, Never>?
 
     init(core: WorkspaceCoreClientProtocol) {
         self.core = core
@@ -25,7 +26,7 @@ final class AppModel: ObservableObject {
             self.workspaces = workspaces
 
             guard !workspaces.isEmpty else {
-                selectionRequestID += 1
+                cancelInflightWork()
                 selectedWorkspaceID = nil
                 clearDetailState()
                 loadErrorMessage = nil
@@ -41,7 +42,7 @@ final class AppModel: ObservableObject {
 
             await selectWorkspace(id: resolvedWorkspaceID)
         } catch {
-            selectionRequestID += 1
+            cancelInflightWork()
             workspaces = []
             selectedWorkspaceID = nil
             clearDetailState()
@@ -50,8 +51,7 @@ final class AppModel: ObservableObject {
     }
 
     func selectWorkspace(id: String?) async {
-        selectionRequestID += 1
-        let requestID = selectionRequestID
+        cancelInflightWork()
 
         guard let id else {
             selectedWorkspaceID = nil
@@ -62,38 +62,46 @@ final class AppModel: ObservableObject {
 
         selectedWorkspaceID = id
 
-        do {
-            let detail = try await core.workspaceDetail(id: id)
-            guard requestID == selectionRequestID else {
-                return
+        let task = Task {
+            do {
+                let detail = try await core.workspaceDetail(id: id)
+                guard !Task.isCancelled else { return }
+                apply(detail: detail)
+                loadErrorMessage = nil
+            } catch {
+                guard !Task.isCancelled else { return }
+                clearDetailState()
+                loadErrorMessage = error.localizedDescription
             }
-            apply(detail: detail)
-            loadErrorMessage = nil
-        } catch {
-            guard requestID == selectionRequestID else {
-                return
-            }
-            clearDetailState()
-            loadErrorMessage = error.localizedDescription
         }
+        detailTask = task
+        await task.value
     }
 
     func saveNote() async {
         guard var workspace = selectedWorkspace else {
             return
         }
-        let requestID = selectionRequestID
 
-        do {
-            try await core.updateWorkspaceNote(id: workspace.id, noteBody: noteDraft)
-            guard requestID == selectionRequestID else { return }
-            workspace.noteBody = noteDraft
-            selectedWorkspace = workspace
-            noteSaveErrorMessage = nil
-        } catch {
-            guard requestID == selectionRequestID else { return }
-            noteSaveErrorMessage = error.localizedDescription
+        let task = Task {
+            do {
+                try await core.updateWorkspaceNote(id: workspace.id, noteBody: noteDraft)
+                guard !Task.isCancelled else { return }
+                workspace.noteBody = noteDraft
+                selectedWorkspace = workspace
+                noteSaveErrorMessage = nil
+            } catch {
+                guard !Task.isCancelled else { return }
+                noteSaveErrorMessage = error.localizedDescription
+            }
         }
+        saveTask = task
+        await task.value
+    }
+
+    private func cancelInflightWork() {
+        detailTask?.cancel()
+        saveTask?.cancel()
     }
 
     private func apply(detail: WorkspaceDetailViewData) {
