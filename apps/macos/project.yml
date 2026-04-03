@@ -1,0 +1,34 @@
+name: StatefulTerminal
+options:
+  minimumXcodeGenVersion: 2.38.0
+settings:
+  base:
+    SWIFT_VERSION: 5.10
+targets:
+  StatefulTerminal:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - StatefulTerminal
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jinto.stateful-terminal
+        GENERATE_INFOPLIST_FILE: YES
+        LIBRARY_SEARCH_PATHS:
+          - $(SRCROOT)/../../target/debug/deps
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -lworkspace_ffi
+        SWIFT_OBJC_BRIDGING_HEADER: StatefulTerminal/Bridge/StatefulTerminal-Bridging-Header.h
+  StatefulTerminalTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - StatefulTerminalTests
+    dependencies:
+      - target: StatefulTerminal
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
