@@ -157,7 +157,6 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
                         title: "shell",
                         targetLabel: "local",
                         lastCwd: "/Users/jinto/projects/spark3",
-                        lastCommand: "cargo test -p workspace-core",
                         closeReason: .appCrashed,
                         snapshotPreview: .fixture(
                             lines: ["cargo test -p workspace-core", "test result: interrupted"]

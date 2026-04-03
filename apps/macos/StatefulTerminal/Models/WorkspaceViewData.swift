@@ -53,7 +53,6 @@ struct ClosedSessionViewData: Identifiable, Equatable {
     let title: String
     let targetLabel: String
     let lastCwd: String?
-    let lastCommand: String?
     let closeReason: CloseReasonViewData
     let snapshotPreview: TerminalSnapshotViewData
     let restoreRecipe: RestoreRecipeViewData

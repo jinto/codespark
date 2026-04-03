@@ -132,7 +132,6 @@ final class AppModelTests: XCTestCase {
                 title: "stale shell",
                 targetLabel: "local",
                 lastCwd: "/tmp",
-                lastCommand: "pwd",
                 closeReason: .appCrashed,
                 snapshotPreview: .fixture(lines: ["stale"]),
                 restoreRecipe: RestoreRecipeViewData(launchCommand: "zsh -l")
