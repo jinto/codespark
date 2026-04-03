@@ -13,12 +13,14 @@ final class AppModel: ObservableObject {
     @Published var closedSessions: [ClosedSessionViewData] = []
     @Published var loadErrorMessage: String?
     @Published var noteSaveErrorMessage: String?
+    @Published var idleSessionIDs: Set<String> = []
 
     private let core: WorkspaceCoreClientProtocol
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
     private var hosts: [String: any TerminalHostProtocol] = [:]
     private var detailTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
+    private var idleTimer: AnyCancellable?
 
     init(
         core: WorkspaceCoreClientProtocol,
@@ -26,6 +28,11 @@ final class AppModel: ObservableObject {
     ) {
         self.core = core
         self.terminalFactory = terminalFactory
+        self.idleTimer = Timer.publish(every: 10, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.updateIdleStates()
+            }
     }
 
     func attachLiveSessions() async {
@@ -206,6 +213,19 @@ final class AppModel: ObservableObject {
         host.close(sessionID: id)
     }
 
+    func renameSession(id: String, title: String) async {
+        if let index = liveSessions.firstIndex(where: { $0.id == id }) {
+            liveSessions[index] = SessionViewData(
+                id: liveSessions[index].id,
+                title: title,
+                targetLabel: liveSessions[index].targetLabel,
+                lastCwd: liveSessions[index].lastCwd,
+                restoreRecipe: liveSessions[index].restoreRecipe
+            )
+        }
+        try? await core.updateSessionTitle(sessionId: id, newTitle: title)
+    }
+
     func selectNextSession() { cycleSession(offset: 1) }
     func selectPreviousSession() { cycleSession(offset: -1) }
 
@@ -220,6 +240,16 @@ final class AppModel: ObservableObject {
         for (sessionID, host) in hosts {
             host.close(sessionID: sessionID)
         }
+    }
+
+    private func updateIdleStates() {
+        let threshold = Date().addingTimeInterval(-10)
+        idleSessionIDs = Set(
+            hosts.compactMap { (id, host) in
+                guard let lastOutput = host.lastOutputTime else { return id }
+                return lastOutput < threshold ? id : nil
+            }
+        )
     }
 
     private func clearDetailState() {
