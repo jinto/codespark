@@ -8,6 +8,7 @@ enum WorkspaceServiceError {
     "WorkspaceDetailFailed",
     "PoisonedState",
     "ListWorkspacesFailed",
+    "ReconcileInterruptedFailed",
 };
 
 enum SessionTransport {
@@ -73,6 +74,9 @@ dictionary WorkspaceDetail {
 interface WorkspaceService {
     [Throws=WorkspaceServiceError]
     constructor(string store_path);
+
+    [Throws=WorkspaceServiceError]
+    void reconcile_interrupted_sessions();
 
     [Throws=WorkspaceServiceError]
     sequence<WorkspaceSummary> list_workspace_summaries();

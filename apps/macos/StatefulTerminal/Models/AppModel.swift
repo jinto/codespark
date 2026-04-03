@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import Foundation
 
@@ -130,6 +131,24 @@ final class AppModel: ObservableObject {
         noteSaveErrorMessage = nil
     }
 
+    func recoveryActions(for session: ClosedSessionViewData) -> [RecoveryActionViewData] {
+        [
+            RecoveryActionViewData(title: "Open local shell here") { [core] in
+                Task { try? await core.openLocalShellHere(sessionID: session.id) }
+            },
+            RecoveryActionViewData(title: "Reconnect SSH") { [core] in
+                Task { try? await core.reconnectSSH(sessionID: session.id, cdIntoDirectory: false) }
+            },
+            RecoveryActionViewData(title: "Reconnect SSH and cd here") { [core] in
+                Task { try? await core.reconnectSSH(sessionID: session.id, cdIntoDirectory: true) }
+            },
+            RecoveryActionViewData(title: "Copy session recipe") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(session.restoreRecipe.launchCommand, forType: .string)
+            },
+        ]
+    }
+
     private func clearDetailState() {
         selectedWorkspace = nil
         noteDraft = ""
@@ -137,6 +156,11 @@ final class AppModel: ObservableObject {
         closedSessions = []
         noteSaveErrorMessage = nil
     }
+}
+
+struct RecoveryActionViewData {
+    let title: String
+    let perform: () -> Void
 }
 
 extension AppModel: TerminalHostDelegate {

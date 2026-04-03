@@ -522,6 +522,8 @@ public protocol WorkspaceServiceProtocol: AnyObject, Sendable {
     
     func listWorkspaceSummaries() throws  -> [WorkspaceSummary]
     
+    func reconcileInterruptedSessions() throws 
+    
     func updateWorkspaceNote(workspaceId: String, noteBody: String) throws 
     
     func workspaceDetail(workspaceId: String) throws  -> WorkspaceDetail
@@ -603,6 +605,13 @@ open func listWorkspaceSummaries()throws  -> [WorkspaceSummary]  {
             self.uniffiCloneHandle(),$0
     )
 })
+}
+    
+open func reconcileInterruptedSessions()throws   {try rustCallWithError(FfiConverterTypeWorkspaceServiceError_lift) {
+    uniffi_workspace_ffi_fn_method_workspaceservice_reconcile_interrupted_sessions(
+            self.uniffiCloneHandle(),$0
+    )
+}
 }
     
 open func updateWorkspaceNote(workspaceId: String, noteBody: String)throws   {try rustCallWithError(FfiConverterTypeWorkspaceServiceError_lift) {
@@ -1234,6 +1243,8 @@ public enum WorkspaceServiceError: Swift.Error, Equatable, Hashable, Foundation.
     
     case ListWorkspacesFailed(message: String)
     
+    case ReconcileInterruptedFailed(message: String)
+    
 
     
 
@@ -1287,6 +1298,10 @@ public struct FfiConverterTypeWorkspaceServiceError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 7: return .ReconcileInterruptedFailed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -1310,6 +1325,8 @@ public struct FfiConverterTypeWorkspaceServiceError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(5))
         case .ListWorkspacesFailed(_ /* message is ignored*/):
             writeInt(&buf, Int32(6))
+        case .ReconcileInterruptedFailed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(7))
 
         
         }
@@ -1474,6 +1491,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_workspace_ffi_checksum_method_workspaceservice_list_workspace_summaries() != 3972) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_workspace_ffi_checksum_method_workspaceservice_reconcile_interrupted_sessions() != 53886) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_workspace_ffi_checksum_method_workspaceservice_update_workspace_note() != 7326) {

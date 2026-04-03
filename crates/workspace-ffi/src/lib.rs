@@ -88,6 +88,8 @@ pub enum WorkspaceServiceError {
     PoisonedState,
     #[error("workspace service failed to list workspaces")]
     ListWorkspacesFailed,
+    #[error("workspace service failed to reconcile interrupted sessions")]
+    ReconcileInterruptedFailed,
 }
 
 pub struct WorkspaceService {
@@ -100,6 +102,13 @@ impl WorkspaceService {
         Ok(Self {
             store: Mutex::new(store),
         })
+    }
+
+    pub fn reconcile_interrupted_sessions(&self) -> Result<(), WorkspaceServiceError> {
+        let store = self.store()?;
+        store
+            .reconcile_interrupted_sessions()
+            .map_err(|_| WorkspaceServiceError::ReconcileInterruptedFailed)
     }
 
     pub fn list_workspace_summaries(&self) -> Result<Vec<WorkspaceSummary>, WorkspaceServiceError> {
