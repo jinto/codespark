@@ -92,12 +92,12 @@ impl Store {
              )",
             params![
                 input.workspace_id,
-                session_transport_to_str(input.transport),
+                input.transport.as_str(),
                 input.target_label,
                 input.title,
                 input.shell,
                 input.initial_cwd,
-                session_state_to_str(SessionState::Live),
+                SessionState::Live.as_str(),
                 updated_at,
             ],
         )?;
@@ -123,7 +123,7 @@ impl Store {
              )",
             params![
                 input.session_id,
-                snapshot_kind_to_str(input.kind),
+                input.kind.as_str(),
                 input.cwd,
                 i64::from(input.grid.cols),
                 i64::from(input.grid.rows),
@@ -155,12 +155,12 @@ impl Store {
              where id = ?1 and state = ?7",
             params![
                 session_id,
-                session_state_to_str(SessionState::Closed),
-                close_reason_to_str(reason),
+                SessionState::Closed.as_str(),
+                reason.as_str(),
                 last_cwd,
                 exit_status,
                 updated_at,
-                session_state_to_str(SessionState::Live),
+                SessionState::Live.as_str(),
             ],
         )?;
 
@@ -191,7 +191,7 @@ impl Store {
              where state = ?1",
         )?;
         let session_ids = stmt
-            .query_map(params![session_state_to_str(SessionState::Live)], |row| {
+            .query_map(params![SessionState::Live.as_str()], |row| {
                 row.get(0)
             })?
             .collect::<rusqlite::Result<Vec<String>>>()?;
@@ -203,10 +203,10 @@ impl Store {
                  updated_at = ?3
              where state = ?4",
             params![
-                session_state_to_str(SessionState::Interrupted),
-                close_reason_to_str(CloseReason::AppCrashed),
+                SessionState::Interrupted.as_str(),
+                CloseReason::AppCrashed.as_str(),
                 updated_at,
-                session_state_to_str(SessionState::Live),
+                SessionState::Live.as_str(),
             ],
         )?;
 
@@ -300,15 +300,15 @@ impl Store {
              where workspace_id = ?1 and state = ?2
              order by updated_at desc, rowid desc",
         )?;
-        let rows = stmt.query_map(params![workspace_id, session_state_to_str(state)], |row| {
+        let rows = stmt.query_map(params![workspace_id, state.as_str()], |row| {
             Ok(SessionSummary {
                 id: row.get(0)?,
                 title: row.get(1)?,
-                transport: session_transport_from_str(&row.get::<_, String>(2)?)?,
+                transport: SessionTransport::from_sql_str(&row.get::<_, String>(2)?)?,
                 target_label: row.get(3)?,
                 last_cwd: row.get(4)?,
                 close_reason: match row.get::<_, Option<String>>(5)? {
-                    Some(ref s) => close_reason_from_str(s)?,
+                    Some(ref s) => CloseReason::from_sql_str(s)?,
                     None => CloseReason::UserClosed,
                 },
             })
@@ -330,7 +330,7 @@ impl Store {
         )?;
         let rows = stmt.query_map(params![workspace_id], |row| {
             let id: String = row.get(0)?;
-            let transport = session_transport_from_str(&row.get::<_, String>(2)?)?;
+            let transport = SessionTransport::from_sql_str(&row.get::<_, String>(2)?)?;
             let initial_cwd: Option<String> = row.get(5)?;
             let last_cwd: Option<String> = row.get(6)?;
             let snapshot = self.latest_snapshot_for(&id)?;
@@ -358,7 +358,7 @@ impl Store {
                 target_label: row.get(3)?,
                 last_cwd: restore_cwd,
                 close_reason: match row.get::<_, Option<String>>(7)? {
-                    Some(ref s) => close_reason_from_str(s)?,
+                    Some(ref s) => CloseReason::from_sql_str(s)?,
                     None => CloseReason::UserClosed,
                 },
                 snapshot_preview,
@@ -434,69 +434,6 @@ fn now() -> i64 {
         .expect("system clock before unix epoch")
         .as_nanos() as i64
 }
-
-fn session_transport_to_str(value: SessionTransport) -> &'static str {
-    match value {
-        SessionTransport::Local => "local",
-        SessionTransport::Ssh => "ssh",
-    }
-}
-
-fn session_transport_from_str(value: &str) -> rusqlite::Result<SessionTransport> {
-    match value {
-        "local" => Ok(SessionTransport::Local),
-        "ssh" => Ok(SessionTransport::Ssh),
-        other => Err(rusqlite::Error::FromSqlConversionFailure(
-            0,
-            rusqlite::types::Type::Text,
-            format!("unknown session transport: {other}").into(),
-        )),
-    }
-}
-
-fn session_state_to_str(value: SessionState) -> &'static str {
-    match value {
-        SessionState::Live => "live",
-        SessionState::Closed => "closed",
-        SessionState::Exited => "exited",
-        SessionState::Lost => "lost",
-        SessionState::Crashed => "crashed",
-        SessionState::Interrupted => "interrupted",
-    }
-}
-
-fn close_reason_to_str(value: CloseReason) -> &'static str {
-    match value {
-        CloseReason::UserClosed => "user_closed",
-        CloseReason::ProcessExited => "process_exited",
-        CloseReason::SshDisconnected => "ssh_disconnected",
-        CloseReason::AppCrashed => "app_crashed",
-        CloseReason::HostQuit => "host_quit",
-    }
-}
-
-fn close_reason_from_str(value: &str) -> rusqlite::Result<CloseReason> {
-    match value {
-        "user_closed" => Ok(CloseReason::UserClosed),
-        "process_exited" => Ok(CloseReason::ProcessExited),
-        "ssh_disconnected" => Ok(CloseReason::SshDisconnected),
-        "app_crashed" => Ok(CloseReason::AppCrashed),
-        "host_quit" => Ok(CloseReason::HostQuit),
-        other => Err(rusqlite::Error::FromSqlConversionFailure(
-            0,
-            rusqlite::types::Type::Text,
-            format!("unknown close reason: {other}").into(),
-        )),
-    }
-}
-
-fn snapshot_kind_to_str(value: SnapshotKind) -> &'static str {
-    match value {
-        SnapshotKind::Checkpoint => "checkpoint",
-        SnapshotKind::Final => "final",
-    }
-}
-
 
 fn encode_terminal_grid_lines(grid: &TerminalGrid) -> Vec<u8> {
     let capacity: usize = grid.lines.iter().map(|l| l.len() + 1).sum();

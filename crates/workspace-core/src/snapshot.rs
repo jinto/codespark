@@ -29,6 +29,15 @@ pub enum SnapshotKind {
     Final,
 }
 
+impl SnapshotKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Checkpoint => "checkpoint",
+            Self::Final => "final",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct NewSnapshot {
     pub session_id: String,
