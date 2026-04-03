@@ -116,6 +116,18 @@ pub const Store = struct {
         try stmt.expectDone();
     }
 
+    pub fn updateSessionTitle(self: *Store, session_id: []const u8, new_title: []const u8) StoreError!void {
+        var stmt = try Statement.init(
+            self.db,
+            "update sessions set title = ?2, updated_at = ?3 where id = ?1",
+        );
+        defer stmt.deinit();
+        try stmt.bindText(1, session_id);
+        try stmt.bindText(2, new_title);
+        try stmt.bindInt64(3, now());
+        try stmt.expectDone();
+    }
+
     pub fn startSession(self: *Store, allocator: std.mem.Allocator, input: models.NewSession) StoreError![]u8 {
         const updated_at = now();
         var stmt = try Statement.init(

@@ -379,6 +379,31 @@ test "unfinalized live sessions are marked interrupted on next launch" {
     );
 }
 
+test "updateSessionTitle changes the session title" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const workspace_id = try store.createWorkspace(std.testing.allocator, "spark3");
+    defer std.testing.allocator.free(workspace_id);
+
+    const session_id = try store.startSession(std.testing.allocator, .{
+        .workspace_id = workspace_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Original",
+        .shell = "zsh",
+        .initial_cwd = null,
+    });
+    defer std.testing.allocator.free(session_id);
+
+    try store.updateSessionTitle(session_id, "Renamed");
+
+    var detail = try store.workspaceDetail(std.testing.allocator, workspace_id);
+    defer detail.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), detail.live_sessions.len);
+    try std.testing.expectEqualStrings("Renamed", detail.live_sessions[0].title);
+}
+
 test "corrupt transport returns error instead of panic" {
     const path = try uniqueDbPath("corrupt-transport");
     defer std.testing.allocator.free(path);
