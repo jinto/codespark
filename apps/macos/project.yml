@@ -20,6 +20,17 @@ targets:
           else
             cargo build -p workspace-ffi
           fi
+    dependencies:
+      - framework: ../../vendor/ghostty/macos/GhosttyKit.xcframework
+        embed: false
+      - sdk: AppKit.framework
+      - sdk: Carbon.framework
+      - sdk: CoreFoundation.framework
+      - sdk: CoreGraphics.framework
+      - sdk: CoreText.framework
+      - sdk: IOKit.framework
+      - sdk: Metal.framework
+      - sdk: QuartzCore.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jinto.stateful-terminal
@@ -27,6 +38,11 @@ targets:
         OTHER_LDFLAGS:
           - $(inherited)
           - -lworkspace_ffi
+          - -lc++
+        OTHER_SWIFT_FLAGS:
+          - $(inherited)
+          - -D
+          - GHOSTTY_FIRST
         SWIFT_OBJC_BRIDGING_HEADER: StatefulTerminal/Bridge/StatefulTerminal-Bridging-Header.h
       configs:
         Debug:
