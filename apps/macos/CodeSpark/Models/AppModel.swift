@@ -16,6 +16,8 @@ final class AppModel: ObservableObject {
     @Published var idleSessionIDs: Set<String> = []
     @Published var pendingCloseSessionID: String?
     @Published var pendingRestoreSessions: [ClosedSessionViewData] = []
+    @Published var hiddenWorkspaceIDs: Set<String> = []
+    @Published var hiddenWorkspaceNames: [String: String] = [:]
 
     private let core: WorkspaceCoreClientProtocol
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
@@ -63,7 +65,8 @@ final class AppModel: ObservableObject {
                 try await core.reconcileInterruptedSessions()
                 hasReconciledOnLaunch = true
             }
-            let workspaces = try await core.listWorkspaceSummaries()
+            let allWorkspaces = try await core.listWorkspaceSummaries()
+            let workspaces = allWorkspaces.filter { !hiddenWorkspaceIDs.contains($0.id) }
             self.workspaces = workspaces
 
             if workspaces.isEmpty {
@@ -302,6 +305,35 @@ final class AppModel: ObservableObject {
             workspaces[index].name = newName
         }
         try? await core.renameWorkspace(id: id, newName: newName)
+    }
+
+    func closeWorkspace(id: String) async {
+        if selectedWorkspaceID == id {
+            for session in liveSessions {
+                closeSession(id: session.id)
+            }
+        }
+
+        if let ws = workspaces.first(where: { $0.id == id }) {
+            hiddenWorkspaceNames[id] = ws.name
+        }
+        hiddenWorkspaceIDs.insert(id)
+        workspaces.removeAll(where: { $0.id == id })
+
+        if selectedWorkspaceID == id {
+            if let next = workspaces.first {
+                await selectWorkspace(id: next.id)
+            } else {
+                await selectWorkspace(id: nil)
+            }
+        }
+    }
+
+    func reopenWorkspace(id: String) async {
+        hiddenWorkspaceIDs.remove(id)
+        hiddenWorkspaceNames.removeValue(forKey: id)
+        await load()
+        await selectWorkspace(id: id)
     }
 
     func deleteWorkspace(id: String) async {

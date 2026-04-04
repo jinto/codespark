@@ -4,6 +4,7 @@ import SwiftUI
 struct CodeSparkApp: App {
     @StateObject private var model = AppModel(core: WorkspaceCoreClient.live)
     @AppStorage("selectedWorkspaceID") private var savedWorkspaceID: String = ""
+    @AppStorage("hiddenWorkspaceIDs") private var savedHiddenIDs: String = ""
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -23,6 +24,9 @@ struct CodeSparkApp: App {
                 #if GHOSTTY_FIRST
                 GhosttyRuntime.shared.initialize()
                 #endif
+                if !savedHiddenIDs.isEmpty {
+                    model.hiddenWorkspaceIDs = Set(savedHiddenIDs.split(separator: ",").map(String.init))
+                }
                 if !savedWorkspaceID.isEmpty {
                     model.selectedWorkspaceID = savedWorkspaceID
                 }
@@ -30,6 +34,9 @@ struct CodeSparkApp: App {
             }
             .onChange(of: model.selectedWorkspaceID) { _, newValue in
                 savedWorkspaceID = newValue ?? ""
+            }
+            .onChange(of: model.hiddenWorkspaceIDs) { _, newValue in
+                savedHiddenIDs = newValue.joined(separator: ",")
             }
         }
         .windowStyle(.hiddenTitleBar)

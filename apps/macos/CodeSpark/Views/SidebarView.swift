@@ -69,6 +69,9 @@ struct SidebarView: View {
                                     editWorkspaceName = workspace.name
                                     editingWorkspaceID = workspace.id
                                 }
+                                Button("Close Workspace") {
+                                    Task { await model.closeWorkspace(id: workspace.id) }
+                                }
                                 Divider()
                                 Button("Delete", role: .destructive) {
                                     pendingDeleteWorkspaceID = workspace.id
@@ -129,6 +132,21 @@ struct SidebarView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
+                if !model.hiddenWorkspaceIDs.isEmpty {
+                    Menu {
+                        ForEach(Array(model.hiddenWorkspaceIDs), id: \.self) { id in
+                            Button(model.hiddenWorkspaceNames[id] ?? id.prefix(8) + "...") {
+                                Task { await model.reopenWorkspace(id: id) }
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Reopen closed workspace")
+                }
                 Button {
                     Task { await model.createWorkspace(name: "New Workspace") }
                 } label: {
