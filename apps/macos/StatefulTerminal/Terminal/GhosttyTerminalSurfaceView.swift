@@ -18,12 +18,27 @@ class GhosttyTerminalSurfaceView: NSView {
         config.scale_factor = Double(NSScreen.main?.backingScaleFactor ?? 2.0)
         config.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
 
-        if let cwd = workingDirectory {
-            cwd.withCString { ptr in
-                config.working_directory = ptr
+        // Both withCString closures must be nested so pointers remain valid at ghostty_surface_new
+        switch (workingDirectory, command) {
+        case let (cwd?, cmd?):
+            cwd.withCString { cwdPtr in
+                cmd.withCString { cmdPtr in
+                    config.working_directory = cwdPtr
+                    config.command = cmdPtr
+                    self.surface = ghostty_surface_new(app, &config)
+                }
+            }
+        case let (cwd?, nil):
+            cwd.withCString { cwdPtr in
+                config.working_directory = cwdPtr
                 self.surface = ghostty_surface_new(app, &config)
             }
-        } else {
+        case let (nil, cmd?):
+            cmd.withCString { cmdPtr in
+                config.command = cmdPtr
+                self.surface = ghostty_surface_new(app, &config)
+            }
+        case (nil, nil):
             surface = ghostty_surface_new(app, &config)
         }
     }

@@ -6,4 +6,5 @@ final class NoOpTerminalHost: TerminalHostProtocol {
 
     func attach(sessionID: String, command: String? = nil) {}
     func close(sessionID: String) {}
+    func extractSnapshot() -> TerminalSnapshotViewData? { nil }
 }

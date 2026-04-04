@@ -16,6 +16,8 @@ protocol WorkspaceCoreClientProtocol {
         closeReason: CloseReasonViewData
     ) async throws
     func updateSessionTitle(sessionId: String, newTitle: String) async throws
+    func reconcileInterruptedSessions() async throws
+    func recordCheckpointSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData) async throws
     func openLocalShellHere(sessionID: String) async throws
     func reconnectSSH(sessionID: String, cdIntoDirectory: Bool) async throws
 }
@@ -216,14 +218,32 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
     // MARK: - Session lifecycle
 
     func recordFinalSnapshotAndClose(sessionID: String, snapshot: TerminalSnapshotViewData, closeReason: CloseReasonViewData) async throws {
-        // Record snapshot
+        try recordSnapshot(sessionID: sessionID, snapshot: snapshot, kind: WORKSPACE_SNAPSHOT_KIND_FINAL)
+
+        let closeStatus = sessionID.withCString { idPtr in
+            workspace_service_close_session(service, idPtr, closeReason.toCReason(), nil)
+        }
+        guard closeStatus == WORKSPACE_STATUS_OK else { throw workspaceError(closeStatus) }
+    }
+
+    func reconcileInterruptedSessions() async throws {
+        let status = workspace_service_reconcile_interrupted_sessions(service)
+        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
+    }
+
+    func recordCheckpointSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData) async throws {
+        guard !snapshot.lines.isEmpty else { return }
+        try recordSnapshot(sessionID: sessionID, snapshot: snapshot, kind: WORKSPACE_SNAPSHOT_KIND_CHECKPOINT)
+    }
+
+    private func recordSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData, kind: workspace_snapshot_kind_t) throws {
         var cLines = snapshot.lines.map { strdup($0) }
         defer { cLines.forEach { free($0) } }
 
         var input = cLines.withUnsafeMutableBufferPointer { buf -> workspace_new_snapshot_t in
             workspace_new_snapshot_t(
                 session_id: nil,
-                kind: WORKSPACE_SNAPSHOT_KIND_FINAL,
+                kind: kind,
                 cwd: nil,
                 cols: UInt16(snapshot.cols),
                 rows: UInt16(snapshot.rows),
@@ -232,17 +252,11 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
             )
         }
 
-        let snapStatus = sessionID.withCString { idPtr -> workspace_status_t in
+        let status = sessionID.withCString { idPtr -> workspace_status_t in
             input.session_id = idPtr
             return workspace_service_record_snapshot(service, &input)
         }
-        guard snapStatus == WORKSPACE_STATUS_OK else { throw workspaceError(snapStatus) }
-
-        // Close session
-        let closeStatus = sessionID.withCString { idPtr in
-            workspace_service_close_session(service, idPtr, closeReason.toCReason(), nil)
-        }
-        guard closeStatus == WORKSPACE_STATUS_OK else { throw workspaceError(closeStatus) }
+        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
     }
 
     func openLocalShellHere(sessionID: String) async throws {

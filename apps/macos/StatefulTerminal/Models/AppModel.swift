@@ -21,6 +21,8 @@ final class AppModel: ObservableObject {
     private var detailTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
     private var idleTimer: AnyCancellable?
+    private var checkpointTimer: AnyCancellable?
+    private var hasReconciledOnLaunch = false
 
     init(
         core: WorkspaceCoreClientProtocol,
@@ -32,6 +34,11 @@ final class AppModel: ObservableObject {
             .autoconnect()
             .sink { [weak self] _ in
                 self?.updateIdleStates()
+            }
+        self.checkpointTimer = Timer.publish(every: 30, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.captureCheckpoints()
             }
     }
 
@@ -50,6 +57,10 @@ final class AppModel: ObservableObject {
 
     func load() async {
         do {
+            if !hasReconciledOnLaunch {
+                try await core.reconcileInterruptedSessions()
+                hasReconciledOnLaunch = true
+            }
             let workspaces = try await core.listWorkspaceSummaries()
             self.workspaces = workspaces
 
@@ -325,6 +336,7 @@ final class AppModel: ObservableObject {
 
     func closeSession(id: String) {
         guard let host = hosts[id] else { return }
+        closingSessionIDs.insert(id)
         host.close(sessionID: id)
     }
 
@@ -350,6 +362,18 @@ final class AppModel: ObservableObject {
     func saveAllSessionsAndClose() {
         for (sessionID, host) in hosts {
             host.close(sessionID: sessionID)
+        }
+    }
+
+    private var closingSessionIDs: Set<String> = []
+
+    private func captureCheckpoints() {
+        guard !hosts.isEmpty else { return }
+        for (sessionID, host) in hosts where !closingSessionIDs.contains(sessionID) {
+            guard let snapshot = host.extractSnapshot() else { continue }
+            Task { [weak self] in
+                try? await self?.core.recordCheckpointSnapshot(sessionID: sessionID, snapshot: snapshot)
+            }
         }
     }
 
@@ -385,6 +409,7 @@ extension AppModel: TerminalHostDelegate {
         guard let index = liveSessions.firstIndex(where: { $0.id == sessionID }) else { return }
         let session = liveSessions.remove(at: index)
         hosts.removeValue(forKey: sessionID)
+        closingSessionIDs.remove(sessionID)
 
         if activeSessionID == sessionID {
             activeSessionID = liveSessions.isEmpty ? nil : liveSessions[max(0, index - 1)].id

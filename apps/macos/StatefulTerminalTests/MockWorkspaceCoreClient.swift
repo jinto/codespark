@@ -82,6 +82,10 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
         closedSessionIDs.append(sessionID)
     }
 
+    func reconcileInterruptedSessions() async throws { }
+
+    func recordCheckpointSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData) async throws { }
+
     func openLocalShellHere(sessionID: String) async throws {
         lastRecoveryAction = "open-local:\(sessionID)"
     }

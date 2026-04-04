@@ -27,9 +27,13 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
         lastOutputTime = Date()
     }
 
+    func extractSnapshot() -> TerminalSnapshotViewData? {
+        surfaceView?.extractSnapshot()
+    }
+
     @MainActor
     func close(sessionID: String) {
-        let snapshot = surfaceView?.extractSnapshot()
+        let snapshot = extractSnapshot()
             ?? TerminalSnapshotViewData(cols: 0, rows: 0, lines: [])
 
         surfaceView = nil

@@ -7,6 +7,7 @@ final class MockTerminalHost: TerminalHostProtocol {
 
     func attach(sessionID: String, command: String? = nil) {}
     func close(sessionID: String) {}
+    func extractSnapshot() -> TerminalSnapshotViewData? { nil }
 
     @MainActor
     func finishClose(sessionID: String, snapshot: TerminalSnapshotViewData, closeReason: CloseReasonViewData) {

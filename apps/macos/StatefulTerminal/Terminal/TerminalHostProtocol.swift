@@ -10,4 +10,5 @@ protocol TerminalHostProtocol: AnyObject {
     var lastOutputTime: Date? { get }
     func attach(sessionID: String, command: String?)
     func close(sessionID: String)
+    func extractSnapshot() -> TerminalSnapshotViewData?
 }
