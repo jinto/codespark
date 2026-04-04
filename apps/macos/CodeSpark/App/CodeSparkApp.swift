@@ -66,6 +66,14 @@ struct CodeSparkApp: App {
                 .disabled(model.selectedWorkspaceID == nil)
             }
             CommandGroup(after: .windowArrangement) {
+                Button("Reopen Closed Session") {
+                    Task { await model.reopenLastClosedSession() }
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+                .disabled(model.closedSessions.isEmpty)
+
+                Divider()
+
                 Button("Select Next Tab") {
                     model.selectNextSession()
                 }

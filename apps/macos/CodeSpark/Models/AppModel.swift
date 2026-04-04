@@ -260,6 +260,16 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func reopenLastClosedSession() async {
+        guard let closed = closedSessions.first else { return }
+        closedSessions.removeFirst()
+        if closed.targetLabel != "local" {
+            await recoverSSHSession(from: closed)
+        } else {
+            await recoverLocalSession(from: closed)
+        }
+    }
+
     func restoreAllClosedSessions() async {
         let sessions = pendingRestoreSessions
         pendingRestoreSessions = []
