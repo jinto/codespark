@@ -67,9 +67,9 @@ struct CodeSparkApp: App {
 
                 Divider()
 
-                ForEach(0..<min(model.workspaces.count, 9), id: \.self) { index in
-                    Button(model.workspaces[index].name) {
-                        Task { await model.selectWorkspace(id: model.workspaces[index].id) }
+                ForEach(Array(model.workspaces.prefix(9).enumerated()), id: \.element.id) { index, workspace in
+                    Button(workspace.name) {
+                        Task { await model.selectWorkspace(id: workspace.id) }
                     }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
                 }
