@@ -50,9 +50,7 @@ struct StatefulTerminalApp: App {
                 Divider()
 
                 Button("Close Session") {
-                    if let id = model.activeSessionID {
-                        model.closeSession(id: id)
-                    }
+                    model.pendingCloseSessionID = model.activeSessionID
                 }
                 .keyboardShortcut("w", modifiers: .command)
                 .disabled(model.activeSessionID == nil)

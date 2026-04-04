@@ -14,6 +14,7 @@ final class AppModel: ObservableObject {
     @Published var loadErrorMessage: String?
     @Published var noteSaveErrorMessage: String?
     @Published var idleSessionIDs: Set<String> = []
+    @Published var pendingCloseSessionID: String?
 
     private let core: WorkspaceCoreClientProtocol
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol

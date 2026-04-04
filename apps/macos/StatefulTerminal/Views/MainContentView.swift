@@ -4,6 +4,7 @@ struct MainContentView: View {
     @ObservedObject var model: AppModel
     @State private var showNote = false
     @State private var activePopoverSessionID: String?
+    @State private var showCloseConfirm = false
 
     var body: some View {
         if let workspace = model.selectedWorkspace {
@@ -131,6 +132,26 @@ struct MainContentView: View {
                 .frame(height: 100)
                 .background(Color.black.opacity(0.2))
             }
+        }
+        .onChange(of: model.pendingCloseSessionID) { _, newValue in
+            showCloseConfirm = newValue != nil
+        }
+        .confirmationDialog(
+            "Close session?",
+            isPresented: $showCloseConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Close", role: .destructive) {
+                if let id = model.pendingCloseSessionID {
+                    model.closeSession(id: id)
+                }
+                model.pendingCloseSessionID = nil
+            }
+            Button("Cancel", role: .cancel) {
+                model.pendingCloseSessionID = nil
+            }
+        } message: {
+            Text("This will close the terminal process.")
         }
     }
 
