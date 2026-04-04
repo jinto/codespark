@@ -67,6 +67,15 @@ struct StatefulTerminalApp: App {
                     model.selectPreviousSession()
                 }
                 .keyboardShortcut("[", modifiers: [.command, .shift])
+
+                Divider()
+
+                ForEach(0..<min(model.workspaces.count, 9), id: \.self) { index in
+                    Button(model.workspaces[index].name) {
+                        Task { await model.selectWorkspace(id: model.workspaces[index].id) }
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                }
             }
         }
         .onChange(of: scenePhase) { _, newPhase in
