@@ -8,7 +8,6 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
     private let detailLatencyByID: [String: UInt64]
     private let noteUpdateError: Error?
     private let noteUpdateLatency: UInt64?
-    private(set) var lastRecoveryAction: String?
     private(set) var closedSessionIDs: [String] = []
     private(set) var renamedWorkspaces: [(id: String, newName: String)] = []
     private(set) var deletedWorkspaceIDs: [String] = []
@@ -86,10 +85,6 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
 
     func recordCheckpointSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData) async throws { }
 
-    func openLocalShellHere(sessionID: String) async throws {
-        lastRecoveryAction = "open-local:\(sessionID)"
-    }
-
     func updateSessionTitle(sessionId: String, newTitle: String) async throws { }
 
     func renameWorkspace(id: String, newName: String) async throws {
@@ -98,10 +93,6 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
 
     func deleteWorkspace(id: String) async throws {
         deletedWorkspaceIDs.append(id)
-    }
-
-    func reconnectSSH(sessionID: String, cdIntoDirectory: Bool) async throws {
-        lastRecoveryAction = cdIntoDirectory ? "reconnect-ssh-cd:\(sessionID)" : "reconnect-ssh:\(sessionID)"
     }
 
     private static func makeDetailsMap(

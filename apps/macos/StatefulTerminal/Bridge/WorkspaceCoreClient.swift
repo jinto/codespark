@@ -18,8 +18,6 @@ protocol WorkspaceCoreClientProtocol {
     func updateSessionTitle(sessionId: String, newTitle: String) async throws
     func reconcileInterruptedSessions() async throws
     func recordCheckpointSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData) async throws
-    func openLocalShellHere(sessionID: String) async throws
-    func reconnectSSH(sessionID: String, cdIntoDirectory: Bool) async throws
 }
 
 enum WorkspaceCoreClient {
@@ -257,14 +255,6 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
             return workspace_service_record_snapshot(service, &input)
         }
         guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
-    }
-
-    func openLocalShellHere(sessionID: String) async throws {
-        // Will be wired when process launching is implemented
-    }
-
-    func reconnectSSH(sessionID: String, cdIntoDirectory: Bool) async throws {
-        // Will be wired when SSH reconnection is implemented
     }
 
     private func workspaceError(_ status: workspace_status_t) -> Error {
