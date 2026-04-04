@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct StatefulTerminalApp: App {
     @StateObject private var model = AppModel(core: WorkspaceCoreClient.live)
+    @AppStorage("selectedWorkspaceID") private var savedWorkspaceID: String = ""
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -22,7 +23,13 @@ struct StatefulTerminalApp: App {
                 #if GHOSTTY_FIRST
                 GhosttyRuntime.shared.initialize()
                 #endif
+                if !savedWorkspaceID.isEmpty {
+                    model.selectedWorkspaceID = savedWorkspaceID
+                }
                 await model.load()
+            }
+            .onChange(of: model.selectedWorkspaceID) { _, newValue in
+                savedWorkspaceID = newValue ?? ""
             }
         }
         .windowStyle(.hiddenTitleBar)

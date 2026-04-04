@@ -2,11 +2,21 @@ import SwiftUI
 
 struct SidebarView: View {
     @ObservedObject var model: AppModel
+    @AppStorage("expandedWorkspaceIDs") private var expandedRaw: String = ""
     @State private var expandedWorkspaceIDs: Set<String> = []
     @State private var editingWorkspaceID: String?
     @State private var editWorkspaceName = ""
     @State private var pendingDeleteWorkspaceID: String?
     @State private var showDeleteConfirmation = false
+
+    private func toggleExpanded(_ id: String) {
+        if expandedWorkspaceIDs.contains(id) {
+            expandedWorkspaceIDs.remove(id)
+        } else {
+            expandedWorkspaceIDs.insert(id)
+        }
+        expandedRaw = expandedWorkspaceIDs.joined(separator: ",")
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -43,11 +53,7 @@ struct SidebarView: View {
                             )
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                if expandedWorkspaceIDs.contains(workspace.id) {
-                                    expandedWorkspaceIDs.remove(workspace.id)
-                                } else {
-                                    expandedWorkspaceIDs.insert(workspace.id)
-                                }
+                                toggleExpanded(workspace.id)
                                 Task { await model.selectWorkspace(id: workspace.id) }
                             }
                             .onTapGesture(count: 2) {
@@ -90,8 +96,11 @@ struct SidebarView: View {
                 .padding(.top, 8)
             }
             .onAppear {
+                if !expandedRaw.isEmpty {
+                    expandedWorkspaceIDs = Set(expandedRaw.split(separator: ",").map(String.init))
+                }
                 if expandedWorkspaceIDs.isEmpty, let first = model.workspaces.first {
-                    expandedWorkspaceIDs.insert(first.id)
+                    toggleExpanded(first.id)
                 }
             }
 

@@ -42,7 +42,7 @@ final class AppModel: ObservableObject {
         for session in liveSessions {
             var host = terminalFactory(session)
             host.delegate = self
-            host.attach(sessionID: session.id)
+            host.attach(sessionID: session.id, command: nil)
             hosts[session.id] = host
         }
         activeSessionID = liveSessions.first?.id
@@ -158,21 +158,88 @@ final class AppModel: ObservableObject {
     }
 
     func recoveryActions(for session: ClosedSessionViewData) -> [RecoveryActionViewData] {
-        [
-            RecoveryActionViewData(title: "Open local shell here") { [core] in
-                Task { try? await core.openLocalShellHere(sessionID: session.id) }
-            },
-            RecoveryActionViewData(title: "Reconnect SSH") { [core] in
-                Task { try? await core.reconnectSSH(sessionID: session.id, cdIntoDirectory: false) }
-            },
-            RecoveryActionViewData(title: "Reconnect SSH and cd here") { [core] in
-                Task { try? await core.reconnectSSH(sessionID: session.id, cdIntoDirectory: true) }
-            },
-            RecoveryActionViewData(title: "Copy session recipe") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(session.restoreRecipe.launchCommand, forType: .string)
-            },
-        ]
+        var actions: [RecoveryActionViewData] = []
+
+        actions.append(RecoveryActionViewData(title: "Open local shell here") { [weak self] in
+            guard let self else { return }
+            Task { await self.recoverLocalSession(from: session) }
+        })
+
+        if session.targetLabel != "local" {
+            actions.append(RecoveryActionViewData(title: "Reconnect SSH and cd here") { [weak self] in
+                guard let self else { return }
+                Task { await self.recoverSSHSession(from: session) }
+            })
+        }
+
+        actions.append(RecoveryActionViewData(title: "Copy session recipe") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(session.restoreRecipe.launchCommand, forType: .string)
+        })
+
+        return actions
+    }
+
+    func recoverLocalSession(from closed: ClosedSessionViewData) async {
+        guard let workspaceID = selectedWorkspaceID else { return }
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        do {
+            let sessionID = try await core.startSession(
+                workspaceId: workspaceID,
+                transport: "local",
+                targetLabel: "local",
+                title: closed.lastCwd.map { ($0 as NSString).lastPathComponent } ?? "Terminal",
+                shell: shell,
+                initialCwd: closed.lastCwd
+            )
+            guard selectedWorkspaceID == workspaceID else { return }
+            let session = SessionViewData(
+                id: sessionID,
+                title: closed.lastCwd.map { ($0 as NSString).lastPathComponent } ?? "Terminal",
+                targetLabel: "local",
+                lastCwd: closed.lastCwd,
+                restoreRecipe: RestoreRecipeViewData(launchCommand: "\(shell) -l")
+            )
+            liveSessions.append(session)
+            var host = terminalFactory(session)
+            host.delegate = self
+            host.attach(sessionID: sessionID, command: nil)
+            hosts[sessionID] = host
+            activeSessionID = sessionID
+        } catch {
+            loadErrorMessage = error.localizedDescription
+        }
+    }
+
+    func recoverSSHSession(from closed: ClosedSessionViewData) async {
+        guard let workspaceID = selectedWorkspaceID else { return }
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        do {
+            let sessionID = try await core.startSession(
+                workspaceId: workspaceID,
+                transport: "ssh",
+                targetLabel: closed.targetLabel,
+                title: closed.title,
+                shell: shell,
+                initialCwd: closed.lastCwd
+            )
+            guard selectedWorkspaceID == workspaceID else { return }
+            let session = SessionViewData(
+                id: sessionID,
+                title: closed.title,
+                targetLabel: closed.targetLabel,
+                lastCwd: closed.lastCwd,
+                restoreRecipe: closed.restoreRecipe
+            )
+            liveSessions.append(session)
+            var host = terminalFactory(session)
+            host.delegate = self
+            host.attach(sessionID: sessionID, command: closed.restoreRecipe.launchCommand)
+            hosts[sessionID] = host
+            activeSessionID = sessionID
+        } catch {
+            loadErrorMessage = error.localizedDescription
+        }
     }
 
     // MARK: - Workspace lifecycle
@@ -248,7 +315,7 @@ final class AppModel: ObservableObject {
             liveSessions.append(session)
             var host = terminalFactory(session)
             host.delegate = self
-            host.attach(sessionID: sessionID)
+            host.attach(sessionID: sessionID, command: nil)
             hosts[sessionID] = host
             activeSessionID = sessionID
         } catch {
