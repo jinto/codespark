@@ -28,7 +28,7 @@ struct SidebarView: View {
                     Image(systemName: "terminal.fill")
                         .font(.title2)
                         .foregroundStyle(AppTheme.accent)
-                    Text("Code Spark")
+                    Text("CodeSpark")
                         .font(.title2)
                         .fontWeight(.bold)
                     Spacer()

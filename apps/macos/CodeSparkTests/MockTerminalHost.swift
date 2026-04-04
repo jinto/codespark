@@ -1,5 +1,5 @@
 import Foundation
-@testable import StatefulTerminal
+@testable import CodeSpark
 
 final class MockTerminalHost: TerminalHostProtocol {
     weak var delegate: (any TerminalHostDelegate)?

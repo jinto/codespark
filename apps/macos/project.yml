@@ -1,16 +1,16 @@
-name: StatefulTerminal
+name: CodeSpark
 options:
   minimumXcodeGenVersion: 2.38.0
 settings:
   base:
     SWIFT_VERSION: 5.10
 targets:
-  StatefulTerminal:
+  CodeSpark:
     type: application
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - StatefulTerminal
+      - CodeSpark
     preBuildScripts:
       - name: Build workspace-core (Zig)
         basedOnDependencyAnalysis: false
@@ -44,7 +44,7 @@ targets:
       - sdk: QuartzCore.framework
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.jinto.stateful-terminal
+        PRODUCT_BUNDLE_IDENTIFIER: com.jinto.codespark
         GENERATE_INFOPLIST_FILE: YES
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/../../libs/workspace-core/include
@@ -59,15 +59,15 @@ targets:
           - $(inherited)
           - -D
           - GHOSTTY_FIRST
-        SWIFT_OBJC_BRIDGING_HEADER: StatefulTerminal/Bridge/StatefulTerminal-Bridging-Header.h
-  StatefulTerminalTests:
+        SWIFT_OBJC_BRIDGING_HEADER: CodeSpark/Bridge/CodeSpark-Bridging-Header.h
+  CodeSparkTests:
     type: bundle.unit-test
     platform: macOS
     deploymentTarget: "14.0"
     sources:
-      - StatefulTerminalTests
+      - CodeSparkTests
     dependencies:
-      - target: StatefulTerminal
+      - target: CodeSpark
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

@@ -1,5 +1,5 @@
 import Foundation
-@testable import StatefulTerminal
+@testable import CodeSpark
 
 final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
     private let summaries: [WorkspaceSummaryViewData]

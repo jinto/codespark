@@ -24,7 +24,7 @@ enum WorkspaceCoreClient {
     static var live: WorkspaceCoreClientProtocol {
         let dbPath = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("StatefulTerminal", isDirectory: true)
+            .appendingPathComponent("CodeSpark", isDirectory: true)
             .appendingPathComponent("store.sqlite3")
             .path
         do {

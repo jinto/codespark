@@ -1,5 +1,5 @@
 import XCTest
-@testable import StatefulTerminal
+@testable import CodeSpark
 
 final class WorkspaceFlowTests: XCTestCase {
     @MainActor

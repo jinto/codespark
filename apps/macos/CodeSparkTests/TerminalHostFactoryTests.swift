@@ -1,5 +1,5 @@
 import XCTest
-@testable import StatefulTerminal
+@testable import CodeSpark
 
 final class TerminalHostFactoryTests: XCTestCase {
     func test_factory_falls_back_to_noop_host_when_ghostty_is_unavailable() {

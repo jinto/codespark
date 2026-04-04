@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct StatefulTerminalApp: App {
+struct CodeSparkApp: App {
     @StateObject private var model = AppModel(core: WorkspaceCoreClient.live)
     @AppStorage("selectedWorkspaceID") private var savedWorkspaceID: String = ""
     @Environment(\.scenePhase) private var scenePhase
