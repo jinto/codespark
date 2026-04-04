@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct SidebarView: View {
@@ -8,6 +9,8 @@ struct SidebarView: View {
     @State private var editWorkspaceName = ""
     @State private var pendingDeleteWorkspaceID: String?
     @State private var showDeleteConfirmation = false
+    @State private var showHotkeys = false
+    @State private var hotkeyMonitor: Any?
 
     private func toggleExpanded(_ id: String) {
         if expandedWorkspaceIDs.contains(id) {
@@ -39,12 +42,13 @@ struct SidebarView: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(model.workspaces) { workspace in
+                    ForEach(Array(model.workspaces.enumerated()), id: \.element.id) { index, workspace in
                         VStack(alignment: .leading, spacing: 0) {
                             WorkspaceSidebarRow(
                                 workspace: workspace,
                                 isSelected: model.selectedWorkspaceID == workspace.id,
                                 isExpanded: expandedWorkspaceIDs.contains(workspace.id),
+                                hotkeyIndex: index < 9 && showHotkeys ? index + 1 : nil,
                                 editingWorkspaceID: $editingWorkspaceID,
                                 editWorkspaceName: $editWorkspaceName,
                                 onRename: { newName in
@@ -102,6 +106,16 @@ struct SidebarView: View {
                 if expandedWorkspaceIDs.isEmpty, let first = model.workspaces.first {
                     toggleExpanded(first.id)
                 }
+                hotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+                    showHotkeys = event.modifierFlags.contains(.command)
+                    return event
+                }
+            }
+            .onDisappear {
+                if let monitor = hotkeyMonitor {
+                    NSEvent.removeMonitor(monitor)
+                    hotkeyMonitor = nil
+                }
             }
 
             Spacer()
@@ -156,6 +170,7 @@ struct WorkspaceSidebarRow: View {
     let workspace: WorkspaceSummaryViewData
     let isSelected: Bool
     let isExpanded: Bool
+    let hotkeyIndex: Int?
     @Binding var editingWorkspaceID: String?
     @Binding var editWorkspaceName: String
     let onRename: (String) -> Void
@@ -208,6 +223,15 @@ struct WorkspaceSidebarRow: View {
             }
 
             Spacer()
+
+            if let index = hotkeyIndex {
+                Text("⌘\(index)")
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
