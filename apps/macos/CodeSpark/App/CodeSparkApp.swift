@@ -46,9 +46,8 @@ struct CodeSparkApp: App {
                     Task { await model.newSession() }
                 }
                 .keyboardShortcut("t", modifiers: .command)
-
-                Divider()
-
+            }
+            CommandGroup(replacing: .saveItem) {
                 Button("Close Session") {
                     model.pendingCloseSessionID = model.activeSessionID
                 }
