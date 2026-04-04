@@ -8,6 +8,12 @@ final class GhosttyRuntime {
 
     private(set) var app: ghostty_app_t?
 
+    deinit {
+        if let app {
+            ghostty_app_free(app)
+        }
+    }
+
     func initialize() {
         guard app == nil else { return }
         // Skip Ghostty initialization in unit test environment

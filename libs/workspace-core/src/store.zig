@@ -53,7 +53,10 @@ pub const Store = struct {
         defer select_stmt.deinit();
         const has_row = try select_stmt.step();
         if (!has_row) return error.Database;
-        return select_stmt.columnOwnedText(allocator, 0);
+        const workspace_id = try select_stmt.columnOwnedText(allocator, 0);
+        errdefer allocator.free(workspace_id);
+        self.recordTimelineEvent(workspace_id, null, .workspace_created) catch {};
+        return workspace_id;
     }
 
     pub fn listWorkspaceSummaries(self: *Store, allocator: std.mem.Allocator) StoreError![]models.WorkspaceSummary {
@@ -114,6 +117,7 @@ pub const Store = struct {
         try stmt.bindText(2, note_body);
         try stmt.bindInt64(3, updated_at);
         try stmt.expectDone();
+        self.recordTimelineEvent(workspace_id, null, .note_updated) catch {};
     }
 
     pub fn renameWorkspace(self: *Store, workspace_id: []const u8, new_name: []const u8) StoreError!void {
@@ -189,6 +193,7 @@ pub const Store = struct {
         errdefer allocator.free(session_id);
 
         try self.touchWorkspace(input.workspace_id);
+        self.recordTimelineEvent(input.workspace_id, session_id, .session_started) catch {};
         return session_id;
     }
 
@@ -218,6 +223,31 @@ pub const Store = struct {
         try stmt.expectDone();
 
         try self.touchWorkspaceBySession(input.session_id);
+        if (input.kind == .final) {
+            if (self.workspaceIdForSession(std.heap.c_allocator, input.session_id)) |workspace_id| {
+                defer std.heap.c_allocator.free(workspace_id);
+                self.recordTimelineEvent(workspace_id, input.session_id, .snapshot_finalized) catch {};
+            } else |_| {}
+        }
+    }
+
+    pub fn recordTimelineEvent(
+        self: *Store,
+        workspace_id: []const u8,
+        session_id: ?[]const u8,
+        event_type: models.TimelineEventKind,
+    ) StoreError!void {
+        var stmt = try Statement.init(
+            self.db,
+            "insert into timeline_events (id, workspace_id, session_id, event_type, created_at)\n" ++
+                " values (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4)",
+        );
+        defer stmt.deinit();
+        try stmt.bindText(1, workspace_id);
+        try stmt.bindOptionalText(2, session_id);
+        try stmt.bindText(3, event_type.asText());
+        try stmt.bindInt64(4, now());
+        try stmt.expectDone();
     }
 
     pub fn closeSession(
@@ -254,26 +284,46 @@ pub const Store = struct {
         }
 
         try self.touchWorkspaceBySession(session_id);
+        if (self.workspaceIdForSession(std.heap.c_allocator, session_id)) |workspace_id| {
+            defer std.heap.c_allocator.free(workspace_id);
+            self.recordTimelineEvent(workspace_id, session_id, .session_closed) catch {};
+        } else |_| {}
     }
 
     pub fn reconcileInterruptedSessions(self: *Store) StoreError!void {
+        const InterruptedSession = struct {
+            id: []u8,
+            workspace_id: []u8,
+        };
+
         var select_stmt = try Statement.init(
             self.db,
-            "select id\n" ++
+            "select id, workspace_id\n" ++
                 " from sessions\n" ++
                 " where state = ?1",
         );
         defer select_stmt.deinit();
         try select_stmt.bindText(1, models.SessionState.live.asSql());
 
-        var session_ids: std.ArrayList([]u8) = .empty;
+        var sessions: std.ArrayList(InterruptedSession) = .empty;
         defer {
-            for (session_ids.items) |id| std.heap.c_allocator.free(id);
-            session_ids.deinit(std.heap.c_allocator);
+            for (sessions.items) |item| {
+                std.heap.c_allocator.free(item.id);
+                std.heap.c_allocator.free(item.workspace_id);
+            }
+            sessions.deinit(std.heap.c_allocator);
         }
 
         while (try select_stmt.step()) {
-            try session_ids.append(std.heap.c_allocator, try select_stmt.columnOwnedText(std.heap.c_allocator, 0));
+            const session_id = try select_stmt.columnOwnedText(std.heap.c_allocator, 0);
+            errdefer std.heap.c_allocator.free(session_id);
+            const workspace_id = try select_stmt.columnOwnedText(std.heap.c_allocator, 1);
+            errdefer std.heap.c_allocator.free(workspace_id);
+
+            try sessions.append(std.heap.c_allocator, .{
+                .id = session_id,
+                .workspace_id = workspace_id,
+            });
         }
 
         var update_stmt = try Statement.init(
@@ -291,8 +341,9 @@ pub const Store = struct {
         try update_stmt.bindText(4, models.SessionState.live.asSql());
         try update_stmt.expectDone();
 
-        for (session_ids.items) |id| {
-            try self.touchWorkspaceBySession(id);
+        for (sessions.items) |item| {
+            try self.touchWorkspaceBySession(item.id);
+            self.recordTimelineEvent(item.workspace_id, item.id, .session_interrupted) catch {};
         }
     }
 
@@ -369,7 +420,17 @@ pub const Store = struct {
                 "\n" ++
                 "create index if not exists idx_sessions_workspace_id on sessions(workspace_id);\n" ++
                 "create index if not exists idx_sessions_state on sessions(state);\n" ++
-                "create index if not exists idx_snapshots_session_id on snapshots(session_id);",
+                "create index if not exists idx_snapshots_session_id on snapshots(session_id);\n" ++
+                "\n" ++
+                "create table if not exists timeline_events (\n" ++
+                "    id text primary key not null,\n" ++
+                "    workspace_id text not null references workspaces(id) on delete cascade,\n" ++
+                "    session_id text,\n" ++
+                "    event_type text not null,\n" ++
+                "    created_at integer not null\n" ++
+                ");\n" ++
+                "create index if not exists idx_timeline_workspace_id on timeline_events(workspace_id);\n" ++
+                "create index if not exists idx_timeline_created_at on timeline_events(created_at);",
         );
     }
 
@@ -467,6 +528,17 @@ pub const Store = struct {
         try stmt.bindText(1, session_id);
         try stmt.bindInt64(2, now());
         try stmt.expectDone();
+    }
+
+    fn workspaceIdForSession(self: *Store, allocator: std.mem.Allocator, session_id: []const u8) StoreError![]u8 {
+        var stmt = try Statement.init(
+            self.db,
+            "select workspace_id from sessions where id = ?1",
+        );
+        defer stmt.deinit();
+        try stmt.bindText(1, session_id);
+        if (!try stmt.step()) return error.Database;
+        return stmt.columnOwnedText(allocator, 0);
     }
 
     fn sessionExists(self: *Store, session_id: []const u8) StoreError!bool {

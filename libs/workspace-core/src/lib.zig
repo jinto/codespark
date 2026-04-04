@@ -6,6 +6,7 @@ pub const c_api = @import("c_api.zig");
 pub const SessionTransport = models.SessionTransport;
 pub const SessionState = models.SessionState;
 pub const CloseReason = models.CloseReason;
+pub const TimelineEventKind = models.TimelineEventKind;
 pub const NewSession = models.NewSession;
 pub const SessionSummary = models.SessionSummary;
 pub const ClosedSessionSummary = models.ClosedSessionSummary;

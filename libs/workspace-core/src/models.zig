@@ -65,6 +65,26 @@ pub const CloseReason = enum {
     }
 };
 
+pub const TimelineEventKind = enum {
+    workspace_created,
+    session_started,
+    session_closed,
+    session_interrupted,
+    snapshot_finalized,
+    note_updated,
+
+    pub fn asText(self: TimelineEventKind) []const u8 {
+        return switch (self) {
+            .workspace_created => "workspace_created",
+            .session_started => "session_started",
+            .session_closed => "session_closed",
+            .session_interrupted => "session_interrupted",
+            .snapshot_finalized => "snapshot_finalized",
+            .note_updated => "note_updated",
+        };
+    }
+};
+
 pub const NewSession = struct {
     workspace_id: []const u8,
     transport: SessionTransport,

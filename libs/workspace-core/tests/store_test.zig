@@ -132,6 +132,51 @@ test "file backed reopen preserves workspace note and session counts" {
     try std.testing.expectEqualStrings("prod logs", detail.closed_sessions[0].title);
 }
 
+test "timeline events are recorded for workspace and session operations" {
+    const path = try uniqueDbPath("timeline-events");
+    defer std.testing.allocator.free(path);
+    defer std.fs.cwd().deleteFile(path) catch {};
+
+    var workspace_id: []u8 = undefined;
+    var session_id: []u8 = undefined;
+    {
+        var store = try core.Store.open(path);
+        defer store.deinit();
+
+        workspace_id = try store.createWorkspace(std.testing.allocator, "release");
+        session_id = try store.startSession(std.testing.allocator, .{
+            .workspace_id = workspace_id,
+            .transport = .ssh,
+            .target_label = "prod",
+            .title = "prod logs",
+            .shell = "zsh",
+            .initial_cwd = "/srv/app",
+        });
+
+        try store.closeSession(session_id, .user_closed, "/srv/app", null);
+    }
+    defer std.testing.allocator.free(workspace_id);
+    defer std.testing.allocator.free(session_id);
+
+    const events = try listTimelineEvents(std.testing.allocator, path);
+    defer freeTimelineEvents(events);
+
+    try std.testing.expectEqual(@as(usize, 3), events.len);
+    try std.testing.expectEqualStrings("workspace_created", events[0].event_type);
+    try std.testing.expectEqualStrings(workspace_id, events[0].workspace_id);
+    try std.testing.expect(events[0].session_id == null);
+
+    try std.testing.expectEqualStrings("session_started", events[1].event_type);
+    try std.testing.expectEqualStrings(workspace_id, events[1].workspace_id);
+    try std.testing.expect(events[1].session_id != null);
+    try std.testing.expectEqualStrings(session_id, events[1].session_id.?);
+
+    try std.testing.expectEqualStrings("session_closed", events[2].event_type);
+    try std.testing.expectEqualStrings(workspace_id, events[2].workspace_id);
+    try std.testing.expect(events[2].session_id != null);
+    try std.testing.expectEqualStrings(session_id, events[2].session_id.?);
+}
+
 test "closing an already closed session keeps existing recovery data" {
     var store = try core.Store.open(":memory:");
     defer store.deinit();
@@ -780,6 +825,24 @@ fn freeWorkspaceSummaries(items: []core.WorkspaceSummary) void {
     std.testing.allocator.free(items);
 }
 
+const TimelineEventRow = struct {
+    workspace_id: []u8,
+    session_id: ?[]u8,
+    event_type: []u8,
+
+    fn deinit(self: *TimelineEventRow) void {
+        std.testing.allocator.free(self.workspace_id);
+        if (self.session_id) |value| std.testing.allocator.free(value);
+        std.testing.allocator.free(self.event_type);
+        self.* = undefined;
+    }
+};
+
+fn freeTimelineEvents(items: []TimelineEventRow) void {
+    for (items) |*item| item.deinit();
+    std.testing.allocator.free(items);
+}
+
 fn uniqueDbPath(prefix: []const u8) ![:0]u8 {
     const stamp = std.time.nanoTimestamp();
     const suffix = std.crypto.random.int(u64);
@@ -829,6 +892,61 @@ fn rawCount(path: []const u8, sql: []const u8) !i64 {
     const step_result = sqlite.sqlite3_step(stmt);
     if (step_result != sqlite.SQLITE_ROW) return error.Database;
     return sqlite.sqlite3_column_int64(stmt, 0);
+}
+
+fn listTimelineEvents(allocator: std.mem.Allocator, path: []const u8) ![]TimelineEventRow {
+    var db: ?*sqlite.sqlite3 = null;
+    const path_z = try allocator.dupeZ(u8, path);
+    defer allocator.free(path_z);
+    try expectSqliteOk(sqlite.sqlite3_open(path_z.ptr, &db), db);
+    defer _ = sqlite.sqlite3_close(db);
+
+    var stmt: ?*sqlite.sqlite3_stmt = null;
+    const sql =
+        "select workspace_id, session_id, event_type\n" ++
+        " from timeline_events\n" ++
+        " order by created_at asc, rowid asc";
+    const sql_z = try allocator.dupeZ(u8, sql);
+    defer allocator.free(sql_z);
+    try expectSqliteOk(sqlite.sqlite3_prepare_v2(db, sql_z.ptr, -1, &stmt, null), db);
+    defer _ = sqlite.sqlite3_finalize(stmt);
+
+    var events: std.ArrayList(TimelineEventRow) = .empty;
+    defer {
+        for (events.items) |*item| item.deinit();
+        events.deinit(allocator);
+    }
+
+    while (true) {
+        switch (sqlite.sqlite3_step(stmt)) {
+            sqlite.SQLITE_ROW => {
+                const workspace_id = try dupColumnText(allocator, stmt, 0);
+                errdefer allocator.free(workspace_id);
+                const session_id = try dupOptionalColumnText(allocator, stmt, 1);
+                errdefer if (session_id) |value| allocator.free(value);
+                const event_type = try dupColumnText(allocator, stmt, 2);
+                errdefer allocator.free(event_type);
+
+                try events.append(allocator, .{
+                    .workspace_id = workspace_id,
+                    .session_id = session_id,
+                    .event_type = event_type,
+                });
+            },
+            sqlite.SQLITE_DONE => return events.toOwnedSlice(allocator),
+            else => return error.Database,
+        }
+    }
+}
+
+fn dupColumnText(allocator: std.mem.Allocator, stmt: ?*sqlite.sqlite3_stmt, index: c_int) ![]u8 {
+    const text = sqlite.sqlite3_column_text(stmt, index) orelse return error.Database;
+    return allocator.dupe(u8, std.mem.span(text));
+}
+
+fn dupOptionalColumnText(allocator: std.mem.Allocator, stmt: ?*sqlite.sqlite3_stmt, index: c_int) !?[]u8 {
+    if (sqlite.sqlite3_column_type(stmt, index) == sqlite.SQLITE_NULL) return null;
+    return @as(?[]u8, try dupColumnText(allocator, stmt, index));
 }
 
 fn expectSqliteOk(code: c_int, db: ?*sqlite.sqlite3) !void {

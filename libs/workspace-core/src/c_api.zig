@@ -7,6 +7,7 @@ pub const Store = store_mod.Store;
 pub const StoreError = store_mod.StoreError;
 pub const SessionTransport = models.SessionTransport;
 pub const CloseReason = models.CloseReason;
+pub const TimelineEventKind = models.TimelineEventKind;
 pub const WorkspaceSummary = models.WorkspaceSummary;
 pub const SessionSummary = models.SessionSummary;
 
