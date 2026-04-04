@@ -277,14 +277,19 @@ final class AppModel: ObservableObject {
 
     func createWorkspace(name: String) async {
         do {
-            let previousSelectedID = selectedWorkspaceID
             let newID = try await core.createWorkspace(name: name)
-            await load()
-            if let newIndex = workspaces.firstIndex(where: { $0.id == newID }),
-               let activeIndex = workspaces.firstIndex(where: { $0.id == previousSelectedID }),
-               newIndex != activeIndex + 1 {
-                let ws = workspaces.remove(at: newIndex)
-                workspaces.insert(ws, at: activeIndex + 1)
+            let newWorkspace = WorkspaceSummaryViewData(
+                id: newID,
+                name: name,
+                liveSessions: 0,
+                recentlyClosedSessions: 0,
+                hasInterruptedSessions: false,
+                liveSessionDetails: []
+            )
+            if let activeIndex = workspaces.firstIndex(where: { $0.id == selectedWorkspaceID }) {
+                workspaces.insert(newWorkspace, at: activeIndex + 1)
+            } else {
+                workspaces.append(newWorkspace)
             }
             await selectWorkspace(id: newID)
         } catch {
