@@ -5,6 +5,7 @@ struct MainContentView: View {
     @State private var showNote = false
     @State private var activePopoverSessionID: String?
     @State private var showCloseConfirm = false
+    @State private var showCloseWorkspaceConfirm = false
 
     var body: some View {
         if let workspace = model.selectedWorkspace {
@@ -156,6 +157,26 @@ struct MainContentView: View {
             }
         } message: {
             Text("This will close the terminal process.")
+        }
+        .onChange(of: model.pendingCloseWorkspaceID) { _, newValue in
+            showCloseWorkspaceConfirm = newValue != nil
+        }
+        .confirmationDialog(
+            "Close workspace?",
+            isPresented: $showCloseWorkspaceConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Close", role: .destructive) {
+                if let id = model.pendingCloseWorkspaceID {
+                    Task { await model.closeWorkspace(id: id) }
+                }
+                model.pendingCloseWorkspaceID = nil
+            }
+            Button("Cancel", role: .cancel) {
+                model.pendingCloseWorkspaceID = nil
+            }
+        } message: {
+            Text("Sessions will be closed. You can reopen this workspace later.")
         }
     }
 

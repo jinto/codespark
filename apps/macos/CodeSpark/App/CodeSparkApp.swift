@@ -55,11 +55,15 @@ struct CodeSparkApp: App {
                 .keyboardShortcut("t", modifiers: .command)
             }
             CommandGroup(replacing: .saveItem) {
-                Button("Close Session") {
-                    model.pendingCloseSessionID = model.activeSessionID
+                Button(model.activeSessionID != nil ? "Close Session" : "Close Workspace") {
+                    if model.activeSessionID != nil {
+                        model.pendingCloseSessionID = model.activeSessionID
+                    } else if let wsID = model.selectedWorkspaceID {
+                        model.pendingCloseWorkspaceID = wsID
+                    }
                 }
                 .keyboardShortcut("w", modifiers: .command)
-                .disabled(model.activeSessionID == nil)
+                .disabled(model.selectedWorkspaceID == nil)
             }
             CommandGroup(after: .windowArrangement) {
                 Button("Select Next Tab") {

@@ -15,6 +15,7 @@ final class AppModel: ObservableObject {
     @Published var noteSaveErrorMessage: String?
     @Published var idleSessionIDs: Set<String> = []
     @Published var pendingCloseSessionID: String?
+    @Published var pendingCloseWorkspaceID: String?
     @Published var pendingRestoreSessions: [ClosedSessionViewData] = []
     @Published var hiddenWorkspaceIDs: Set<String> = []
     @Published var hiddenWorkspaceNames: [String: String] = [:]
