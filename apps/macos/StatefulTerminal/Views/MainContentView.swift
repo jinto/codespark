@@ -106,30 +106,34 @@ struct MainContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if !model.closedSessions.isEmpty {
+            if !model.pendingRestoreSessions.isEmpty {
                 Divider().background(AppTheme.divider)
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(model.closedSessions) { session in
-                            RecentlyClosedSessionCardView(session: session)
-                                .frame(width: 260)
-                                .popover(isPresented: Binding(
-                                    get: { activePopoverSessionID == session.id },
-                                    set: { if !$0 { activePopoverSessionID = nil } }
-                                )) {
-                                    ClosedSessionInspectorView(
-                                        session: session,
-                                        actions: model.recoveryActions(for: session)
-                                    )
-                                    .frame(width: 300)
-                                }
-                                .onTapGesture { activePopoverSessionID = session.id }
-                        }
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.counterclockwise.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(AppTheme.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(model.pendingRestoreSessions.count) previous session\(model.pendingRestoreSessions.count == 1 ? "" : "s")")
+                            .font(.system(.body, weight: .medium))
+                        Text("Restore them?")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    Spacer()
+                    Button("Restore") {
+                        Task { await model.restoreAllClosedSessions() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(AppTheme.accent)
+                    .controlSize(.small)
+                    Button("Dismiss") {
+                        model.dismissRestorePrompt()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
-                .frame(height: 100)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
                 .background(Color.black.opacity(0.2))
             }
         }

@@ -15,6 +15,7 @@ final class AppModel: ObservableObject {
     @Published var noteSaveErrorMessage: String?
     @Published var idleSessionIDs: Set<String> = []
     @Published var pendingCloseSessionID: String?
+    @Published var pendingRestoreSessions: [ClosedSessionViewData] = []
 
     private let core: WorkspaceCoreClientProtocol
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
@@ -164,6 +165,7 @@ final class AppModel: ObservableObject {
         selectedWorkspace = detail
         noteDraft = detail.noteBody
         liveSessions = detail.liveSessions
+        pendingRestoreSessions = detail.closedSessions
         closedSessions = detail.closedSessions
         activeSessionID = liveSessions.first?.id
         noteSaveErrorMessage = nil
@@ -252,6 +254,23 @@ final class AppModel: ObservableObject {
         } catch {
             loadErrorMessage = error.localizedDescription
         }
+    }
+
+    func restoreAllClosedSessions() async {
+        let sessions = pendingRestoreSessions
+        pendingRestoreSessions = []
+        closedSessions = []
+        for session in sessions {
+            if session.targetLabel != "local" {
+                await recoverSSHSession(from: session)
+            } else {
+                await recoverLocalSession(from: session)
+            }
+        }
+    }
+
+    func dismissRestorePrompt() {
+        pendingRestoreSessions = []
     }
 
     // MARK: - Workspace lifecycle
