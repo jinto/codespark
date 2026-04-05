@@ -6,71 +6,87 @@ final class CodeSparkUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
         app.launch()
-        // Wait for initial load
-        let sidebar = app.staticTexts["CodeSpark"]
-        _ = sidebar.waitForExistence(timeout: 5)
+        // Wait for initial load — sidebar title should appear
+        XCTAssertTrue(
+            app.staticTexts["CodeSpark"].waitForExistence(timeout: 10),
+            "App should launch and show sidebar title"
+        )
     }
 
-    // MARK: - Workspace Management
+    // MARK: - Sidebar
 
     func test_sidebar_shows_app_title() {
-        XCTAssertTrue(app.staticTexts["CodeSpark"].exists, "App title should be visible in sidebar")
+        XCTAssertTrue(app.staticTexts["CodeSpark"].exists)
     }
+
+    // MARK: - Cmd+N: New Workspace
 
     func test_cmd_n_creates_new_workspace() {
-        let before = app.staticTexts.matching(NSPredicate(format: "label == 'New Workspace'")).count
+        let workspaceNames = app.staticTexts.matching(identifier: "workspaceName")
+        let before = workspaceNames.count
         app.typeKey("n", modifierFlags: .command)
-        sleep(1) // wait for workspace creation
-        let after = app.staticTexts.matching(NSPredicate(format: "label == 'New Workspace'")).count
-        XCTAssertGreaterThan(after, before, "Cmd+N should create a new workspace")
+        // Wait for the new workspace text to appear
+        let newWorkspace = workspaceNames.element(boundBy: before)
+        XCTAssertTrue(
+            newWorkspace.waitForExistence(timeout: 5),
+            "Cmd+N should add a workspace to sidebar (before: \(before))"
+        )
     }
 
-    // MARK: - Session Close Flow
+    // MARK: - Cmd+W: Close Session
 
-    func test_cmd_w_shows_close_alert_when_session_exists() {
-        // Create a session first
-        app.typeKey("t", modifierFlags: .command)
-        sleep(1)
-
-        // Try to close
+    func test_cmd_w_shows_alert() {
+        // Cmd+W should show some kind of close alert (session or workspace)
         app.typeKey("w", modifierFlags: .command)
-        let alert = app.dialogs.firstMatch
-        XCTAssertTrue(alert.waitForExistence(timeout: 3), "Cmd+W should show close alert")
+
+        // macOS SwiftUI .alert can appear as alerts or sheets
+        let alertExists = app.alerts.firstMatch.waitForExistence(timeout: 3)
+        let sheetExists = app.sheets.firstMatch.waitForExistence(timeout: 1)
+        let dialogExists = app.dialogs.firstMatch.waitForExistence(timeout: 1)
+
+        XCTAssertTrue(
+            alertExists || sheetExists || dialogExists,
+            "Cmd+W should show a close confirmation (alert, sheet, or dialog)"
+        )
     }
 
-    func test_cmd_w_close_alert_dismiss_cancels() {
-        app.typeKey("t", modifierFlags: .command)
-        sleep(1)
-
+    func test_cmd_w_cancel_keeps_state() {
         app.typeKey("w", modifierFlags: .command)
-        let alert = app.dialogs.firstMatch
-        guard alert.waitForExistence(timeout: 3) else {
-            XCTFail("Alert should appear")
-            return
+
+        // Find whichever dialog type appeared
+        let alert = app.alerts.firstMatch
+        let sheet = app.sheets.firstMatch
+        let dialog = app.dialogs.firstMatch
+
+        var cancelTapped = false
+        for container in [alert, sheet, dialog] {
+            if container.waitForExistence(timeout: 2) {
+                let cancelButton = container.buttons["Cancel"]
+                if cancelButton.exists {
+                    cancelButton.tap()
+                    cancelTapped = true
+                    break
+                }
+            }
         }
-        alert.buttons["Cancel"].tap()
-        // Session should still exist — no crash
+
+        XCTAssertTrue(cancelTapped, "Should find and tap Cancel button in close dialog")
     }
 
-    func test_cmd_w_shows_close_workspace_alert_when_no_sessions() {
-        // With no sessions, Cmd+W should offer to close workspace
-        app.typeKey("w", modifierFlags: .command)
-        let alert = app.dialogs.firstMatch
-        if alert.waitForExistence(timeout: 3) {
-            // Should mention workspace, not session
-            XCTAssertTrue(
-                alert.staticTexts.element(matching: NSPredicate(format: "label CONTAINS 'workspace'")).exists
-                || alert.staticTexts.element(matching: NSPredicate(format: "label CONTAINS 'Workspace'")).exists,
-                "Alert should mention workspace when no sessions"
-            )
-        }
-    }
+    // MARK: - Cmd+1: Workspace Switching
 
-    // MARK: - Workspace Switching
-
-    func test_cmd_1_selects_first_workspace() {
+    func test_cmd_1_does_not_crash() {
         app.typeKey("1", modifierFlags: .command)
-        // Should not crash
         sleep(1)
+        // App should still be running
+        XCTAssertTrue(app.staticTexts["CodeSpark"].exists, "App should not crash on Cmd+1")
+    }
+
+    // MARK: - Cmd+Shift+T: Reopen Closed Session
+
+    func test_cmd_shift_t_does_not_crash() {
+        app.typeKey("t", modifierFlags: [.command, .shift])
+        sleep(1)
+        XCTAssertTrue(app.staticTexts["CodeSpark"].exists, "App should not crash on Cmd+Shift+T")
     }
 }

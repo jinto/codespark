@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"git add .gitignore apps/macos/project.yml apps/macos/StatefulTerminal/Terminal/GhosttyTerminalHost.swift apps/macos/StatefulTerminal/Terminal/TerminalHostFactory.swift apps/macos/StatefulT...",
+  "error": "Exit code 128\nfatal: pathspec '.gitignore' did not match any files",
+  "timestamp": "2026-04-03T09:10:29.810Z",
+  "retry_count": 1
+}

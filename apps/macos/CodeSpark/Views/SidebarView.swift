@@ -222,6 +222,7 @@ struct WorkspaceSidebarRow: View {
                     Text(workspace.name)
                         .font(.system(.body, design: .default, weight: .medium))
                         .foregroundStyle(isSelected ? .white : .primary)
+                        .accessibilityIdentifier("workspaceName")
                 }
 
                 HStack(spacing: 6) {

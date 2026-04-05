@@ -1,0 +1,387 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1775198634842,
+  "projectRoot": "/Users/jinto/projects/spark3",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Rust",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "Cargo.toml"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "cargo",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "cargo build",
+    "testCommand": "cargo test",
+    "lintCommand": "cargo clippy",
+    "devCommand": "cargo run",
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "scripts"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "apps": {
+      "path": "apps",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775198634811,
+      "keyFiles": []
+    },
+    "crates": {
+      "path": "crates",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775198634812,
+      "keyFiles": []
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 0,
+      "lastAccessed": 1775198634816,
+      "keyFiles": []
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 1,
+      "lastAccessed": 1775198634819,
+      "keyFiles": [
+        "generate-swift-bindings.sh"
+      ]
+    },
+    "target": {
+      "path": "target",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1775198634823,
+      "keyFiles": [
+        "CACHEDIR.TAG"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "crates/workspace-core/src/store.rs",
+      "accessCount": 83,
+      "lastAccessed": 1775203843619,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Bridge/WorkspaceCoreClient.swift",
+      "accessCount": 38,
+      "lastAccessed": 1775220436888,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Models/AppModel.swift",
+      "accessCount": 23,
+      "lastAccessed": 1775220446306,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminalTests/AppModelTests.swift",
+      "accessCount": 17,
+      "lastAccessed": 1775204052271,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 17,
+      "lastAccessed": 1775221198759,
+      "type": "directory"
+    },
+    {
+      "path": "crates/workspace-ffi/src/lib.rs",
+      "accessCount": 16,
+      "lastAccessed": 1775208161896,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/project.yml",
+      "accessCount": 16,
+      "lastAccessed": 1775220067390,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/tests/corrupt_data.rs",
+      "accessCount": 14,
+      "lastAccessed": 1775203736344,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal",
+      "accessCount": 13,
+      "lastAccessed": 1775221199755,
+      "type": "directory"
+    },
+    {
+      "path": "crates/workspace-ffi/src/api.udl",
+      "accessCount": 11,
+      "lastAccessed": 1775208169966,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/App/StatefulTerminalApp.swift",
+      "accessCount": 11,
+      "lastAccessed": 1775221201584,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Models/WorkspaceViewData.swift",
+      "accessCount": 10,
+      "lastAccessed": 1775219788289,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/src/lib.rs",
+      "accessCount": 9,
+      "lastAccessed": 1775203239190,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/src/models.rs",
+      "accessCount": 9,
+      "lastAccessed": 1775203548181,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/tests/workspace_store.rs",
+      "accessCount": 8,
+      "lastAccessed": 1775202530467,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/tests/snapshot_restore.rs",
+      "accessCount": 8,
+      "lastAccessed": 1775202565096,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Views/WorkspaceDetailView.swift",
+      "accessCount": 8,
+      "lastAccessed": 1775221190792,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/tests/session_lifecycle.rs",
+      "accessCount": 6,
+      "lastAccessed": 1775202542031,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/Cargo.toml",
+      "accessCount": 6,
+      "lastAccessed": 1775202943348,
+      "type": "file"
+    },
+    {
+      "path": "docs/superpowers/plans/2026-04-01-stateful-terminal.md",
+      "accessCount": 6,
+      "lastAccessed": 1775205203413,
+      "type": "directory"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Bridge/StatefulTerminal-Bridging-Header.h",
+      "accessCount": 6,
+      "lastAccessed": 1775219747741,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-ffi/Cargo.toml",
+      "accessCount": 5,
+      "lastAccessed": 1775201509142,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Views/WorkspaceListView.swift",
+      "accessCount": 5,
+      "lastAccessed": 1775221190597,
+      "type": "file"
+    },
+    {
+      "path": "Cargo.toml",
+      "accessCount": 4,
+      "lastAccessed": 1775201509282,
+      "type": "file"
+    },
+    {
+      "path": "scripts/generate-swift-bindings.sh",
+      "accessCount": 4,
+      "lastAccessed": 1775201536909,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/src/snapshot.rs",
+      "accessCount": 4,
+      "lastAccessed": 1775203554568,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Bridge/workspace_ffi.swift",
+      "accessCount": 4,
+      "lastAccessed": 1775204358285,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/App/AppDelegate.swift",
+      "accessCount": 3,
+      "lastAccessed": 1775201495161,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/tests/interrupted_recovery.rs",
+      "accessCount": 3,
+      "lastAccessed": 1775202510528,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos",
+      "accessCount": 3,
+      "lastAccessed": 1775204046256,
+      "type": "directory"
+    },
+    {
+      "path": "apps/macos/StatefulTerminalTests/MockWorkspaceCoreClient.swift",
+      "accessCount": 3,
+      "lastAccessed": 1775220460429,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Views/WorkspaceNoteView.swift",
+      "accessCount": 3,
+      "lastAccessed": 1775221190957,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal.xcodeproj/project.pbxproj",
+      "accessCount": 2,
+      "lastAccessed": 1775198709972,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Bridge/workspace_ffiFFI.modulemap",
+      "accessCount": 2,
+      "lastAccessed": 1775201338282,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Bridge/workspace_ffiFFI.h",
+      "accessCount": 2,
+      "lastAccessed": 1775201338359,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/src/timeline.rs",
+      "accessCount": 2,
+      "lastAccessed": 1775201482274,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/src/restore.rs",
+      "accessCount": 2,
+      "lastAccessed": 1775201483449,
+      "type": "file"
+    },
+    {
+      "path": "crates",
+      "accessCount": 2,
+      "lastAccessed": 1775201489254,
+      "type": "directory"
+    },
+    {
+      "path": "crates/workspace-ffi/tests/service_smoke.rs",
+      "accessCount": 2,
+      "lastAccessed": 1775201501813,
+      "type": "file"
+    },
+    {
+      "path": "apps",
+      "accessCount": 2,
+      "lastAccessed": 1775201516488,
+      "type": "directory"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Views",
+      "accessCount": 2,
+      "lastAccessed": 1775221199417,
+      "type": "directory"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "accessCount": 1,
+      "lastAccessed": 1775201332286,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/src",
+      "accessCount": 1,
+      "lastAccessed": 1775201517387,
+      "type": "directory"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Models",
+      "accessCount": 1,
+      "lastAccessed": 1775201523965,
+      "type": "directory"
+    },
+    {
+      "path": "crates/workspace-ffi",
+      "accessCount": 1,
+      "lastAccessed": 1775201524859,
+      "type": "directory"
+    },
+    {
+      "path": "crates/workspace-core/tests/common/mod.rs",
+      "accessCount": 1,
+      "lastAccessed": 1775202503916,
+      "type": "file"
+    },
+    {
+      "path": "crates/workspace-core/src/error.rs",
+      "accessCount": 1,
+      "lastAccessed": 1775202954398,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminalTests/WorkspaceFlowTests.swift",
+      "accessCount": 1,
+      "lastAccessed": 1775204834042,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminalTests/MockTerminalHost.swift",
+      "accessCount": 1,
+      "lastAccessed": 1775204835850,
+      "type": "file"
+    },
+    {
+      "path": "apps/macos/StatefulTerminal/Terminal/TerminalHostProtocol.swift",
+      "accessCount": 1,
+      "lastAccessed": 1775204841372,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

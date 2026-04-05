@@ -109,12 +109,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: AppModel?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Remove the system "Close" menu item (Cmd+W) so our custom one takes effect
-        DispatchQueue.main.async {
-            if let fileMenu = NSApp.mainMenu?.item(withTitle: "File")?.submenu {
-                for item in fileMenu.items where item.keyEquivalent == "w" {
-                    fileMenu.removeItem(item)
-                }
+        // Intercept Cmd+W before the system handles it
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+                  event.charactersIgnoringModifiers == "w" else { return event }
+            self?.handleCloseShortcut()
+            return nil // consume the event
+        }
+
+        // Also remove system Close menu item for good measure
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.removeSystemCloseMenuItem()
+        }
+    }
+
+    @MainActor
+    private func handleCloseShortcut() {
+        guard let model else { return }
+        if model.activeSessionID != nil {
+            model.pendingCloseSessionID = model.activeSessionID
+        } else if let wsID = model.selectedWorkspaceID {
+            model.pendingCloseWorkspaceID = wsID
+        }
+    }
+
+    private func removeSystemCloseMenuItem() {
+        guard let mainMenu = NSApp.mainMenu else { return }
+        for menuItem in mainMenu.items {
+            guard let submenu = menuItem.submenu else { continue }
+            for item in submenu.items where item.keyEquivalent == "w" {
+                submenu.removeItem(item)
             }
         }
     }
