@@ -20,6 +20,7 @@
 		47E722B3A80D8F6EA4095FAA /* SessionTabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */; };
 		4E5838C30942E3A4EAC8B3B2 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 17158E6BF62F75313B1E9B2F /* Metal.framework */; };
 		4F7109283E67CEE1A8CA7425 /* GhosttyTerminalSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF23B602753F8B2AC6D2D29 /* GhosttyTerminalSurfaceView.swift */; };
+		55DF7F1F76B8385AE01FBEB5 /* CodeSparkUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1E03959DA8A839A6A0BDA5 /* CodeSparkUITests.swift */; };
 		566296EC328127177468735C /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D4B27F8AE7CBF0B33461523 /* AppModel.swift */; };
 		5A9644496F341ACE93AF9035 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7DA64F8FB306B85441226CB5 /* AppKit.framework */; };
 		68CDA3FC6783ACCAB79CD278 /* WorkspaceViewData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C48A56D3F8E5FEA2B670204 /* WorkspaceViewData.swift */; };
@@ -52,10 +53,18 @@
 			remoteGlobalIDString = 2263AD2F95218B1DF797CA6C;
 			remoteInfo = CodeSpark;
 		};
+		E343C6367A850C12BC39CBBF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1DB8162BC007CAA3AE103925 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 2263AD2F95218B1DF797CA6C;
+			remoteInfo = CodeSpark;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		09663ACDCA19F3846F64A881 /* RecoveryActionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecoveryActionsTests.swift; sourceTree = "<group>"; };
+		0D1E03959DA8A839A6A0BDA5 /* CodeSparkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSparkUITests.swift; sourceTree = "<group>"; };
 		1188AFD5C69D085D60330D02 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		11CCE58232FA2D383F208923 /* CodeSparkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSparkApp.swift; sourceTree = "<group>"; };
 		13C9EBA2F1A781BC47810CD2 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
@@ -64,6 +73,7 @@
 		1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostFactoryTests.swift; sourceTree = "<group>"; };
 		2B327210A7BF1E45F70D1236 /* WorkspaceFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceFlowTests.swift; sourceTree = "<group>"; };
 		34B3EF915455EE5A5AEFAE01 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
+		381AF8F6420D8B1CC3F1D29A /* CodeSpark-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CodeSpark-Bridging-Header.h"; sourceTree = "<group>"; };
 		48CA429791ED61F383243326 /* MockTerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTerminalHost.swift; sourceTree = "<group>"; };
 		57130C98814A126F278112F1 /* RecentlyClosedSessionCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentlyClosedSessionCardView.swift; sourceTree = "<group>"; };
 		61B66760C324727703F07319 /* GhosttyRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyRuntime.swift; sourceTree = "<group>"; };
@@ -74,6 +84,7 @@
 		6D4B27F8AE7CBF0B33461523 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		6DE9AB7891F06F27BFD3EC90 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
 		6E640D049F79763B0863CD21 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		7D0E3CC9722D71DAF836505B /* CodeSparkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodeSparkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7DA64F8FB306B85441226CB5 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
 		84115AE2AA0AA4FE8E41BE9A /* CodeSpark.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeSpark.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		85F9E2DCA6D0CF00B744A92C /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
@@ -92,7 +103,6 @@
 		D401BB4E2423695AD5030BA7 /* TerminalSurfaceHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurfaceHostView.swift; sourceTree = "<group>"; };
 		E11516437F9C0FF1FF85D2DE /* GhosttyKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = GhosttyKit.xcframework; path = ../../vendor/ghostty/macos/GhosttyKit.xcframework; sourceTree = "<group>"; };
 		F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostFactory.swift; sourceTree = "<group>"; };
-		FA57CA46D343C64AD1D757C9 /* StatefulTerminal-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "StatefulTerminal-Bridging-Header.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,7 +128,7 @@
 		003142DBC9E0BC6D466F64AA /* Bridge */ = {
 			isa = PBXGroup;
 			children = (
-				FA57CA46D343C64AD1D757C9 /* StatefulTerminal-Bridging-Header.h */,
+				381AF8F6420D8B1CC3F1D29A /* CodeSpark-Bridging-Header.h */,
 				A2492DB2B44B6D59CAA29661 /* workspace_core.swift */,
 				99FB814D6FDD9E9B75A8E79E /* WorkspaceCoreClient.swift */,
 			);
@@ -212,11 +222,20 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		CDA365527906F6E3AAF82D8F /* CodeSparkUITests */ = {
+			isa = PBXGroup;
+			children = (
+				0D1E03959DA8A839A6A0BDA5 /* CodeSparkUITests.swift */,
+			);
+			path = CodeSparkUITests;
+			sourceTree = "<group>";
+		};
 		D613F442A461099B9892C00B = {
 			isa = PBXGroup;
 			children = (
 				777DD9D97F6579E6E22A4061 /* CodeSpark */,
 				38FB42A4FD142433C498A9F1 /* CodeSparkTests */,
+				CDA365527906F6E3AAF82D8F /* CodeSparkUITests */,
 				329CE2F0B9AFB2180562F875 /* Frameworks */,
 				F32C6BF7E0302B619E889A2C /* Products */,
 			);
@@ -227,6 +246,7 @@
 			children = (
 				84115AE2AA0AA4FE8E41BE9A /* CodeSpark.app */,
 				BAEC4795D26203BF922A48FF /* CodeSparkTests.xctest */,
+				7D0E3CC9722D71DAF836505B /* CodeSparkUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -279,6 +299,24 @@
 			productReference = BAEC4795D26203BF922A48FF /* CodeSparkTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		F06C3E5A2662563413BCCFFA /* CodeSparkUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 92F60A2738FF71C880C0FA72 /* Build configuration list for PBXNativeTarget "CodeSparkUITests" */;
+			buildPhases = (
+				E028E73F09DE203B35788F5A /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				198B556D0EFE83525A47F679 /* PBXTargetDependency */,
+			);
+			name = CodeSparkUITests;
+			packageProductDependencies = (
+			);
+			productName = CodeSparkUITests;
+			productReference = 7D0E3CC9722D71DAF836505B /* CodeSparkUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -287,6 +325,11 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					F06C3E5A2662563413BCCFFA = {
+						TestTargetID = 2263AD2F95218B1DF797CA6C;
+					};
+				};
 			};
 			buildConfigurationList = 63A4DCCEF31084F87FE186E2 /* Build configuration list for PBXProject "CodeSpark" */;
 			compatibilityVersion = "Xcode 14.0";
@@ -304,6 +347,7 @@
 			targets = (
 				2263AD2F95218B1DF797CA6C /* CodeSpark */,
 				59B016AE83A719EC5EF1DDC2 /* CodeSparkTests */,
+				F06C3E5A2662563413BCCFFA /* CodeSparkUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -344,6 +388,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E028E73F09DE203B35788F5A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				55DF7F1F76B8385AE01FBEB5 /* CodeSparkUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		EFA6F634A150CF143B22983A /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -374,6 +426,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		198B556D0EFE83525A47F679 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 2263AD2F95218B1DF797CA6C /* CodeSpark */;
+			targetProxy = E343C6367A850C12BC39CBBF /* PBXContainerItemProxy */;
+		};
 		DAFF45537389257A88081F68 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 2263AD2F95218B1DF797CA6C /* CodeSpark */;
@@ -436,6 +493,23 @@
 				SWIFT_VERSION = 5.1;
 			};
 			name = Release;
+		};
+		64EAEB55DE9BF9B245AF335C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = CodeSpark;
+			};
+			name = Debug;
 		};
 		67622EE00067105B22DBC7A0 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -615,6 +689,23 @@
 			};
 			name = Debug;
 		};
+		E2E8AE1AECBB378609ACC45E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = CodeSpark;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -632,6 +723,15 @@
 			buildConfigurations = (
 				DB2B304090C1CE840A98382E /* Debug */,
 				1074C727312626FE0E50A6C1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		92F60A2738FF71C880C0FA72 /* Build configuration list for PBXNativeTarget "CodeSparkUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				64EAEB55DE9BF9B245AF335C /* Debug */,
+				E2E8AE1AECBB378609ACC45E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

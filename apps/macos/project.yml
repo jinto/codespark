@@ -73,3 +73,14 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/../../libs/workspace-core/include
+  CodeSparkUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - CodeSparkUITests
+    dependencies:
+      - target: CodeSpark
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
