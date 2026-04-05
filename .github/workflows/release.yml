@@ -69,7 +69,8 @@ jobs:
 
       - name: Disable GHOSTTY_FIRST in pbxproj
         run: |
-          sed -i '' 's/GHOSTTY_FIRST,//g' apps/macos/CodeSpark.xcodeproj/project.pbxproj
+          sed -i '' '/"- D"/d; /GHOSTTY_FIRST/d' apps/macos/CodeSpark.xcodeproj/project.pbxproj
+          sed -i '' '/"-D"/d' apps/macos/CodeSpark.xcodeproj/project.pbxproj
 
       - name: Build Release
         run: |
