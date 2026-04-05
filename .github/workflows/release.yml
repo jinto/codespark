@@ -13,6 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+
       - name: Create GhosttyKit stub
         run: |
           FWDIR="vendor/ghostty/macos/GhosttyKit.xcframework"
