@@ -15,8 +15,12 @@ jobs:
 
       - name: Create GhosttyKit stub
         run: |
-          mkdir -p vendor/ghostty/macos/GhosttyKit.xcframework/macos-arm64/Headers
-          cat > vendor/ghostty/macos/GhosttyKit.xcframework/Info.plist << 'PLIST'
+          FWDIR="vendor/ghostty/macos/GhosttyKit.xcframework"
+          LIBDIR="$FWDIR/macos-arm64"
+          mkdir -p "$LIBDIR/Headers"
+
+          # Info.plist
+          cat > "$FWDIR/Info.plist" << 'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
@@ -31,9 +35,37 @@ jobs:
             </dict></array>
           </dict></plist>
           PLIST
-          touch vendor/ghostty/macos/GhosttyKit.xcframework/macos-arm64/Headers/ghostty.h
-          echo "" | clang -c -x c - -o /tmp/empty.o
-          ar rcs vendor/ghostty/macos/GhosttyKit.xcframework/macos-arm64/libghostty.a /tmp/empty.o
+
+          # Minimal C stub with all symbols the linker expects
+          cat > /tmp/ghostty_stub.c << 'STUB'
+          // Empty stubs — real Ghostty not available in CI
+          void ghostty_init() {}
+          void ghostty_app_new() {}
+          void ghostty_app_free() {}
+          void ghostty_app_tick() {}
+          void ghostty_config_new() {}
+          void ghostty_config_free() {}
+          void ghostty_config_load_file() {}
+          void ghostty_config_finalize() {}
+          void ghostty_surface_config_new() {}
+          void ghostty_surface_new() {}
+          void ghostty_surface_free() {}
+          void ghostty_surface_set_content_scale() {}
+          void ghostty_surface_set_size() {}
+          void ghostty_surface_key() {}
+          void ghostty_surface_mouse_button() {}
+          void ghostty_surface_mouse_pos() {}
+          void ghostty_surface_mouse_scroll() {}
+          void ghostty_surface_text() {}
+          void ghostty_surface_size() {}
+          void ghostty_surface_read_text() {}
+          void ghostty_surface_free_text() {}
+          STUB
+          clang -c -target arm64-apple-macos14 /tmp/ghostty_stub.c -o /tmp/ghostty_stub.o
+          ar rcs "$LIBDIR/libghostty.a" /tmp/ghostty_stub.o
+
+          # Empty header
+          touch "$LIBDIR/Headers/ghostty.h"
 
       - name: Build Release
         run: |
@@ -41,9 +73,11 @@ jobs:
             -scheme CodeSpark \
             -configuration Release \
             -derivedDataPath build \
+            -arch arm64 \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited)' \
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS=" " \
+            OTHER_LDFLAGS="-L/dev/null" \
             build
 
       - name: Create DMG
