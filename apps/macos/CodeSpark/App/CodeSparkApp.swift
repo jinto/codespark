@@ -1,6 +1,7 @@
 import AppKit
 import ObjectiveC
 import SwiftUI
+import UserNotifications
 
 @main
 struct CodeSparkApp: App {
@@ -122,6 +123,7 @@ struct CodeSparkApp: App {
 
     @MainActor
     private func initializeAndLoad() async {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
         #if GHOSTTY_FIRST
         GhosttyRuntime.shared.initialize()
         #endif

@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Foundation
+import UserNotifications
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -469,7 +470,36 @@ final class AppModel: ObservableObject {
                 return lastOutput < threshold ? id : nil
             }
         )
+        // Detect newly idle sessions for notifications
+        let newlyIdle = newSet.subtracting(idleSessionIDs)
+        if !newlyIdle.isEmpty {
+            sendIdleNotifications(for: newlyIdle)
+        }
         if newSet != idleSessionIDs { idleSessionIDs = newSet }
+    }
+
+    private func sendIdleNotifications(for sessionIDs: Set<String>) {
+        guard NSApp.isActive else { return }
+        for sessionID in sessionIDs {
+            // Skip if this is the session the user is currently looking at
+            guard sessionID != activeSessionID else { continue }
+            guard let session = liveSessions.first(where: { $0.id == sessionID }) else { continue }
+
+            let wsName = workspaces.first { ws in
+                ws.liveSessionDetails.contains { $0.id == sessionID }
+            }?.name ?? "Terminal"
+
+            let content = UNMutableNotificationContent()
+            content.title = wsName
+            content.body = "\(session.title) is waiting for input"
+            content.sound = .default
+            let request = UNNotificationRequest(
+                identifier: "idle-\(sessionID)",
+                content: content,
+                trigger: nil
+            )
+            UNUserNotificationCenter.current().add(request)
+        }
     }
 
     private func refreshGitBranches() {

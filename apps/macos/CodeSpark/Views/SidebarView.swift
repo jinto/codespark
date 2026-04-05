@@ -12,6 +12,26 @@ struct SidebarView: View {
     @State private var showHotkeys = false
     @State private var hotkeyMonitor: Any?
 
+    private var sortedWorkspaces: [WorkspaceSummaryViewData] {
+        model.workspaces.sorted { a, b in
+            let sa = model.workspaceStatus(for: a)
+            let sb = model.workspaceStatus(for: b)
+            if sa == .needsInput && sb != .needsInput { return true }
+            if sa != .needsInput && sb == .needsInput { return false }
+            if sa == .running && sb == .idle { return true }
+            if sa == .idle && sb == .running { return false }
+            return false
+        }
+    }
+
+    private var needsInputCount: Int {
+        model.workspaces.filter { ws in
+            guard ws.id != model.selectedWorkspaceID else { return false }
+            let status = model.workspaceStatus(for: ws)
+            return status == .needsInput || status == .idle && ws.liveSessions > 0
+        }.count
+    }
+
     private func workspaceInfoLine(for workspace: WorkspaceSummaryViewData) -> String? {
         guard let cwd = workspace.liveSessionDetails.first?.lastCwd else { return nil }
         let path = abbreviatePath(cwd)
@@ -39,6 +59,19 @@ struct SidebarView: View {
             WindowDragArea {
                 HStack(spacing: 10) {
                     Spacer()
+                    if needsInputCount > 0 {
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "bell.fill")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.orange)
+                            Text("\(needsInputCount)")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundStyle(.white)
+                                .padding(2)
+                                .background(Circle().fill(.red))
+                                .offset(x: 5, y: -5)
+                        }
+                    }
                     Button {
                         Task { await model.createWorkspace(name: "New Workspace") }
                     } label: {
@@ -65,7 +98,7 @@ struct SidebarView: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
-                    ForEach(Array(model.workspaces.enumerated()), id: \.element.id) { index, workspace in
+                    ForEach(Array(sortedWorkspaces.enumerated()), id: \.element.id) { index, workspace in
                         VStack(alignment: .leading, spacing: 0) {
                             WorkspaceSidebarRow(
                                 workspace: workspace,
