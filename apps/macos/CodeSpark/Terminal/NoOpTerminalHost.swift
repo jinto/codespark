@@ -5,6 +5,13 @@ final class NoOpTerminalHost: TerminalHostProtocol {
     var lastOutputTime: Date? { nil }
 
     func attach(sessionID: String, command: String? = nil) {}
-    func close(sessionID: String) {}
+    @MainActor
+    func close(sessionID: String) {
+        delegate?.terminalHostDidClose(
+            sessionID: sessionID,
+            snapshot: TerminalSnapshotViewData(cols: 0, rows: 0, lines: []),
+            closeReason: .userClosed
+        )
+    }
     func extractSnapshot() -> TerminalSnapshotViewData? { nil }
 }
