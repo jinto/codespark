@@ -8,6 +8,7 @@ struct MainContentView: View {
     @State private var showCloseWorkspaceAlert = false
 
     var body: some View {
+        Group {
         if let workspace = model.selectedWorkspace {
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
@@ -79,6 +80,39 @@ struct MainContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(AppTheme.surfaceBackground)
         }
+        } // Group
+        .onChange(of: model.pendingCloseSessionID) { _, newValue in
+            showCloseSessionAlert = newValue != nil
+        }
+        .alert("Close session?", isPresented: $showCloseSessionAlert) {
+            Button("Close", role: .destructive) {
+                if let id = model.pendingCloseSessionID {
+                    model.closeSession(id: id)
+                }
+                model.pendingCloseSessionID = nil
+            }
+            Button("Cancel", role: .cancel) {
+                model.pendingCloseSessionID = nil
+            }
+        } message: {
+            Text("This will close the terminal process.")
+        }
+        .onChange(of: model.pendingCloseWorkspaceID) { _, newValue in
+            showCloseWorkspaceAlert = newValue != nil
+        }
+        .alert("Close workspace?", isPresented: $showCloseWorkspaceAlert) {
+            Button("Close", role: .destructive) {
+                if let id = model.pendingCloseWorkspaceID {
+                    Task { await model.closeWorkspace(id: id) }
+                }
+                model.pendingCloseWorkspaceID = nil
+            }
+            Button("Cancel", role: .cancel) {
+                model.pendingCloseWorkspaceID = nil
+            }
+        } message: {
+            Text("Sessions will be closed. You can reopen this workspace later.")
+        }
     }
 
     private var terminalArea: some View {
@@ -137,38 +171,6 @@ struct MainContentView: View {
                 .padding(.vertical, 10)
                 .background(Color.black.opacity(0.2))
             }
-        }
-        .onChange(of: model.pendingCloseSessionID) { _, newValue in
-            showCloseSessionAlert = newValue != nil
-        }
-        .alert("Close session?", isPresented: $showCloseSessionAlert) {
-            Button("Close", role: .destructive) {
-                if let id = model.pendingCloseSessionID {
-                    model.closeSession(id: id)
-                }
-                model.pendingCloseSessionID = nil
-            }
-            Button("Cancel", role: .cancel) {
-                model.pendingCloseSessionID = nil
-            }
-        } message: {
-            Text("This will close the terminal process.")
-        }
-        .onChange(of: model.pendingCloseWorkspaceID) { _, newValue in
-            showCloseWorkspaceAlert = newValue != nil
-        }
-        .alert("Close workspace?", isPresented: $showCloseWorkspaceAlert) {
-            Button("Close", role: .destructive) {
-                if let id = model.pendingCloseWorkspaceID {
-                    Task { await model.closeWorkspace(id: id) }
-                }
-                model.pendingCloseWorkspaceID = nil
-            }
-            Button("Cancel", role: .cancel) {
-                model.pendingCloseWorkspaceID = nil
-            }
-        } message: {
-            Text("Sessions will be closed. You can reopen this workspace later.")
         }
     }
 
