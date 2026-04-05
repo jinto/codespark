@@ -7,4 +7,8 @@ enum AppTheme {
     static let divider = Color.white.opacity(0.06)
     static let cardBackground = Color.white.opacity(0.04)
     static let accent = Color.purple
+    static let statusRunning = Color.green
+    static let statusIdle = Color.gray
+    static let statusNeedsInput = Color.orange
+    static let infoText = Color.white.opacity(0.4)
 }

@@ -43,6 +43,12 @@
 		EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */; };
 		EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1188AFD5C69D085D60330D02 /* AppTheme.swift */; };
 		F043AFB563954DCF5543FF11 /* WorkspaceCoreClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99FB814D6FDD9E9B75A8E79E /* WorkspaceCoreClient.swift */; };
+		F1A2B3C4D5E6F7081234ABCD /* GitBranchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F708ABCD1234 /* GitBranchService.swift */; };
+		F1A2B3C4D5E6F709W1ND0W01 /* CodeSparkWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F709W1ND0W02 /* CodeSparkWindow.swift */; };
+		F1A2B3C4D5E6F70BRESOURC2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F70AASSET001 /* Assets.xcassets */; };
+		F1A2B3C4D5E6F70CSETTNG01 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F70CSETTNG02 /* SettingsView.swift */; };
+		F1A2B3C4D5E6F70DFNTSET01 /* TerminalFontSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F70DFNTSET02 /* TerminalFontSettings.swift */; };
+		F1A2B3C4D5E6F70EONBRD001 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F70EONBRD002 /* OnboardingView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -103,6 +109,12 @@
 		D401BB4E2423695AD5030BA7 /* TerminalSurfaceHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurfaceHostView.swift; sourceTree = "<group>"; };
 		E11516437F9C0FF1FF85D2DE /* GhosttyKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = GhosttyKit.xcframework; path = ../../vendor/ghostty/macos/GhosttyKit.xcframework; sourceTree = "<group>"; };
 		F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostFactory.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F708ABCD1234 /* GitBranchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitBranchService.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F709W1ND0W02 /* CodeSparkWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSparkWindow.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F70AASSET001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F70CSETTNG02 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F70DFNTSET02 /* TerminalFontSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalFontSettings.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F70EONBRD002 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -123,6 +135,17 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		F1A2B3C4D5E6F70BRESOURC1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F1A2B3C4D5E6F70BRESOURC2 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXGroup section */
 		003142DBC9E0BC6D466F64AA /* Bridge */ = {
@@ -172,6 +195,8 @@
 				57130C98814A126F278112F1 /* RecentlyClosedSessionCardView.swift */,
 				A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */,
 				6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */,
+				F1A2B3C4D5E6F70EONBRD002 /* OnboardingView.swift */,
+				F1A2B3C4D5E6F70CSETTNG02 /* SettingsView.swift */,
 				13C9EBA2F1A781BC47810CD2 /* SidebarView.swift */,
 				9A9B2227B48DAD2AB9FB7207 /* WindowDragArea.swift */,
 			);
@@ -181,14 +206,25 @@
 		777DD9D97F6579E6E22A4061 /* CodeSpark */ = {
 			isa = PBXGroup;
 			children = (
+				F1A2B3C4D5E6F70AASSET001 /* Assets.xcassets */,
 				BC41946E808A6117628F00FC /* App */,
 				003142DBC9E0BC6D466F64AA /* Bridge */,
 				9E29F8DC1C08077549415B5F /* Models */,
+				F1A2B3C4D5E6F708SERV1CE5 /* Services */,
 				93D62B78FDD0C92C09A47DC1 /* Terminal */,
 				FE13F7FAAC8D3F5153388CD2 /* Theme */,
 				5F6A9769AA74128980885847 /* Views */,
 			);
 			path = CodeSpark;
+			sourceTree = "<group>";
+		};
+		F1A2B3C4D5E6F708SERV1CE5 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				F1A2B3C4D5E6F708ABCD1234 /* GitBranchService.swift */,
+				F1A2B3C4D5E6F70DFNTSET02 /* TerminalFontSettings.swift */,
+			);
+			path = Services;
 			sourceTree = "<group>";
 		};
 		93D62B78FDD0C92C09A47DC1 /* Terminal */ = {
@@ -218,6 +254,7 @@
 			isa = PBXGroup;
 			children = (
 				11CCE58232FA2D383F208923 /* CodeSparkApp.swift */,
+				F1A2B3C4D5E6F709W1ND0W02 /* CodeSparkWindow.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -269,6 +306,7 @@
 				299E152222E9766898AB81DB /* Build workspace-core (Zig) */,
 				EFA6F634A150CF143B22983A /* Sources */,
 				34E16C43B362353B10DC387C /* Frameworks */,
+				F1A2B3C4D5E6F70BRESOURC1 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -402,6 +440,11 @@
 			files = (
 				566296EC328127177468735C /* AppModel.swift in Sources */,
 				EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */,
+				F1A2B3C4D5E6F7081234ABCD /* GitBranchService.swift in Sources */,
+				F1A2B3C4D5E6F709W1ND0W01 /* CodeSparkWindow.swift in Sources */,
+				F1A2B3C4D5E6F70CSETTNG01 /* SettingsView.swift in Sources */,
+				F1A2B3C4D5E6F70DFNTSET01 /* TerminalFontSettings.swift in Sources */,
+				F1A2B3C4D5E6F70EONBRD001 /* OnboardingView.swift in Sources */,
 				2FB53C5935BBD54F24B58E5E /* ClosedSessionInspectorView.swift in Sources */,
 				E1275E7403FDD3DEE3FB06A2 /* CodeSparkApp.swift in Sources */,
 				A014AF3F565FAEE68A6AF58D /* GhosttyRuntime.swift in Sources */,

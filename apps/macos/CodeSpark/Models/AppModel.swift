@@ -19,6 +19,7 @@ final class AppModel: ObservableObject {
     @Published var pendingRestoreSessions: [ClosedSessionViewData] = []
     @Published var hiddenWorkspaceIDs: Set<String> = []
     @Published var hiddenWorkspaceNames: [String: String] = [:]
+    @Published var gitBranches: [String: String] = [:]
 
     private let core: WorkspaceCoreClientProtocol
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
@@ -28,6 +29,7 @@ final class AppModel: ObservableObject {
     private var idleTimer: AnyCancellable?
     private var checkpointTimer: AnyCancellable?
     private var hasReconciledOnLaunch = false
+    private let gitBranchService = GitBranchService()
 
     init(
         core: WorkspaceCoreClientProtocol,
@@ -39,6 +41,7 @@ final class AppModel: ObservableObject {
             .autoconnect()
             .sink { [weak self] _ in
                 self?.updateIdleStates()
+                self?.refreshGitBranches()
             }
         self.checkpointTimer = Timer.publish(every: 30, on: .main, in: .common)
             .autoconnect()
@@ -315,6 +318,11 @@ final class AppModel: ObservableObject {
         if let index = workspaces.firstIndex(where: { $0.id == id }) {
             workspaces[index].name = newName
         }
+        if selectedWorkspace?.id == id {
+            selectedWorkspace = selectedWorkspace.map {
+                WorkspaceDetailViewData(id: $0.id, name: newName, noteBody: $0.noteBody, liveSessions: $0.liveSessions, closedSessions: $0.closedSessions)
+            }
+        }
         try? await core.renameWorkspace(id: id, newName: newName)
     }
 
@@ -462,6 +470,30 @@ final class AppModel: ObservableObject {
             }
         )
         if newSet != idleSessionIDs { idleSessionIDs = newSet }
+    }
+
+    private func refreshGitBranches() {
+        let paths = workspaces.flatMap { $0.liveSessionDetails.compactMap(\.lastCwd) }
+        guard !paths.isEmpty else { return }
+        Task {
+            await gitBranchService.refreshBranches(for: paths)
+            let updated = Dictionary(
+                uniqueKeysWithValues: paths.compactMap { path in
+                    gitBranchService.branch(for: path).map { (path, $0) }
+                }
+            )
+            if updated != gitBranches { gitBranches = updated }
+        }
+    }
+
+    func workspaceStatus(for workspace: WorkspaceSummaryViewData) -> WorkspaceStatus {
+        if workspace.hasInterruptedSessions { return .needsInput }
+        if workspace.liveSessions > 0 {
+            let sessionIDs = Set(workspace.liveSessionDetails.map(\.id))
+            let allIdle = !sessionIDs.isEmpty && sessionIDs.isSubset(of: idleSessionIDs)
+            return allIdle ? .idle : .running
+        }
+        return .idle
     }
 
     private func clearDetailState() {

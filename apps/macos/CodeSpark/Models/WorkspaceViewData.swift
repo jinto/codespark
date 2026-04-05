@@ -1,4 +1,35 @@
 import Foundation
+import SwiftUI
+
+enum WorkspaceStatus: Equatable {
+    case running
+    case idle
+    case needsInput
+
+    var label: String {
+        switch self {
+        case .running: "Running"
+        case .idle: "Idle"
+        case .needsInput: "Needs input"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .running: "bolt.fill"
+        case .idle: "circle.fill"
+        case .needsInput: "exclamationmark.triangle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .running: AppTheme.statusRunning
+        case .idle: AppTheme.statusIdle
+        case .needsInput: AppTheme.statusNeedsInput
+        }
+    }
+}
 
 struct SessionSummary: Identifiable, Equatable {
     let id: String

@@ -12,6 +12,19 @@ struct SidebarView: View {
     @State private var showHotkeys = false
     @State private var hotkeyMonitor: Any?
 
+    private func workspaceInfoLine(for workspace: WorkspaceSummaryViewData) -> String? {
+        guard let cwd = workspace.liveSessionDetails.first?.lastCwd else { return nil }
+        let path = abbreviatePath(cwd)
+        if let branch = model.gitBranches[cwd] {
+            return "\(branch) \u{2022} \(path)"
+        }
+        return path
+    }
+
+    private func abbreviatePath(_ path: String) -> String {
+        (path as NSString).abbreviatingWithTildeInPath
+    }
+
     private func toggleExpanded(_ id: String) {
         if expandedWorkspaceIDs.contains(id) {
             expandedWorkspaceIDs.remove(id)
@@ -24,18 +37,28 @@ struct SidebarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             WindowDragArea {
-                HStack {
-                    Image(systemName: "terminal.fill")
-                        .font(.title2)
-                        .foregroundStyle(AppTheme.accent)
-                    Text("CodeSpark")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                HStack(spacing: 10) {
                     Spacer()
+                    Button {
+                        Task { await model.createWorkspace(name: "New Workspace") }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
+                            if showHotkeys {
+                                Text("\u{2318}N")
+                                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                    .help("New workspace (\u{2318}N)")
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 20)
-                .padding(.bottom, 12)
+                .padding(.horizontal, 12)
+                .frame(height: 28)
             }
 
             Divider().background(AppTheme.divider)
@@ -49,24 +72,14 @@ struct SidebarView: View {
                                 isSelected: model.selectedWorkspaceID == workspace.id,
                                 isExpanded: expandedWorkspaceIDs.contains(workspace.id),
                                 hotkeyIndex: index < 9 && showHotkeys ? index + 1 : nil,
-                                editingWorkspaceID: $editingWorkspaceID,
-                                editWorkspaceName: $editWorkspaceName,
-                                onRename: { newName in
-                                    Task { await model.renameWorkspace(id: workspace.id, newName: newName) }
-                                }
+                                status: model.workspaceStatus(for: workspace),
+                                infoLine: workspaceInfoLine(for: workspace)
                             )
                             .contentShape(Rectangle())
-                            .gesture(
-                                TapGesture(count: 2).onEnded {
-                                    editWorkspaceName = workspace.name
-                                    editingWorkspaceID = workspace.id
-                                }.exclusively(before:
-                                    TapGesture().onEnded {
-                                        toggleExpanded(workspace.id)
-                                        Task { await model.selectWorkspace(id: workspace.id) }
-                                    }
-                                )
-                            )
+                            .onTapGesture {
+                                toggleExpanded(workspace.id)
+                                Task { await model.selectWorkspace(id: workspace.id) }
+                            }
                             .contextMenu {
                                 Button("Rename") {
                                     editWorkspaceName = workspace.name
@@ -128,40 +141,13 @@ struct SidebarView: View {
 
             Divider().background(AppTheme.divider)
             HStack {
-                Circle()
-                    .fill(.green)
-                    .frame(width: 8, height: 8)
                 Text("\(model.workspaces.count) workspace\(model.workspaces.count == 1 ? "" : "s")")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
                 Spacer()
-                if !model.hiddenWorkspaceIDs.isEmpty {
-                    Menu {
-                        ForEach(Array(model.hiddenWorkspaceIDs), id: \.self) { id in
-                            Button(model.hiddenWorkspaceNames[id] ?? id.prefix(8) + "...") {
-                                Task { await model.reopenWorkspace(id: id) }
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "arrow.counterclockwise")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Reopen closed workspace")
-                }
-                Button {
-                    Task { await model.createWorkspace(name: "New Workspace") }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .help("New workspace (\u{2318}N)")
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
         }
         .background(AppTheme.sidebarBackground)
         .confirmationDialog(
@@ -184,6 +170,21 @@ struct SidebarView: View {
                 Text("This will permanently delete \"\(ws.name)\" and all its sessions.")
             }
         }
+        .sheet(isPresented: .init(
+            get: { editingWorkspaceID != nil },
+            set: { if !$0 { editingWorkspaceID = nil } }
+        )) {
+            RenameWorkspaceSheet(
+                name: $editWorkspaceName,
+                onRename: {
+                    if let id = editingWorkspaceID, !editWorkspaceName.isEmpty {
+                        Task { await model.renameWorkspace(id: id, newName: editWorkspaceName) }
+                    }
+                    editingWorkspaceID = nil
+                },
+                onCancel: { editingWorkspaceID = nil }
+            )
+        }
     }
 }
 
@@ -192,67 +193,47 @@ struct WorkspaceSidebarRow: View {
     let isSelected: Bool
     let isExpanded: Bool
     let hotkeyIndex: Int?
-    @Binding var editingWorkspaceID: String?
-    @Binding var editWorkspaceName: String
-    let onRename: (String) -> Void
+    let status: WorkspaceStatus
+    let infoLine: String?
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .top, spacing: 8) {
             Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                 .font(.system(size: 9, weight: .bold))
                 .foregroundStyle(.secondary)
                 .frame(width: 10)
+                .padding(.top, 4)
 
-            Circle()
-                .fill(statusColor)
-                .frame(width: 8, height: 8)
-
-            VStack(alignment: .leading, spacing: 2) {
-                if editingWorkspaceID == workspace.id {
-                    TextField("", text: $editWorkspaceName, onCommit: {
-                        if !editWorkspaceName.isEmpty {
-                            onRename(editWorkspaceName)
-                        }
-                        editingWorkspaceID = nil
-                    })
-                    .textFieldStyle(.plain)
-                    .font(.system(.body, design: .default, weight: .medium))
-                    .onExitCommand { editingWorkspaceID = nil }
-                } else {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
                     Text(workspace.name)
-                        .font(.system(.body, design: .default, weight: .medium))
+                        .font(.system(.body, weight: .semibold))
                         .foregroundStyle(isSelected ? .white : .primary)
                         .accessibilityIdentifier("workspaceName")
+
+                    Spacer()
+
+                    Text(hotkeyIndex.map { "\u{2318}\($0)" } ?? "")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(hotkeyIndex != nil ? Color.white.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 4))
+                        .opacity(hotkeyIndex != nil ? 1 : 0)
                 }
 
-                HStack(spacing: 6) {
-                    if workspace.liveSessions > 0 {
-                        Label("\(workspace.liveSessions)", systemImage: "bolt.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.green)
-                    }
-                    if workspace.recentlyClosedSessions > 0 {
-                        Label("\(workspace.recentlyClosedSessions)", systemImage: "clock")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    if workspace.hasInterruptedSessions {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
-                    }
+                Label(status.label, systemImage: status.icon)
+                    .font(.caption2)
+                    .foregroundStyle(status.color)
+
+                if let infoLine {
+                    Text(infoLine)
+                        .font(.caption2)
+                        .foregroundStyle(AppTheme.infoText)
+                        .lineLimit(1)
+                } else {
+                    Text(" ").font(.caption2).hidden()
                 }
-            }
-
-            Spacer()
-
-            if let index = hotkeyIndex {
-                Text("⌘\(index)")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 4))
             }
         }
         .padding(.horizontal, 10)
@@ -262,10 +243,33 @@ struct WorkspaceSidebarRow: View {
                 .fill(isSelected ? AppTheme.accent.opacity(0.25) : Color.clear)
         )
     }
+}
 
-    private var statusColor: Color {
-        if workspace.liveSessions > 0 { return .green }
-        if workspace.hasInterruptedSessions { return .orange }
-        return .gray.opacity(0.4)
+private struct RenameWorkspaceSheet: View {
+    @Binding var name: String
+    let onRename: () -> Void
+    let onCancel: () -> Void
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 16) {
+            Text("Rename Workspace")
+                .font(.headline)
+            TextField("Workspace name", text: $name)
+                .textFieldStyle(.roundedBorder)
+                .focused($isFocused)
+                .onSubmit(onRename)
+            HStack {
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Rename", action: onRename)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(name.isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 300)
+        .onAppear { isFocused = true }
     }
 }

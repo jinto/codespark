@@ -29,9 +29,7 @@ struct SessionTabBarView: View {
 
             Spacer()
         }
-        .padding(.horizontal, 8)
-        .frame(height: 32)
-        .background(AppTheme.toolbarBackground)
+        .padding(.horizontal, 4)
     }
 }
 

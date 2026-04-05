@@ -1,4 +1,5 @@
 import AppKit
+import ObjectiveC
 import SwiftUI
 
 @main
@@ -7,34 +8,34 @@ struct CodeSparkApp: App {
     @StateObject private var model = AppModel(core: WorkspaceCoreClient.live)
     @AppStorage("selectedWorkspaceID") private var savedWorkspaceID: String = ""
     @AppStorage("hiddenWorkspaceIDs") private var savedHiddenIDs: String = ""
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
-            HStack(spacing: 0) {
-                SidebarView(model: model)
-                    .frame(width: 240)
+            Group {
+                if hasCompletedOnboarding {
+                    HStack(spacing: 0) {
+                        SidebarView(model: model)
+                            .frame(width: 240)
 
-                Divider()
+                        Divider()
 
-                MainContentView(model: model)
+                        MainContentView(model: model)
+                    }
+                    .background(AppTheme.toolbarBackground)
+                    .ignoresSafeArea()
+                    .task {
+                        await initializeAndLoad()
+                    }
+                } else {
+                    OnboardingView {
+                        hasCompletedOnboarding = true
+                    }
+                }
             }
-            .background(AppTheme.toolbarBackground)
             .preferredColorScheme(.dark)
             .frame(minWidth: 1200, minHeight: 760)
-            .task {
-                #if GHOSTTY_FIRST
-                GhosttyRuntime.shared.initialize()
-                #endif
-                appDelegate.model = model
-                if !savedHiddenIDs.isEmpty {
-                    model.hiddenWorkspaceIDs = Set(savedHiddenIDs.split(separator: ",").map(String.init))
-                }
-                if !savedWorkspaceID.isEmpty {
-                    model.selectedWorkspaceID = savedWorkspaceID
-                }
-                await model.load()
-            }
             .onChange(of: model.selectedWorkspaceID) { _, newValue in
                 savedWorkspaceID = newValue ?? ""
             }
@@ -56,6 +57,17 @@ struct CodeSparkApp: App {
                     Task { await model.newSession() }
                 }
                 .keyboardShortcut("t", modifiers: .command)
+
+                if !model.hiddenWorkspaceIDs.isEmpty {
+                    Divider()
+                    Menu("Open Recent Workspace") {
+                        ForEach(Array(model.hiddenWorkspaceIDs), id: \.self) { id in
+                            Button(model.hiddenWorkspaceNames[id] ?? id.prefix(8) + "...") {
+                                Task { await model.reopenWorkspace(id: id) }
+                            }
+                        }
+                    }
+                }
             }
             CommandGroup(replacing: .saveItem) {
                 Button(model.activeSessionID != nil ? "Close Session" : "Close Workspace") {
@@ -102,6 +114,25 @@ struct CodeSparkApp: App {
                 model.saveAllSessionsAndClose()
             }
         }
+
+        Settings {
+            SettingsView()
+        }
+    }
+
+    @MainActor
+    private func initializeAndLoad() async {
+        #if GHOSTTY_FIRST
+        GhosttyRuntime.shared.initialize()
+        #endif
+        appDelegate.model = model
+        if !savedHiddenIDs.isEmpty {
+            model.hiddenWorkspaceIDs = Set(savedHiddenIDs.split(separator: ",").map(String.init))
+        }
+        if !savedWorkspaceID.isEmpty {
+            model.selectedWorkspaceID = savedWorkspaceID
+        }
+        await model.load()
     }
 }
 
@@ -121,6 +152,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             self.removeSystemCloseMenuItem()
         }
+
+        // Make content extend into the title bar area (cmux-style)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.configureWindowTitleBar()
+        }
+    }
+
+    private func configureWindowTitleBar() {
+        guard let window = NSApp.windows.first else { return }
+        object_setClass(window, CodeSparkWindow.self)
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.styleMask.insert(.fullSizeContentView)
+        window.setFrameAutosaveName("CodeSparkMain")
     }
 
     @MainActor

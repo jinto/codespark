@@ -11,37 +11,48 @@ struct MainContentView: View {
         Group {
         if let workspace = model.selectedWorkspace {
             VStack(spacing: 0) {
-                HStack(spacing: 12) {
-                    Text(workspace.name)
-                        .font(.system(.title3, weight: .semibold))
+                WindowDragArea {
+                    HStack(spacing: 0) {
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.blue)
+                            .padding(.leading, 16)
+                            .padding(.trailing, 6)
 
-                    if !model.liveSessions.isEmpty {
-                        HStack(spacing: 4) {
-                            Circle().fill(.green).frame(width: 6, height: 6)
-                            Text("\(model.liveSessions.count) live")
-                                .font(.caption)
-                                .foregroundStyle(.green)
+                        Text(workspace.name)
+                            .font(.system(.caption, weight: .semibold))
+                            .lineLimit(1)
+
+                        Divider()
+                            .frame(height: 14)
+                            .padding(.horizontal, 8)
+
+                        SessionTabBarView(
+                            sessions: model.liveSessions,
+                            activeSessionID: model.activeSessionID,
+                            onSelect: { id in model.activeSessionID = id },
+                            onClose: { id in model.closeSession(id: id) },
+                            onNew: { Task { await model.newSession() } }
+                        )
+
+                        Spacer()
+
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showNote.toggle()
+                            }
+                        } label: {
+                            Image(systemName: showNote ? "sidebar.trailing" : "note.text")
+                                .font(.system(size: 12))
+                                .foregroundStyle(.secondary)
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.green.opacity(0.1), in: Capsule())
+                        .buttonStyle(.plain)
+                        .help("Toggle workspace note")
+                        .padding(.trailing, 12)
                     }
-
-                    Spacer()
-
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            showNote.toggle()
-                        }
-                    } label: {
-                        Image(systemName: showNote ? "sidebar.trailing" : "note.text")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Toggle workspace note")
+                    .frame(height: 34)
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
+                .frame(height: 34)
                 .background(AppTheme.toolbarBackground)
 
                 Divider().background(AppTheme.divider)
@@ -51,7 +62,7 @@ struct MainContentView: View {
                         if model.liveSessions.isEmpty && model.closedSessions.isEmpty {
                             emptyState
                         } else {
-                            terminalArea
+                            terminalContent
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -115,26 +126,17 @@ struct MainContentView: View {
         }
     }
 
-    private var terminalArea: some View {
+    private var terminalContent: some View {
         VStack(spacing: 0) {
-            SessionTabBarView(
-                sessions: model.liveSessions,
-                activeSessionID: model.activeSessionID,
-                onSelect: { id in model.activeSessionID = id },
-                onClose: { id in model.closeSession(id: id) },
-                onNew: { Task { await model.newSession() } }
-            )
-            Divider().background(AppTheme.divider)
-
             ZStack {
                 ForEach(model.liveSessions) { session in
                     #if GHOSTTY_FIRST
                     if let app = GhosttyRuntime.shared.app {
-                        TerminalSurfaceHostView(session: session, app: app)
+                        TerminalSurfaceHostView(session: session, app: app, isActive: session.id == model.activeSessionID)
                             .opacity(session.id == model.activeSessionID ? 1 : 0)
                     }
                     #else
-                    TerminalSurfaceHostView(session: session)
+                    TerminalSurfaceHostView(session: session, isActive: session.id == model.activeSessionID)
                         .opacity(session.id == model.activeSessionID ? 1 : 0)
                     #endif
                 }

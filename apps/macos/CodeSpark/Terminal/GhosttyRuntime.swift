@@ -29,6 +29,13 @@ final class GhosttyRuntime {
         let config = ghostty_config_new()
         defer { ghostty_config_free(config) }
 
+        // Apply font settings via temp config file
+        let fontConfig = TerminalFontSettings.buildConfigString()
+        let tempPath = NSTemporaryDirectory() + "codespark-ghostty-\(ProcessInfo.processInfo.processIdentifier).conf"
+        try? fontConfig.write(toFile: tempPath, atomically: true, encoding: .utf8)
+        tempPath.withCString { ghostty_config_load_file(config, $0) }
+        ghostty_config_finalize(config)
+
         var runtime = ghostty_runtime_config_s(
             userdata: Unmanaged.passUnretained(self).toOpaque(),
             supports_selection_clipboard: false,

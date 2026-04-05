@@ -6,6 +6,7 @@ import GhosttyKit
 struct TerminalSurfaceHostView: NSViewRepresentable {
     let session: SessionViewData
     let app: ghostty_app_t
+    var isActive: Bool = false
 
     func makeNSView(context: Context) -> GhosttyTerminalSurfaceView {
         GhosttyTerminalSurfaceView(
@@ -15,11 +16,18 @@ struct TerminalSurfaceHostView: NSViewRepresentable {
         )
     }
 
-    func updateNSView(_ nsView: GhosttyTerminalSurfaceView, context: Context) {}
+    func updateNSView(_ nsView: GhosttyTerminalSurfaceView, context: Context) {
+        if isActive, nsView.window?.firstResponder !== nsView {
+            DispatchQueue.main.async {
+                nsView.window?.makeFirstResponder(nsView)
+            }
+        }
+    }
 }
 #else
 struct TerminalSurfaceHostView: View {
     let session: SessionViewData
+    var isActive: Bool = false
 
     var body: some View {
         VStack(alignment: .leading) {
