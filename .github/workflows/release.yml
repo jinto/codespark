@@ -67,17 +67,19 @@ jobs:
           # Empty header
           touch "$LIBDIR/Headers/ghostty.h"
 
+      - name: Disable GHOSTTY_FIRST in pbxproj
+        run: |
+          sed -i '' 's/GHOSTTY_FIRST,//g' apps/macos/CodeSpark.xcodeproj/project.pbxproj
+
       - name: Build Release
         run: |
           xcodebuild -project apps/macos/CodeSpark.xcodeproj \
             -scheme CodeSpark \
             -configuration Release \
             -derivedDataPath build \
-            -arch arm64 \
+            -destination "platform=macOS,arch=arm64" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            SWIFT_ACTIVE_COMPILATION_CONDITIONS=" " \
-            OTHER_LDFLAGS="-L/dev/null" \
             build
 
       - name: Create DMG
