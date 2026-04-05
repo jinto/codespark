@@ -56,14 +56,17 @@ struct SidebarView: View {
                                 }
                             )
                             .contentShape(Rectangle())
-                            .onTapGesture {
-                                toggleExpanded(workspace.id)
-                                Task { await model.selectWorkspace(id: workspace.id) }
-                            }
-                            .onTapGesture(count: 2) {
-                                editWorkspaceName = workspace.name
-                                editingWorkspaceID = workspace.id
-                            }
+                            .gesture(
+                                TapGesture(count: 2).onEnded {
+                                    editWorkspaceName = workspace.name
+                                    editingWorkspaceID = workspace.id
+                                }.exclusively(before:
+                                    TapGesture().onEnded {
+                                        toggleExpanded(workspace.id)
+                                        Task { await model.selectWorkspace(id: workspace.id) }
+                                    }
+                                )
+                            )
                             .contextMenu {
                                 Button("Rename") {
                                     editWorkspaceName = workspace.name
