@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct CodeSparkApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var model = AppModel(core: WorkspaceCoreClient.live)
     @AppStorage("selectedWorkspaceID") private var savedWorkspaceID: String = ""
     @AppStorage("hiddenWorkspaceIDs") private var savedHiddenIDs: String = ""
@@ -25,25 +26,12 @@ struct CodeSparkApp: App {
                 #if GHOSTTY_FIRST
                 GhosttyRuntime.shared.initialize()
                 #endif
+                appDelegate.model = model
                 if !savedHiddenIDs.isEmpty {
                     model.hiddenWorkspaceIDs = Set(savedHiddenIDs.split(separator: ",").map(String.init))
                 }
                 if !savedWorkspaceID.isEmpty {
                     model.selectedWorkspaceID = savedWorkspaceID
-                }
-                NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                    if event.modifierFlags.contains(.command),
-                       event.charactersIgnoringModifiers == "w" {
-                        Task { @MainActor in
-                            if model.activeSessionID != nil {
-                                model.pendingCloseSessionID = model.activeSessionID
-                            } else if let wsID = model.selectedWorkspaceID {
-                                model.pendingCloseWorkspaceID = wsID
-                            }
-                        }
-                        return nil
-                    }
-                    return event
                 }
                 await model.load()
             }
@@ -69,7 +57,17 @@ struct CodeSparkApp: App {
                 }
                 .keyboardShortcut("t", modifiers: .command)
             }
-            CommandGroup(replacing: .saveItem) { }
+            CommandGroup(replacing: .saveItem) {
+                Button(model.activeSessionID != nil ? "Close Session" : "Close Workspace") {
+                    if model.activeSessionID != nil {
+                        model.pendingCloseSessionID = model.activeSessionID
+                    } else if let wsID = model.selectedWorkspaceID {
+                        model.pendingCloseWorkspaceID = wsID
+                    }
+                }
+                .keyboardShortcut("w", modifiers: .command)
+                .disabled(model.selectedWorkspaceID == nil)
+            }
             CommandGroup(after: .windowArrangement) {
                 Button("Reopen Closed Session") {
                     Task { await model.reopenLastClosedSession() }
@@ -104,5 +102,24 @@ struct CodeSparkApp: App {
                 model.saveAllSessionsAndClose()
             }
         }
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    var model: AppModel?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Remove the system "Close" menu item (Cmd+W) so our custom one takes effect
+        DispatchQueue.main.async {
+            if let fileMenu = NSApp.mainMenu?.item(withTitle: "File")?.submenu {
+                for item in fileMenu.items where item.keyEquivalent == "w" {
+                    fileMenu.removeItem(item)
+                }
+            }
+        }
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
     }
 }
