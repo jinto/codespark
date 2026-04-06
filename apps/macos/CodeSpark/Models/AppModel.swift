@@ -26,6 +26,7 @@ final class AppModel: ObservableObject {
     @Published var gitBranches: [String: String] = [:]
     @Published var hookNeedsInputCwds: Set<String> = []
     @Published var acknowledgedWorkspaceIDs: Set<String> = []
+    @Published var hookSnippets: [String: String] = [:]  // workspaceID → last output snippet
     @Published var claudeHooksStatus: ClaudeHooksStatus = .installed
 
     var hookServer: HookSocketServer?
@@ -570,13 +571,17 @@ final class AppModel: ObservableObject {
         switch event.hookEventName {
         case "Stop":
             hookNeedsInputCwds.insert(cwd)
-            if let ws = workspaceForCwd(cwd), ws.id != selectedWorkspaceID {
-                sendHookNotification(for: ws)
+            if let ws = workspaceForCwd(cwd) {
+                captureSnippet(for: ws)
+                if ws.id != selectedWorkspaceID {
+                    sendHookNotification(for: ws, snippet: hookSnippets[ws.id])
+                }
             }
         case "UserPromptSubmit":
             hookNeedsInputCwds.remove(cwd)
             if let ws = workspaceForCwd(cwd) {
                 acknowledgedWorkspaceIDs.remove(ws.id)
+                hookSnippets.removeValue(forKey: ws.id)
             }
         case "SessionStart":
             hookNeedsInputCwds.remove(cwd)
@@ -584,6 +589,22 @@ final class AppModel: ObservableObject {
             hookNeedsInputCwds.remove(cwd)
         default:
             break
+        }
+    }
+
+    private func captureSnippet(for workspace: WorkspaceSummaryViewData) {
+        // Find the host for this workspace's session and extract last non-empty line
+        for session in workspace.liveSessionDetails {
+            guard let host = hosts[session.id],
+                  let snapshot = host.extractSnapshot() else { continue }
+            let lastLine = snapshot.lines
+                .reversed()
+                .first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }?
+                .trimmingCharacters(in: .whitespaces)
+            if let lastLine, !lastLine.isEmpty {
+                hookSnippets[workspace.id] = String(lastLine.prefix(80))
+                return
+            }
         }
     }
 
@@ -607,11 +628,11 @@ final class AppModel: ObservableObject {
         })
     }
 
-    private func sendHookNotification(for workspace: WorkspaceSummaryViewData) {
+    private func sendHookNotification(for workspace: WorkspaceSummaryViewData, snippet: String? = nil) {
         guard !acknowledgedWorkspaceIDs.contains(workspace.id) else { return }
         let content = UNMutableNotificationContent()
         content.title = workspace.name
-        content.body = "Claude is waiting for your input"
+        content.body = snippet ?? "Claude is waiting for your input"
         content.sound = .default
         let request = UNNotificationRequest(
             identifier: "hook-needsinput-\(workspace.id)",

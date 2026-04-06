@@ -145,7 +145,8 @@ struct SidebarView: View {
                                 isExpanded: expandedWorkspaceIDs.contains(workspace.id),
                                 hotkeyIndex: index < 9 && showHotkeys ? index + 1 : nil,
                                 status: model.workspaceStatus(for: workspace),
-                                infoLine: workspaceInfoLine(for: workspace)
+                                infoLine: workspaceInfoLine(for: workspace),
+                                snippet: model.hookSnippets[workspace.id]
                             )
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -268,6 +269,7 @@ struct WorkspaceSidebarRow: View {
     let hotkeyIndex: Int?
     let status: WorkspaceStatus
     let infoLine: String?
+    var snippet: String? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -297,9 +299,10 @@ struct WorkspaceSidebarRow: View {
                 }
 
                 if status == .needsInput {
-                    Text("Claude is waiting for your input")
+                    Text(snippet ?? "Claude is waiting for your input")
                         .font(.system(size: 10))
                         .foregroundStyle(status.color.opacity(0.8))
+                        .lineLimit(2)
                 }
 
                 HStack(spacing: 6) {
