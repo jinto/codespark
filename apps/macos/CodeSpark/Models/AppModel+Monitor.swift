@@ -13,6 +13,7 @@ extension AppModel {
                 guard NSApp.isActive else { return }
                 self?.updateIdleStates()
                 self?.refreshGitBranches()
+                self?.refreshGitWorktrees()
             }
         checkpointTimer = Timer.publish(every: 30, on: .main, in: .common)
             .autoconnect()
@@ -71,6 +72,15 @@ extension AppModel {
                 }
             )
             if updated != gitBranches { gitBranches = updated }
+        }
+    }
+
+    func refreshGitWorktrees() {
+        let projectPaths = projects.map(\.path).filter { !$0.isEmpty }
+        guard !projectPaths.isEmpty else { return }
+        Task {
+            await gitWorktreeService.refreshWorktrees(for: projectPaths)
+            recomputeWorkspaces()
         }
     }
 

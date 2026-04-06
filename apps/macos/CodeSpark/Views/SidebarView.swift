@@ -11,6 +11,7 @@ struct SidebarView: View {
     @State private var showDeleteConfirmation = false
     @State private var showHotkeys = false
     @State private var hotkeyMonitor: Any?
+    @State private var expandedWorkspacePaths: Set<String> = []
 
     private var sortedProjects: [ProjectSummaryViewData] {
         let selected = model.selectedProjectID
@@ -55,6 +56,74 @@ struct SidebarView: View {
 
     private func abbreviatePath(_ path: String) -> String {
         (path as NSString).abbreviatingWithTildeInPath
+    }
+
+    /// Expand all workspaces with sessions on first encounter (no-op after that).
+    private func autoExpandWorkspacesOnce() {
+        let currentPaths = Set(model.workspaces.map(\.path))
+        guard expandedWorkspacePaths.isDisjoint(with: currentPaths) else { return }
+        for ws in model.workspaces where !ws.sessions.isEmpty {
+            expandedWorkspacePaths.insert(ws.path)
+        }
+    }
+
+    private func toggleWorkspaceExpanded(_ path: String) {
+        if expandedWorkspacePaths.contains(path) {
+            expandedWorkspacePaths.remove(path)
+        } else {
+            expandedWorkspacePaths.insert(path)
+        }
+    }
+
+    @ViewBuilder
+    private func flatSessions(for project: ProjectSummaryViewData) -> some View {
+        ForEach(project.liveSessionDetails) { session in
+            sessionRow(session: session, projectID: project.id)
+                .padding(.leading, 18)
+        }
+    }
+
+    @ViewBuilder
+    private func workspaceGroupedSessions(for project: ProjectSummaryViewData) -> some View {
+        ForEach(model.workspaces) { workspace in
+            WorkspaceSidebarRow(
+                workspace: workspace,
+                isExpanded: expandedWorkspacePaths.contains(workspace.path),
+                isActive: model.activeSessionID.map { id in
+                    workspace.sessions.contains { $0.id == id }
+                } ?? false
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { toggleWorkspaceExpanded(workspace.path) }
+            .contextMenu {
+                Button("New Terminal") {
+                    Task { await model.newSession(inWorkspacePath: workspace.path) }
+                }
+            }
+
+            if expandedWorkspacePaths.contains(workspace.path) {
+                ForEach(workspace.sessions) { session in
+                    sessionRow(session: session, projectID: project.id)
+                        .padding(.leading, 30)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sessionRow(session: SessionSummary, projectID: String) -> some View {
+        SessionSidebarRow(
+            session: session,
+            isActive: model.activeSessionID == session.id,
+            isIdle: model.idleSessionIDs.contains(session.id),
+            onSelect: {
+                model.activeSessionID = session.id
+                Task { await model.selectProject(id: projectID) }
+            },
+            onRename: { newTitle in
+                Task { await model.renameSession(id: session.id, title: newTitle) }
+            }
+        )
     }
 
     private func toggleExpanded(_ id: String) {
@@ -170,20 +239,11 @@ struct SidebarView: View {
                             }
 
                             if expandedProjectIDs.contains(project.id) {
-                                ForEach(project.liveSessionDetails) { session in
-                                    SessionSidebarRow(
-                                        session: session,
-                                        isActive: model.activeSessionID == session.id,
-                                        isIdle: model.idleSessionIDs.contains(session.id),
-                                        onSelect: {
-                                            model.activeSessionID = session.id
-                                            Task { await model.selectProject(id: project.id) }
-                                        },
-                                        onRename: { newTitle in
-                                            Task { await model.renameSession(id: session.id, title: newTitle) }
-                                        }
-                                    )
-                                    .padding(.leading, 18)
+                                let isSelected = model.selectedProjectID == project.id
+                                if isSelected && model.workspaces.count > 1 {
+                                    workspaceGroupedSessions(for: project)
+                                } else {
+                                    flatSessions(for: project)
                                 }
                             }
                         }
@@ -209,6 +269,9 @@ struct SidebarView: View {
                     NSEvent.removeMonitor(monitor)
                     hotkeyMonitor = nil
                 }
+            }
+            .onChange(of: model.workspaces) { _, _ in
+                autoExpandWorkspacesOnce()
             }
 
             Spacer()
@@ -331,6 +394,45 @@ struct ProjectSidebarRow: View {
         .overlay(
             RoundedRectangle(cornerRadius: 6)
                 .strokeBorder(isSelected ? AppTheme.accent.opacity(0.5) : .clear, lineWidth: 1)
+        )
+    }
+}
+
+struct WorkspaceSidebarRow: View {
+    let workspace: WorkspaceViewData
+    let isExpanded: Bool
+    let isActive: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.secondary)
+                .frame(width: 8)
+
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 10))
+                .foregroundStyle(isActive ? AppTheme.accent : .secondary)
+
+            Text(workspace.branch)
+                .font(.system(.caption, weight: isActive ? .semibold : .medium))
+                .foregroundStyle(isActive ? .white : .primary)
+                .lineLimit(1)
+
+            Spacer()
+
+            if !workspace.sessions.isEmpty {
+                Text("\(workspace.sessions.count)")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .padding(.leading, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(isActive ? AppTheme.accentSubtle.opacity(0.5) : .clear)
         )
     }
 }

@@ -30,6 +30,7 @@
 		55DF7F1F76B8385AE01FBEB5 /* CodeSparkUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1E03959DA8A839A6A0BDA5 /* CodeSparkUITests.swift */; };
 		566296EC328127177468735C /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D4B27F8AE7CBF0B33461523 /* AppModel.swift */; };
 		5A9644496F341ACE93AF9035 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7DA64F8FB306B85441226CB5 /* AppKit.framework */; };
+		60C7CF3D0995795AD79893D3 /* GitWorktreeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 982886C18B94884FEA504409 /* GitWorktreeService.swift */; };
 		63F552917CA547901266483B /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3450FDDB010612C39DC6A6B /* OnboardingView.swift */; };
 		6EDDCB3536F1F90C00DEC640 /* GhosttyKit.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = E11516437F9C0FF1FF85D2DE /* GhosttyKit.xcframework */; };
 		8434723ACD950CD31779E3C5 /* NoOpTerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE1DCBDAC0F1AD453524CED /* NoOpTerminalHost.swift */; };
@@ -121,6 +122,7 @@
 		85F9E2DCA6D0CF00B744A92C /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 		89EFB0B5A4636EDF3FFF91CB /* codespark-hook */ = {isa = PBXFileReference; includeInIndex = 0; path = "codespark-hook"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8CA1F37A49DC57DD259D7C23 /* ProjectFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFlowTests.swift; sourceTree = "<group>"; };
+		982886C18B94884FEA504409 /* GitWorktreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitWorktreeService.swift; sourceTree = "<group>"; };
 		9A9B2227B48DAD2AB9FB7207 /* WindowDragArea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowDragArea.swift; sourceTree = "<group>"; };
 		9FDED25D7FAF92C05A934D97 /* TerminalHostProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostProtocol.swift; sourceTree = "<group>"; };
 		A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSidebarRow.swift; sourceTree = "<group>"; };
@@ -212,6 +214,7 @@
 			children = (
 				7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */,
 				C84785B7B190829BA72AF822 /* GitBranchService.swift */,
+				982886C18B94884FEA504409 /* GitWorktreeService.swift */,
 				813E0BA18FE27147BC9B017D /* HookEventProcessor.swift */,
 				3A611C18C82E4858E7E1A2B3 /* HookSocketServer.swift */,
 				B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */,
@@ -537,6 +540,7 @@
 				ADC7C90A0E6B40786204C136 /* GhosttyTerminalHost.swift in Sources */,
 				4F7109283E67CEE1A8CA7425 /* GhosttyTerminalSurfaceView.swift in Sources */,
 				A1A3C945D732C2265CE7F237 /* GitBranchService.swift in Sources */,
+				60C7CF3D0995795AD79893D3 /* GitWorktreeService.swift in Sources */,
 				07F78497934AA2ABB909879A /* HookEventProcessor.swift in Sources */,
 				D6FB9049A77D020BD711EB57 /* HookSocketServer.swift in Sources */,
 				8562620D298BE43C1FD7FF4F /* MainContentView.swift in Sources */,

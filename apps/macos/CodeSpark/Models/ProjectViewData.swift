@@ -121,3 +121,67 @@ struct ProjectDetailViewData: Equatable {
     let transport: String
     let liveSessions: [SessionViewData]
 }
+
+// MARK: - Workspace
+
+struct WorkspaceViewData: Identifiable, Equatable {
+    let path: String
+    let branch: String
+    let isMainWorktree: Bool
+    var sessions: [SessionSummary]
+
+    var id: String { path }
+}
+
+extension WorkspaceViewData {
+    /// Group sessions into workspaces based on their cwd matching worktree paths.
+    /// - Non-git / single worktree: returns 1 workspace with all sessions
+    /// - Multi-worktree: matches session.lastCwd to longest-prefix worktree path
+    /// - Unmatched sessions: assigned to main worktree
+    static func groupSessions(
+        _ sessions: [SessionSummary],
+        into worktrees: [GitWorktree]?,
+        projectPath: String
+    ) -> [WorkspaceViewData] {
+        guard let worktrees, worktrees.count > 1 else {
+            let ws = worktrees?.first
+            return [WorkspaceViewData(
+                path: ws?.path ?? projectPath,
+                branch: ws?.branch ?? "default",
+                isMainWorktree: true,
+                sessions: sessions
+            )]
+        }
+
+        // Sort worktrees by path length descending for longest-prefix matching
+        let sorted = worktrees.sorted { $0.path.count > $1.path.count }
+        var buckets: [String: [SessionSummary]] = [:]
+        for wt in worktrees { buckets[wt.path] = [] }
+
+        let mainPath = worktrees.first(where: \.isMainWorktree)?.path ?? worktrees[0].path
+
+        for session in sessions {
+            let cwd = session.lastCwd ?? ""
+            if let match = sorted.first(where: { cwdBelongsTo(cwd: cwd, worktreePath: $0.path) }) {
+                buckets[match.path, default: []].append(session)
+            } else {
+                buckets[mainPath, default: []].append(session)
+            }
+        }
+
+        return worktrees.map { wt in
+            WorkspaceViewData(
+                path: wt.path,
+                branch: wt.branch,
+                isMainWorktree: wt.isMainWorktree,
+                sessions: buckets[wt.path] ?? []
+            )
+        }
+    }
+
+    /// Check that cwd is exactly the worktree path or a subdirectory of it.
+    /// Prevents "/projects/codespark-other" matching "/projects/codespark".
+    private static func cwdBelongsTo(cwd: String, worktreePath: String) -> Bool {
+        cwd == worktreePath || cwd.hasPrefix(worktreePath + "/")
+    }
+}

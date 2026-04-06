@@ -61,10 +61,12 @@
 - [x] **테스트 업데이트** — RecoveryActionsTests 삭제, 기존 테스트 조정
 - [x] **문서 업데이트** — CLAUDE.md, PRD.md
 
-## M12: Git Worktree 격리
+## M12: Project > Workspace > Terminal
 
-- [ ] **프로젝트별 worktree** — 새 프로젝트 생성 시 독립적인 git worktree 자동 생성
-- [ ] **브랜치 자동 관리** — worktree 생성 시 새 브랜치 자동 생성, 삭제 시 정리
+- [x] **Workspace 계층** — GitWorktreeService로 worktree 자동 발견, 3레벨 사이드바 (Project > Workspace > Terminal)
+- [x] **세션 그루핑** — session.initial_cwd 기반 workspace 매칭, 단일 workspace 시 플래튼
+- [x] **workspace 경로 터미널** — newSession()이 $HOME 대신 workspace 경로에서 열림
+- [ ] **worktree 관리 UI** — Add/Remove worktree 명령어 + 시트
 - [ ] **내장 Diff 뷰어** — 프로젝트 내 코드 변경사항 검토 (git diff 시각화)
 
 ## M13: 외부 통합

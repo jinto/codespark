@@ -24,6 +24,7 @@ final class AppModel: ObservableObject {
     @Published var acknowledgedProjectIDs: Set<String> = []
     @Published var hookSnippets: [String: String] = [:]  // projectID → last output snippet
     @Published var claudeHooksStatus: ClaudeHooksStatus = .installed
+    @Published var workspaces: [WorkspaceViewData] = []
 
     var hookServer: HookSocketServer?
 
@@ -35,6 +36,7 @@ final class AppModel: ObservableObject {
     var checkpointTimer: AnyCancellable?
     private var hasReconciledOnLaunch = false
     let gitBranchService = GitBranchService()
+    let gitWorktreeService = GitWorktreeService()
 
     init(
         core: ProjectCoreClientProtocol,
@@ -148,6 +150,19 @@ final class AppModel: ObservableObject {
         selectedProject = detail
         liveSessions = detail.liveSessions
         activeSessionID = liveSessions.first?.id
+        recomputeWorkspaces()
+    }
+
+    func recomputeWorkspaces() {
+        guard let project = selectedProject else {
+            workspaces = []
+            return
+        }
+        let sessions = liveSessions.map { s in
+            SessionSummary(id: s.id, title: s.title, targetLabel: s.targetLabel, lastCwd: s.lastCwd)
+        }
+        let worktrees = gitWorktreeService.worktrees(for: project.path)
+        workspaces = WorkspaceViewData.groupSessions(sessions, into: worktrees, projectPath: project.path)
     }
 
     // MARK: - Project lifecycle
@@ -288,9 +303,24 @@ final class AppModel: ObservableObject {
         return sessionID
     }
 
-    func newSession() async {
+    func newSession(inWorkspacePath: String? = nil) async {
         guard let projectID = selectedProjectID else { return }
-        let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+        guard let project = selectedProject else { return }
+
+        let workspacePath: String
+        if let explicit = inWorkspacePath {
+            workspacePath = explicit
+        } else if let activeID = activeSessionID,
+                  let activeSession = liveSessions.first(where: { $0.id == activeID }),
+                  let activeCwd = activeSession.lastCwd,
+                  let matchedWS = workspaces.first(where: { activeCwd == $0.path || activeCwd.hasPrefix($0.path + "/") }) {
+            workspacePath = matchedWS.path
+        } else {
+            workspacePath = project.path.isEmpty
+                ? FileManager.default.homeDirectoryForCurrentUser.path
+                : project.path
+        }
+
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         do {
             let sessionID = try await startAndAttachSession(
@@ -299,9 +329,10 @@ final class AppModel: ObservableObject {
                 targetLabel: "local",
                 title: "Terminal",
                 shell: shell,
-                cwd: homeDir
+                cwd: workspacePath
             )
             activeSessionID = sessionID
+            recomputeWorkspaces()
         } catch {
             loadErrorMessage = error.localizedDescription
         }
@@ -370,6 +401,7 @@ final class AppModel: ObservableObject {
         selectedProject = nil
         activeSessionID = nil
         liveSessions = []
+        workspaces = []
     }
 
 }
@@ -385,6 +417,7 @@ extension AppModel: TerminalHostDelegate {
         if activeSessionID == sessionID {
             activeSessionID = liveSessions.isEmpty ? nil : liveSessions[max(0, index - 1)].id
         }
+        recomputeWorkspaces()
 
         Task { [weak self] in
             do {
