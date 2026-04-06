@@ -192,8 +192,6 @@ struct SidebarView: View {
                 .frame(height: 28)
             }
 
-            Divider().background(AppTheme.divider)
-
             if model.claudeHooksStatus != .installed {
                 Button {
                     model.installClaudeHooks()
