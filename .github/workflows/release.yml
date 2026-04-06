@@ -82,11 +82,21 @@ jobs:
         run: |
           APP_PATH="build/Build/Products/Release/CodeSpark.app"
           ditto -c -k --keepParent "$APP_PATH" /tmp/CodeSpark.zip
-          xcrun notarytool submit /tmp/CodeSpark.zip \
+          SUBMIT_OUT=$(xcrun notarytool submit /tmp/CodeSpark.zip \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_PASSWORD" \
             --team-id "$TEAM_ID" \
-            --wait
+            --wait 2>&1) || true
+          echo "$SUBMIT_OUT"
+          SUBMISSION_ID=$(echo "$SUBMIT_OUT" | grep "id:" | head -1 | awk '{print $2}')
+          if echo "$SUBMIT_OUT" | grep -q "Invalid"; then
+            echo "--- Notarization log ---"
+            xcrun notarytool log "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_PASSWORD" \
+              --team-id "$TEAM_ID" || true
+            exit 1
+          fi
           xcrun stapler staple "$APP_PATH"
 
       - name: Create DMG
