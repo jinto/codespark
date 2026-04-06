@@ -57,6 +57,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jinto.codespark
         GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: CodeSpark
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/../../libs/workspace-core/include
         LIBRARY_SEARCH_PATHS:
@@ -71,6 +72,13 @@ targets:
           - -D
           - GHOSTTY_FIRST
         SWIFT_OBJC_BRIDGING_HEADER: CodeSpark/Bridge/CodeSpark-Bridging-Header.h
+      configs:
+        Debug:
+          PRODUCT_NAME: CodeSpark Dev
+          PRODUCT_BUNDLE_IDENTIFIER: com.jinto.codespark.dev
+          INFOPLIST_KEY_CFBundleDisplayName: CodeSpark Dev
+        Release:
+          PRODUCT_NAME: CodeSpark
   codespark-hook:
     type: tool
     platform: macOS

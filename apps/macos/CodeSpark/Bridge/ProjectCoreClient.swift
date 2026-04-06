@@ -21,9 +21,10 @@ protocol ProjectCoreClientProtocol {
 
 enum ProjectCoreClient {
     static var live: ProjectCoreClientProtocol {
+        let appName = Bundle.main.bundleIdentifier ?? "CodeSpark"
         let dbPath = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("CodeSpark", isDirectory: true)
+            .appendingPathComponent(appName, isDirectory: true)
             .appendingPathComponent("store.sqlite3")
             .path
         do {

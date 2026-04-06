@@ -713,6 +713,7 @@
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/../../libs/workspace-core/include",
 				);
+				INFOPLIST_KEY_CFBundleDisplayName = "CodeSpark Dev";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -732,7 +733,8 @@
 					"-D",
 					GHOSTTY_FIRST,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.jinto.codespark;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jinto.codespark.dev;
+				PRODUCT_NAME = "CodeSpark Dev";
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "CodeSpark/Bridge/CodeSpark-Bridging-Header.h";
 			};
@@ -751,6 +753,7 @@
 				HEADER_SEARCH_PATHS = (
 					"$(SRCROOT)/../../libs/workspace-core/include",
 				);
+				INFOPLIST_KEY_CFBundleDisplayName = CodeSpark;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -771,6 +774,7 @@
 					GHOSTTY_FIRST,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.jinto.codespark;
+				PRODUCT_NAME = CodeSpark;
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "CodeSpark/Bridge/CodeSpark-Bridging-Header.h";
 			};
