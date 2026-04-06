@@ -126,6 +126,9 @@ struct CodeSparkApp: App {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
         #if GHOSTTY_FIRST
         GhosttyRuntime.shared.initialize()
+        GhosttyRuntime.shared.onTerminalOutput = { [weak model] in
+            model?.markActiveSessionOutput()
+        }
         #endif
         appDelegate.model = model
         if !savedHiddenIDs.isEmpty {

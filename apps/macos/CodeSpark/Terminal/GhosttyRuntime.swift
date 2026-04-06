@@ -8,6 +8,9 @@ final class GhosttyRuntime {
 
     private(set) var app: ghostty_app_t?
 
+    /// Called on main thread when Ghostty processes terminal output (wakeup → tick).
+    var onTerminalOutput: (() -> Void)?
+
     /// Coalesces wakeup signals: skip dispatch if a tick is already queued.
     /// Unlike official Ghostty (no SwiftUI overhead), CodeSpark needs this because
     /// the SwiftUI view hierarchy makes main thread work much heavier per drain cycle.
@@ -55,6 +58,7 @@ final class GhosttyRuntime {
                         return
                     }
                     ghostty_app_tick(app)
+                    rt.onTerminalOutput?()
                     // Yield one run-loop pass before allowing the next tick,
                     // so user events (Cmd+Tab, mouse) aren't starved by heavy output.
                     RunLoop.main.perform { rt.tickPending = false }

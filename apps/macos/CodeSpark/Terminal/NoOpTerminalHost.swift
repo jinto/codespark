@@ -4,6 +4,7 @@ final class NoOpTerminalHost: TerminalHostProtocol {
     weak var delegate: (any TerminalHostDelegate)?
     var lastOutputTime: Date? { nil }
 
+    func markOutput() {}
     func attach(sessionID: String, command: String? = nil) {}
     @MainActor
     func close(sessionID: String) {

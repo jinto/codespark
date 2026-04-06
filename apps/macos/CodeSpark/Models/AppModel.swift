@@ -522,6 +522,11 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func markActiveSessionOutput() {
+        guard let id = activeSessionID, let host = hosts[id] else { return }
+        host.markOutput()
+    }
+
     func workspaceStatus(for workspace: WorkspaceSummaryViewData) -> WorkspaceStatus {
         if workspace.hasInterruptedSessions { return .needsInput }
         if workspace.liveSessions > 0 {

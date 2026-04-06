@@ -21,3 +21,4 @@
 - [x] **Ctrl+C/D/Z** — `performKeyEquivalent` override + control char text 재계산 (공식 Ghostty 패턴)
 - [x] **비활성 세션** — opacity → `isHidden` 전환
 - [x] **Timer guard** — background 시 idle/git 타이머 skip
+- [x] **Running 상태 표시** — wakeup→tick 시 active session의 lastOutputTime 갱신, 사이드바에 Running/Idle 정확히 반영
