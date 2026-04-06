@@ -17,6 +17,7 @@ case "stop":           eventName = "Stop"
 case "session-start":  eventName = "SessionStart"
 case "prompt-submit":  eventName = "UserPromptSubmit"
 case "session-end":    eventName = "SessionEnd"
+case "notification":   eventName = "Notification"
 default:               exit(1)
 }
 

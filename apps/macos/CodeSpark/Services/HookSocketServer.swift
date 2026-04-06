@@ -7,6 +7,8 @@ struct ClaudeHookEvent {
     let hookEventName: String
     let sessionId: String?
     let cwd: String?
+    let title: String?
+    let message: String?
 }
 
 // MARK: - Delegate
@@ -90,7 +92,9 @@ final class HookSocketServer {
         let event = ClaudeHookEvent(
             hookEventName: eventName,
             sessionId: json["session_id"] as? String,
-            cwd: json["cwd"] as? String
+            cwd: json["cwd"] as? String,
+            title: json["title"] as? String,
+            message: json["message"] as? String
         )
 
         let delegate = self.delegate

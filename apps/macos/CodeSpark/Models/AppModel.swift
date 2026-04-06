@@ -587,6 +587,15 @@ final class AppModel: ObservableObject {
             hookNeedsInputCwds.remove(cwd)
         case "SessionEnd":
             hookNeedsInputCwds.remove(cwd)
+        case "Notification":
+            if let ws = workspaceForCwd(cwd) {
+                let snippet = event.message ?? event.title ?? "Claude is waiting for your input"
+                hookSnippets[ws.id] = String(snippet.prefix(120))
+                hookNeedsInputCwds.insert(cwd)
+                if ws.id != selectedWorkspaceID {
+                    sendHookNotification(for: ws, snippet: snippet)
+                }
+            }
         default:
             break
         }

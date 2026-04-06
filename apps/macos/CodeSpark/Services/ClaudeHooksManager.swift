@@ -14,6 +14,7 @@ enum ClaudeHooksManager {
         ("UserPromptSubmit", "codespark-hook prompt-submit"),
         ("SessionStart", "codespark-hook session-start"),
         ("SessionEnd", "codespark-hook session-end"),
+        ("Notification", "codespark-hook notification"),
     ]
 
     // MARK: - Health check
