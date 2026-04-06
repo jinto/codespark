@@ -31,7 +31,7 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/ghostty-org/ghostty.git vendor/ghostty
           cd vendor/ghostty
-          zig build -Doptimize=ReleaseFast -Demit-xcframework=true -Dxcframework-target=native
+          zig build -Doptimize=ReleaseFast -Demit-xcframework=true -Dxcframework-target=native -Demit-macos-app=false
 
       - name: Clone Ghostty headers (cache hit)
         if: steps.ghostty-cache.outputs.cache-hit == 'true'
