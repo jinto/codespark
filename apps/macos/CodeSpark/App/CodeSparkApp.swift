@@ -44,6 +44,7 @@ struct CodeSparkApp: App {
                 savedHiddenIDs = newValue.joined(separator: ",")
             }
         }
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -183,17 +184,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.removeSystemCloseMenuItem()
         }
 
-        // Make content extend into the title bar area
+        // Window title bar is configured via .windowStyle(.hiddenTitleBar) in SwiftUI Scene
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.configureWindowTitleBar()
+            self.configureWindowFrame()
         }
     }
 
-    private func configureWindowTitleBar() {
+    private func configureWindowFrame() {
         guard let window = NSApp.windows.first else { return }
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.styleMask.insert(.fullSizeContentView)
         window.setFrameAutosaveName("CodeSparkMain")
     }
 
