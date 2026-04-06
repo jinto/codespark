@@ -108,6 +108,33 @@ struct SidebarView: View {
 
             Divider().background(AppTheme.divider)
 
+            if model.claudeHooksStatus != .installed {
+                Button {
+                    model.installClaudeHooks()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.orange)
+                        Text("Claude hooks not configured")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("Install")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(AppTheme.accent, in: RoundedRectangle(cornerRadius: 4))
+                    }
+                    .padding(8)
+                    .background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 8)
+                .padding(.top, 6)
+            }
+
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(sortedWorkspaces.enumerated()), id: \.element.id) { index, workspace in

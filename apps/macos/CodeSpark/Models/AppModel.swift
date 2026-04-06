@@ -26,6 +26,7 @@ final class AppModel: ObservableObject {
     @Published var gitBranches: [String: String] = [:]
     @Published var hookNeedsInputCwds: Set<String> = []
     @Published var acknowledgedWorkspaceIDs: Set<String> = []
+    @Published var claudeHooksStatus: ClaudeHooksStatus = .installed
 
     var hookServer: HookSocketServer?
 
@@ -627,6 +628,18 @@ final class AppModel: ObservableObject {
         liveSessions = []
         closedSessions = []
         noteSaveErrorMessage = nil
+    }
+
+    // MARK: - Claude hooks health check
+
+    func checkClaudeHooksHealth() {
+        claudeHooksStatus = ClaudeHooksManager.checkStatus()
+    }
+
+    func installClaudeHooks() {
+        ClaudeHooksManager.install()
+        _ = ClaudeHooksManager.installCLISymlink()
+        checkClaudeHooksHealth()
     }
 }
 

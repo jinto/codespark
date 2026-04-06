@@ -39,7 +39,7 @@ apps/macos/CodeSpark/
   Views/        — SwiftUI views (Sidebar, MainContent, Settings, Onboarding)
   Terminal/     — Ghostty integration (Runtime, SurfaceView, Host, Protocol)
   Bridge/       — workspace-core C FFI bridge
-  Services/     — GitBranchService, TerminalFontSettings, HookSocketServer
+  Services/     — GitBranchService, TerminalFontSettings, HookSocketServer, ClaudeHooksManager
   Theme/        — AppTheme colors
 apps/macos/CLI/ — codespark-hook CLI (Claude Code hook → Unix socket bridge)
 ```

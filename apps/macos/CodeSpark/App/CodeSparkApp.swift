@@ -155,6 +155,7 @@ struct CodeSparkApp: App {
             model.selectedWorkspaceID = savedWorkspaceID
         }
         await model.load()
+        model.checkClaudeHooksHealth()
     }
 }
 

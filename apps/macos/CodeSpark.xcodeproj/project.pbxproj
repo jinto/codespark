@@ -52,6 +52,7 @@
 		EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */; };
 		EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1188AFD5C69D085D60330D02 /* AppTheme.swift */; };
 		F043AFB563954DCF5543FF11 /* WorkspaceCoreClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99FB814D6FDD9E9B75A8E79E /* WorkspaceCoreClient.swift */; };
+		F47361B02296F2A523F06A08 /* ClaudeHooksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -103,6 +104,7 @@
 		6D4B27F8AE7CBF0B33461523 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		6DE9AB7891F06F27BFD3EC90 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
 		6E640D049F79763B0863CD21 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHooksManager.swift; sourceTree = "<group>"; };
 		7D0E3CC9722D71DAF836505B /* CodeSparkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodeSparkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7DA64F8FB306B85441226CB5 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
 		84115AE2AA0AA4FE8E41BE9A /* CodeSpark.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeSpark.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -200,6 +202,7 @@
 		5ABBBB834E3488F442614934 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */,
 				C84785B7B190829BA72AF822 /* GitBranchService.swift */,
 				3A611C18C82E4858E7E1A2B3 /* HookSocketServer.swift */,
 				B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */,
@@ -512,6 +515,7 @@
 			files = (
 				566296EC328127177468735C /* AppModel.swift in Sources */,
 				EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */,
+				F47361B02296F2A523F06A08 /* ClaudeHooksManager.swift in Sources */,
 				2FB53C5935BBD54F24B58E5E /* ClosedSessionInspectorView.swift in Sources */,
 				E1275E7403FDD3DEE3FB06A2 /* CodeSparkApp.swift in Sources */,
 				5066F54CBC80078498D6B71E /* CodeSparkWindow.swift in Sources */,

@@ -4,6 +4,8 @@ struct SettingsView: View {
     @AppStorage("terminalFontFamily") private var fontFamily = ""
     @AppStorage("terminalFontSize") private var fontSize: Double = 0
     @State private var saved = false
+    @State private var hooksStatus: ClaudeHooksStatus = .installed
+    @State private var symlinkFailed = false
 
     private var displayFamily: String {
         fontFamily.isEmpty ? "Auto (\(TerminalFontSettings.resolvedFontFamily()))" : fontFamily
@@ -56,9 +58,65 @@ struct SettingsView: View {
                         .foregroundStyle(.tertiary)
                 }
             }
+
+            Section("Claude Code Integration") {
+                HStack {
+                    if hooksStatus == .installed {
+                        Label("Hooks installed", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else {
+                        Label(hooksStatusLabel, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                    Spacer()
+                }
+
+                if hooksStatus != .installed {
+                    Button("Install Hooks") {
+                        ClaudeHooksManager.install()
+                        if !ClaudeHooksManager.installCLISymlink() {
+                            symlinkFailed = true
+                        }
+                        refreshStatus()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.blue)
+
+                    if symlinkFailed {
+                        Text("Could not create /usr/local/bin/codespark-hook symlink. CLI is still available inside CodeSpark terminals.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                } else {
+                    Button("Uninstall Hooks") {
+                        ClaudeHooksManager.uninstall()
+                        refreshStatus()
+                    }
+                    .buttonStyle(.bordered)
+                    .foregroundStyle(.secondary)
+                }
+
+                Text("Hooks let CodeSpark detect when Claude Code is waiting for input.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 400)
         .padding()
+        .onAppear { refreshStatus() }
+    }
+
+    private var hooksStatusLabel: String {
+        switch hooksStatus {
+        case .installed: "Installed"
+        case .missingHooks: "Hooks not registered in Claude settings"
+        case .missingCLI: "CLI tool not in PATH"
+        case .missingBoth: "Hooks and CLI not configured"
+        }
+    }
+
+    private func refreshStatus() {
+        hooksStatus = ClaudeHooksManager.checkStatus()
     }
 }
