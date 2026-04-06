@@ -18,64 +18,11 @@ jobs:
         with:
           version: 0.15.2
 
-      - name: Create GhosttyKit stub
+      - name: Build GhosttyKit (ReleaseFast)
         run: |
-          FWDIR="vendor/ghostty/macos/GhosttyKit.xcframework"
-          LIBDIR="$FWDIR/macos-arm64"
-          mkdir -p "$LIBDIR/Headers"
-
-          # Info.plist
-          cat > "$FWDIR/Info.plist" << 'PLIST'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0"><dict>
-            <key>CFBundlePackageType</key><string>XFWK</string>
-            <key>XCFrameworkFormatVersion</key><string>1.0</string>
-            <key>AvailableLibraries</key><array><dict>
-              <key>LibraryIdentifier</key><string>macos-arm64</string>
-              <key>LibraryPath</key><string>libghostty.a</string>
-              <key>HeadersPath</key><string>Headers</string>
-              <key>SupportedPlatform</key><string>macos</string>
-              <key>SupportedArchitectures</key><array><string>arm64</string></array>
-            </dict></array>
-          </dict></plist>
-          PLIST
-
-          # Minimal C stub with all symbols the linker expects
-          cat > /tmp/ghostty_stub.c << 'STUB'
-          // Empty stubs — real Ghostty not available in CI
-          void ghostty_init() {}
-          void ghostty_app_new() {}
-          void ghostty_app_free() {}
-          void ghostty_app_tick() {}
-          void ghostty_config_new() {}
-          void ghostty_config_free() {}
-          void ghostty_config_load_file() {}
-          void ghostty_config_finalize() {}
-          void ghostty_surface_config_new() {}
-          void ghostty_surface_new() {}
-          void ghostty_surface_free() {}
-          void ghostty_surface_set_content_scale() {}
-          void ghostty_surface_set_size() {}
-          void ghostty_surface_key() {}
-          void ghostty_surface_mouse_button() {}
-          void ghostty_surface_mouse_pos() {}
-          void ghostty_surface_mouse_scroll() {}
-          void ghostty_surface_text() {}
-          void ghostty_surface_size() {}
-          void ghostty_surface_read_text() {}
-          void ghostty_surface_free_text() {}
-          STUB
-          clang -c -target arm64-apple-macos14 /tmp/ghostty_stub.c -o /tmp/ghostty_stub.o
-          ar rcs "$LIBDIR/libghostty.a" /tmp/ghostty_stub.o
-
-          # Empty header
-          touch "$LIBDIR/Headers/ghostty.h"
-
-      - name: Disable GHOSTTY_FIRST in pbxproj
-        run: |
-          sed -i '' '/"- D"/d; /GHOSTTY_FIRST/d' apps/macos/CodeSpark.xcodeproj/project.pbxproj
-          sed -i '' '/"-D"/d' apps/macos/CodeSpark.xcodeproj/project.pbxproj
+          git clone --depth 1 https://github.com/ghostty-org/ghostty.git vendor/ghostty
+          cd vendor/ghostty
+          zig build -Doptimize=ReleaseFast -Demit-xcframework=true
 
       - name: Build Release
         run: |
