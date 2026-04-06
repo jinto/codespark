@@ -41,7 +41,7 @@ enum WorkspaceServiceError: Error, Equatable {
         case WORKSPACE_STATUS_DELETE_WORKSPACE_FAILED:
             self = .deleteWorkspaceFailed
         case WORKSPACE_STATUS_OK:
-            self = .workspaceDetailFailed
+            fatalError("WorkspaceServiceError.init(status:) must not be called with WORKSPACE_STATUS_OK")
         default:
             self = .workspaceDetailFailed
         }

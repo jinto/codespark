@@ -238,16 +238,29 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
         var cLines = snapshot.lines.map { strdup($0) }
         defer { cLines.forEach { free($0) } }
 
-        var input = cLines.withUnsafeMutableBufferPointer { buf -> workspace_new_snapshot_t in
-            workspace_new_snapshot_t(
+        var input: workspace_new_snapshot_t
+        if cLines.isEmpty {
+            input = workspace_new_snapshot_t(
                 session_id: nil,
                 kind: kind,
                 cwd: nil,
                 cols: UInt16(snapshot.cols),
                 rows: UInt16(snapshot.rows),
-                lines: UnsafePointer(buf.baseAddress!.withMemoryRebound(to: UnsafePointer<CChar>?.self, capacity: buf.count) { $0 }),
-                line_count: Int32(snapshot.lines.count)
+                lines: nil,
+                line_count: 0
             )
+        } else {
+            input = cLines.withUnsafeMutableBufferPointer { buf -> workspace_new_snapshot_t in
+                workspace_new_snapshot_t(
+                    session_id: nil,
+                    kind: kind,
+                    cwd: nil,
+                    cols: UInt16(snapshot.cols),
+                    rows: UInt16(snapshot.rows),
+                    lines: UnsafePointer(buf.baseAddress!.withMemoryRebound(to: UnsafePointer<CChar>?.self, capacity: buf.count) { $0 }),
+                    line_count: Int32(snapshot.lines.count)
+                )
+            }
         }
 
         let status = sessionID.withCString { idPtr -> workspace_status_t in

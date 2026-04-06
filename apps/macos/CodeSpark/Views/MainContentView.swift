@@ -3,7 +3,6 @@ import SwiftUI
 struct MainContentView: View {
     @ObservedObject var model: AppModel
     @State private var showNote = false
-    @State private var activePopoverSessionID: String?
     @State private var showCloseSessionAlert = false
     @State private var showCloseWorkspaceAlert = false
 
