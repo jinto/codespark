@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-enum WorkspaceStatus: Equatable {
+enum ProjectStatus: Equatable {
     case running
     case idle
     case needsInput
@@ -38,7 +38,7 @@ struct SessionSummary: Identifiable, Equatable {
     let lastCwd: String?
 }
 
-struct WorkspaceSummaryViewData: Identifiable, Equatable {
+struct ProjectSummaryViewData: Identifiable, Equatable {
     let id: String
     var name: String
     let liveSessions: Int
@@ -78,24 +78,24 @@ enum CloseReasonViewData: Equatable {
         }
     }
 
-    static func from(cReason: workspace_close_reason_t) -> Self {
+    static func from(cReason: project_close_reason_t) -> Self {
         switch cReason {
-        case WORKSPACE_CLOSE_REASON_USER_CLOSED: return .userClosed
-        case WORKSPACE_CLOSE_REASON_PROCESS_EXITED: return .processExited
-        case WORKSPACE_CLOSE_REASON_SSH_DISCONNECTED: return .sshDisconnected
-        case WORKSPACE_CLOSE_REASON_APP_CRASHED: return .appCrashed
-        case WORKSPACE_CLOSE_REASON_HOST_QUIT: return .hostQuit
+        case PROJECT_CLOSE_REASON_USER_CLOSED: return .userClosed
+        case PROJECT_CLOSE_REASON_PROCESS_EXITED: return .processExited
+        case PROJECT_CLOSE_REASON_SSH_DISCONNECTED: return .sshDisconnected
+        case PROJECT_CLOSE_REASON_APP_CRASHED: return .appCrashed
+        case PROJECT_CLOSE_REASON_HOST_QUIT: return .hostQuit
         default: return .userClosed
         }
     }
 
-    func toCReason() -> workspace_close_reason_t {
+    func toCReason() -> project_close_reason_t {
         switch self {
-        case .userClosed: return WORKSPACE_CLOSE_REASON_USER_CLOSED
-        case .processExited: return WORKSPACE_CLOSE_REASON_PROCESS_EXITED
-        case .sshDisconnected: return WORKSPACE_CLOSE_REASON_SSH_DISCONNECTED
-        case .appCrashed: return WORKSPACE_CLOSE_REASON_APP_CRASHED
-        case .hostQuit: return WORKSPACE_CLOSE_REASON_HOST_QUIT
+        case .userClosed: return PROJECT_CLOSE_REASON_USER_CLOSED
+        case .processExited: return PROJECT_CLOSE_REASON_PROCESS_EXITED
+        case .sshDisconnected: return PROJECT_CLOSE_REASON_SSH_DISCONNECTED
+        case .appCrashed: return PROJECT_CLOSE_REASON_APP_CRASHED
+        case .hostQuit: return PROJECT_CLOSE_REASON_HOST_QUIT
         }
     }
 }
@@ -128,7 +128,7 @@ struct ClosedSessionViewData: Identifiable, Equatable {
     let restoreRecipe: RestoreRecipeViewData
 }
 
-struct WorkspaceDetailViewData: Equatable {
+struct ProjectDetailViewData: Equatable {
     let id: String
     let name: String
     var noteBody: String

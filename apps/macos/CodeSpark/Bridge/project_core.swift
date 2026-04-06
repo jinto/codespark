@@ -1,49 +1,49 @@
 import Foundation
 
-enum WorkspaceServiceError: Error, Equatable {
+enum ProjectServiceError: Error, Equatable {
     case openStoreFailed
-    case createWorkspaceFailed
-    case updateWorkspaceNoteFailed
-    case workspaceDetailFailed
+    case createProjectFailed
+    case updateProjectNoteFailed
+    case projectDetailFailed
     case poisonedState
-    case listWorkspacesFailed
+    case listProjectsFailed
     case reconcileInterruptedFailed
     case startSessionFailed
     case recordSnapshotFailed
     case closeSessionFailed
-    case renameWorkspaceFailed
-    case deleteWorkspaceFailed
+    case renameProjectFailed
+    case deleteProjectFailed
 
-    init(status: workspace_status_t) {
+    init(status: project_status_t) {
         switch status {
-        case WORKSPACE_STATUS_OPEN_STORE_FAILED:
+        case PROJECT_STATUS_OPEN_STORE_FAILED:
             self = .openStoreFailed
-        case WORKSPACE_STATUS_CREATE_WORKSPACE_FAILED:
-            self = .createWorkspaceFailed
-        case WORKSPACE_STATUS_UPDATE_WORKSPACE_NOTE_FAILED:
-            self = .updateWorkspaceNoteFailed
-        case WORKSPACE_STATUS_WORKSPACE_DETAIL_FAILED:
-            self = .workspaceDetailFailed
-        case WORKSPACE_STATUS_POISONED_STATE:
+        case PROJECT_STATUS_CREATE_PROJECT_FAILED:
+            self = .createProjectFailed
+        case PROJECT_STATUS_UPDATE_PROJECT_NOTE_FAILED:
+            self = .updateProjectNoteFailed
+        case PROJECT_STATUS_PROJECT_DETAIL_FAILED:
+            self = .projectDetailFailed
+        case PROJECT_STATUS_POISONED_STATE:
             self = .poisonedState
-        case WORKSPACE_STATUS_LIST_WORKSPACES_FAILED:
-            self = .listWorkspacesFailed
-        case WORKSPACE_STATUS_RECONCILE_INTERRUPTED_FAILED:
+        case PROJECT_STATUS_LIST_PROJECTS_FAILED:
+            self = .listProjectsFailed
+        case PROJECT_STATUS_RECONCILE_INTERRUPTED_FAILED:
             self = .reconcileInterruptedFailed
-        case WORKSPACE_STATUS_START_SESSION_FAILED:
+        case PROJECT_STATUS_START_SESSION_FAILED:
             self = .startSessionFailed
-        case WORKSPACE_STATUS_RECORD_SNAPSHOT_FAILED:
+        case PROJECT_STATUS_RECORD_SNAPSHOT_FAILED:
             self = .recordSnapshotFailed
-        case WORKSPACE_STATUS_CLOSE_SESSION_FAILED:
+        case PROJECT_STATUS_CLOSE_SESSION_FAILED:
             self = .closeSessionFailed
-        case WORKSPACE_STATUS_RENAME_WORKSPACE_FAILED:
-            self = .renameWorkspaceFailed
-        case WORKSPACE_STATUS_DELETE_WORKSPACE_FAILED:
-            self = .deleteWorkspaceFailed
-        case WORKSPACE_STATUS_OK:
-            fatalError("WorkspaceServiceError.init(status:) must not be called with WORKSPACE_STATUS_OK")
+        case PROJECT_STATUS_RENAME_PROJECT_FAILED:
+            self = .renameProjectFailed
+        case PROJECT_STATUS_DELETE_PROJECT_FAILED:
+            self = .deleteProjectFailed
+        case PROJECT_STATUS_OK:
+            fatalError("ProjectServiceError.init(status:) must not be called with PROJECT_STATUS_OK")
         default:
-            self = .workspaceDetailFailed
+            self = .projectDetailFailed
         }
     }
 }
@@ -52,21 +52,21 @@ enum SessionTransport: Equatable, Sendable {
     case local
     case ssh
 
-    init(cValue: workspace_session_transport_t) {
+    init(cValue: project_session_transport_t) {
         switch cValue {
-        case WORKSPACE_SESSION_TRANSPORT_SSH:
+        case PROJECT_SESSION_TRANSPORT_SSH:
             self = .ssh
         default:
             self = .local
         }
     }
 
-    var cValue: workspace_session_transport_t {
+    var cValue: project_session_transport_t {
         switch self {
         case .local:
-            return WORKSPACE_SESSION_TRANSPORT_LOCAL
+            return PROJECT_SESSION_TRANSPORT_LOCAL
         case .ssh:
-            return WORKSPACE_SESSION_TRANSPORT_SSH
+            return PROJECT_SESSION_TRANSPORT_SSH
         }
     }
 }
@@ -78,33 +78,33 @@ enum CloseReason: Equatable, Sendable {
     case appCrashed
     case hostQuit
 
-    init(cValue: workspace_close_reason_t) {
+    init(cValue: project_close_reason_t) {
         switch cValue {
-        case WORKSPACE_CLOSE_REASON_PROCESS_EXITED:
+        case PROJECT_CLOSE_REASON_PROCESS_EXITED:
             self = .processExited
-        case WORKSPACE_CLOSE_REASON_SSH_DISCONNECTED:
+        case PROJECT_CLOSE_REASON_SSH_DISCONNECTED:
             self = .sshDisconnected
-        case WORKSPACE_CLOSE_REASON_APP_CRASHED:
+        case PROJECT_CLOSE_REASON_APP_CRASHED:
             self = .appCrashed
-        case WORKSPACE_CLOSE_REASON_HOST_QUIT:
+        case PROJECT_CLOSE_REASON_HOST_QUIT:
             self = .hostQuit
         default:
             self = .userClosed
         }
     }
 
-    var cValue: workspace_close_reason_t {
+    var cValue: project_close_reason_t {
         switch self {
         case .userClosed:
-            return WORKSPACE_CLOSE_REASON_USER_CLOSED
+            return PROJECT_CLOSE_REASON_USER_CLOSED
         case .processExited:
-            return WORKSPACE_CLOSE_REASON_PROCESS_EXITED
+            return PROJECT_CLOSE_REASON_PROCESS_EXITED
         case .sshDisconnected:
-            return WORKSPACE_CLOSE_REASON_SSH_DISCONNECTED
+            return PROJECT_CLOSE_REASON_SSH_DISCONNECTED
         case .appCrashed:
-            return WORKSPACE_CLOSE_REASON_APP_CRASHED
+            return PROJECT_CLOSE_REASON_APP_CRASHED
         case .hostQuit:
-            return WORKSPACE_CLOSE_REASON_HOST_QUIT
+            return PROJECT_CLOSE_REASON_HOST_QUIT
         }
     }
 }
@@ -119,7 +119,7 @@ struct RestoreRecipe: Equatable, Hashable, Sendable {
     var launchCommand: String
 }
 
-struct WorkspaceSessionSummary: Equatable, Hashable, Sendable {
+struct ProjectSessionSummary: Equatable, Hashable, Sendable {
     var id: String
     var title: String
     var transport: SessionTransport
@@ -128,7 +128,7 @@ struct WorkspaceSessionSummary: Equatable, Hashable, Sendable {
     var closeReason: CloseReason
 }
 
-struct WorkspaceClosedSessionSummary: Equatable, Hashable, Sendable {
+struct ProjectClosedSessionSummary: Equatable, Hashable, Sendable {
     var id: String
     var title: String
     var transport: SessionTransport
@@ -139,7 +139,7 @@ struct WorkspaceClosedSessionSummary: Equatable, Hashable, Sendable {
     var restoreRecipe: RestoreRecipe
 }
 
-struct WorkspaceSummary: Equatable, Hashable, Sendable {
+struct ProjectSummary: Equatable, Hashable, Sendable {
     var id: String
     var name: String
     var liveSessions: Int64
@@ -148,88 +148,88 @@ struct WorkspaceSummary: Equatable, Hashable, Sendable {
     var updatedAt: Int64
 }
 
-struct WorkspaceDetail: Equatable, Hashable, Sendable {
+struct ProjectDetail: Equatable, Hashable, Sendable {
     var id: String
     var name: String
     var noteBody: String
-    var liveSessions: [WorkspaceSessionSummary]
-    var closedSessions: [WorkspaceClosedSessionSummary]
+    var liveSessions: [ProjectSessionSummary]
+    var closedSessions: [ProjectClosedSessionSummary]
 }
 
-protocol WorkspaceServiceProtocol: AnyObject, Sendable {
+protocol ProjectServiceProtocol: AnyObject, Sendable {
     func closeSession(sessionId: String, reason: CloseReason, lastCwd: String?) throws
-    func createWorkspace(name: String) throws -> String
-    func listWorkspaceSummaries() throws -> [WorkspaceSummary]
+    func createProject(name: String) throws -> String
+    func listProjectSummaries() throws -> [ProjectSummary]
     func reconcileInterruptedSessions() throws
     func recordSnapshot(sessionId: String, kind: String, cwd: String?, cols: UInt16, rows: UInt16, lines: [String]) throws
-    func startSession(workspaceId: String, transport: SessionTransport, targetLabel: String, title: String, shell: String, initialCwd: String?) throws -> String
-    func updateWorkspaceNote(workspaceId: String, noteBody: String) throws
-    func renameWorkspace(workspaceId: String, newName: String) throws
-    func deleteWorkspace(workspaceId: String) throws
-    func workspaceDetail(workspaceId: String) throws -> WorkspaceDetail
+    func startSession(projectId: String, transport: SessionTransport, targetLabel: String, title: String, shell: String, initialCwd: String?) throws -> String
+    func updateProjectNote(projectId: String, noteBody: String) throws
+    func renameProject(projectId: String, newName: String) throws
+    func deleteProject(projectId: String) throws
+    func projectDetail(projectId: String) throws -> ProjectDetail
 }
 
-final class WorkspaceService: WorkspaceServiceProtocol, @unchecked Sendable {
+final class ProjectService: ProjectServiceProtocol, @unchecked Sendable {
     private let handle: OpaquePointer
 
     init(storePath: String) throws {
-        var status = WORKSPACE_STATUS_OK
-        guard let handle = workspace_service_new(storePath, &status) else {
-            throw WorkspaceServiceError(status: status)
+        var status = PROJECT_STATUS_OK
+        guard let handle = project_service_new(storePath, &status) else {
+            throw ProjectServiceError(status: status)
         }
         self.handle = handle
     }
 
     deinit {
-        workspace_service_free(handle)
+        project_service_free(handle)
     }
 
     func closeSession(sessionId: String, reason: CloseReason, lastCwd: String?) throws {
         try throwIfNeeded(
-            workspace_service_close_session(handle, sessionId, reason.cValue, lastCwd),
+            project_service_close_session(handle, sessionId, reason.cValue, lastCwd),
             defaultError: .closeSessionFailed
         )
     }
 
-    func createWorkspace(name: String) throws -> String {
+    func createProject(name: String) throws -> String {
         var result: UnsafeMutablePointer<CChar>? = nil
-        let status = workspace_service_create_workspace(handle, name, &result)
-        guard status == WORKSPACE_STATUS_OK, let result else {
-            throw WorkspaceServiceError(status: status)
+        let status = project_service_create_project(handle, name, &result)
+        guard status == PROJECT_STATUS_OK, let result else {
+            throw ProjectServiceError(status: status)
         }
-        defer { workspace_free_string(result) }
+        defer { project_free_string(result) }
         return String(cString: result)
     }
 
-    func listWorkspaceSummaries() throws -> [WorkspaceSummary] {
-        var summaries: UnsafeMutablePointer<workspace_summary_t>? = nil
+    func listProjectSummaries() throws -> [ProjectSummary] {
+        var summaries: UnsafeMutablePointer<project_summary_t>? = nil
         var count: Int32 = 0
-        let status = workspace_service_list_workspace_summaries(handle, &summaries, &count)
-        guard status == WORKSPACE_STATUS_OK else {
-            throw WorkspaceServiceError(status: status)
+        let status = project_service_list_project_summaries(handle, &summaries, &count)
+        guard status == PROJECT_STATUS_OK else {
+            throw ProjectServiceError(status: status)
         }
-        defer { workspace_free_summaries(summaries, count) }
+        defer { project_free_summaries(summaries, count) }
 
         guard let summaries, count > 0 else { return [] }
-        return UnsafeBufferPointer(start: summaries, count: Int(count)).map(Self.makeWorkspaceSummary)
+        return UnsafeBufferPointer(start: summaries, count: Int(count)).map(Self.makeProjectSummary)
     }
 
     func reconcileInterruptedSessions() throws {
         try throwIfNeeded(
-            workspace_service_reconcile_interrupted_sessions(handle),
+            project_service_reconcile_interrupted_sessions(handle),
             defaultError: .reconcileInterruptedFailed
         )
     }
 
     func recordSnapshot(sessionId: String, kind: String, cwd: String?, cols: UInt16, rows: UInt16, lines: [String]) throws {
-        let snapshotKind: workspace_snapshot_kind_t = kind == "final"
-            ? WORKSPACE_SNAPSHOT_KIND_FINAL
-            : WORKSPACE_SNAPSHOT_KIND_CHECKPOINT
+        let snapshotKind: project_snapshot_kind_t = kind == "final"
+            ? PROJECT_SNAPSHOT_KIND_FINAL
+            : PROJECT_SNAPSHOT_KIND_CHECKPOINT
 
         try sessionId.withCString { sessionIdPtr in
             try withOptionalCString(cwd) { cwdPtr in
                 try withCStringArray(lines) { rawLines in
-                    var input = workspace_new_snapshot_t(
+                    var input = project_new_snapshot_t(
                         session_id: sessionIdPtr,
                         kind: snapshotKind,
                         cwd: cwdPtr,
@@ -239,7 +239,7 @@ final class WorkspaceService: WorkspaceServiceProtocol, @unchecked Sendable {
                         line_count: Int32(rawLines.count)
                     )
                     try throwIfNeeded(
-                        workspace_service_record_snapshot(handle, &input),
+                        project_service_record_snapshot(handle, &input),
                         defaultError: .recordSnapshotFailed
                     )
                 }
@@ -248,20 +248,20 @@ final class WorkspaceService: WorkspaceServiceProtocol, @unchecked Sendable {
     }
 
     func startSession(
-        workspaceId: String,
+        projectId: String,
         transport: SessionTransport,
         targetLabel: String,
         title: String,
         shell: String,
         initialCwd: String?
     ) throws -> String {
-        try workspaceId.withCString { workspaceIdPtr in
+        try projectId.withCString { projectIdPtr in
             try targetLabel.withCString { targetLabelPtr in
                 try title.withCString { titlePtr in
                     try shell.withCString { shellPtr in
                         try withOptionalCString(initialCwd) { initialCwdPtr in
-                            var input = workspace_new_session_t(
-                                workspace_id: workspaceIdPtr,
+                            var input = project_new_session_t(
+                                project_id: projectIdPtr,
                                 transport: transport.cValue,
                                 target_label: targetLabelPtr,
                                 title: titlePtr,
@@ -269,11 +269,11 @@ final class WorkspaceService: WorkspaceServiceProtocol, @unchecked Sendable {
                                 initial_cwd: initialCwdPtr
                             )
                             var result: UnsafeMutablePointer<CChar>? = nil
-                            let status = workspace_service_start_session(handle, &input, &result)
-                            guard status == WORKSPACE_STATUS_OK, let result else {
-                                throw WorkspaceServiceError(status: status)
+                            let status = project_service_start_session(handle, &input, &result)
+                            guard status == PROJECT_STATUS_OK, let result else {
+                                throw ProjectServiceError(status: status)
                             }
-                            defer { workspace_free_string(result) }
+                            defer { project_free_string(result) }
                             return String(cString: result)
                         }
                     }
@@ -282,50 +282,50 @@ final class WorkspaceService: WorkspaceServiceProtocol, @unchecked Sendable {
         }
     }
 
-    func updateWorkspaceNote(workspaceId: String, noteBody: String) throws {
+    func updateProjectNote(projectId: String, noteBody: String) throws {
         try throwIfNeeded(
-            workspace_service_update_workspace_note(handle, workspaceId, noteBody),
-            defaultError: .updateWorkspaceNoteFailed
+            project_service_update_project_note(handle, projectId, noteBody),
+            defaultError: .updateProjectNoteFailed
         )
     }
 
-    func renameWorkspace(workspaceId: String, newName: String) throws {
+    func renameProject(projectId: String, newName: String) throws {
         try throwIfNeeded(
-            workspace_service_rename_workspace(handle, workspaceId, newName),
-            defaultError: .renameWorkspaceFailed
+            project_service_rename_project(handle, projectId, newName),
+            defaultError: .renameProjectFailed
         )
     }
 
-    func deleteWorkspace(workspaceId: String) throws {
+    func deleteProject(projectId: String) throws {
         try throwIfNeeded(
-            workspace_service_delete_workspace(handle, workspaceId),
-            defaultError: .deleteWorkspaceFailed
+            project_service_delete_project(handle, projectId),
+            defaultError: .deleteProjectFailed
         )
     }
 
-    func workspaceDetail(workspaceId: String) throws -> WorkspaceDetail {
-        var raw = workspace_detail_t()
-        let status = workspace_service_workspace_detail(handle, workspaceId, &raw)
-        guard status == WORKSPACE_STATUS_OK else {
-            workspace_free_detail(&raw)
-            throw WorkspaceServiceError(status: status)
+    func projectDetail(projectId: String) throws -> ProjectDetail {
+        var raw = project_detail_t()
+        let status = project_service_project_detail(handle, projectId, &raw)
+        guard status == PROJECT_STATUS_OK else {
+            project_free_detail(&raw)
+            throw ProjectServiceError(status: status)
         }
-        defer { workspace_free_detail(&raw) }
-        return Self.makeWorkspaceDetail(raw)
+        defer { project_free_detail(&raw) }
+        return Self.makeProjectDetail(raw)
     }
 
-    private func throwIfNeeded(_ status: workspace_status_t, defaultError: WorkspaceServiceError) throws {
-        guard status == WORKSPACE_STATUS_OK else {
-            if status == WORKSPACE_STATUS_OK {
+    private func throwIfNeeded(_ status: project_status_t, defaultError: ProjectServiceError) throws {
+        guard status == PROJECT_STATUS_OK else {
+            if status == PROJECT_STATUS_OK {
                 return
             }
-            throw WorkspaceServiceError(status: status)
+            throw ProjectServiceError(status: status)
         }
         _ = defaultError
     }
 
-    private static func makeWorkspaceSummary(_ raw: workspace_summary_t) -> WorkspaceSummary {
-        WorkspaceSummary(
+    private static func makeProjectSummary(_ raw: project_summary_t) -> ProjectSummary {
+        ProjectSummary(
             id: requiredString(raw.id),
             name: requiredString(raw.name),
             liveSessions: raw.live_sessions,
@@ -335,8 +335,8 @@ final class WorkspaceService: WorkspaceServiceProtocol, @unchecked Sendable {
         )
     }
 
-    private static func makeSessionSummary(_ raw: workspace_session_summary_t) -> WorkspaceSessionSummary {
-        WorkspaceSessionSummary(
+    private static func makeSessionSummary(_ raw: project_session_summary_t) -> ProjectSessionSummary {
+        ProjectSessionSummary(
             id: requiredString(raw.id),
             title: requiredString(raw.title),
             transport: SessionTransport(cValue: raw.transport),
@@ -346,8 +346,8 @@ final class WorkspaceService: WorkspaceServiceProtocol, @unchecked Sendable {
         )
     }
 
-    private static func makeClosedSessionSummary(_ raw: workspace_closed_session_summary_t) -> WorkspaceClosedSessionSummary {
-        WorkspaceClosedSessionSummary(
+    private static func makeClosedSessionSummary(_ raw: project_closed_session_summary_t) -> ProjectClosedSessionSummary {
+        ProjectClosedSessionSummary(
             id: requiredString(raw.id),
             title: requiredString(raw.title),
             transport: SessionTransport(cValue: raw.transport),
@@ -359,22 +359,22 @@ final class WorkspaceService: WorkspaceServiceProtocol, @unchecked Sendable {
         )
     }
 
-    private static func makeWorkspaceDetail(_ raw: workspace_detail_t) -> WorkspaceDetail {
-        let liveSessions: [WorkspaceSessionSummary]
+    private static func makeProjectDetail(_ raw: project_detail_t) -> ProjectDetail {
+        let liveSessions: [ProjectSessionSummary]
         if let sessions = raw.live_sessions, raw.live_session_count > 0 {
             liveSessions = UnsafeBufferPointer(start: sessions, count: Int(raw.live_session_count)).map(makeSessionSummary)
         } else {
             liveSessions = []
         }
 
-        let closedSessions: [WorkspaceClosedSessionSummary]
+        let closedSessions: [ProjectClosedSessionSummary]
         if let sessions = raw.closed_sessions, raw.closed_session_count > 0 {
             closedSessions = UnsafeBufferPointer(start: sessions, count: Int(raw.closed_session_count)).map(makeClosedSessionSummary)
         } else {
             closedSessions = []
         }
 
-        return WorkspaceDetail(
+        return ProjectDetail(
             id: requiredString(raw.id),
             name: requiredString(raw.name),
             noteBody: requiredString(raw.note_body),
@@ -383,7 +383,7 @@ final class WorkspaceService: WorkspaceServiceProtocol, @unchecked Sendable {
         )
     }
 
-    private static func makeTerminalGrid(_ raw: workspace_terminal_grid_t) -> TerminalGrid {
+    private static func makeTerminalGrid(_ raw: project_terminal_grid_t) -> TerminalGrid {
         let lines: [String]
         if let rawLines = raw.lines, raw.line_count > 0 {
             lines = UnsafeBufferPointer(

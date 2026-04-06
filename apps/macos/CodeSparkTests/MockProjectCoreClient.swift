@@ -1,21 +1,21 @@
 import Foundation
 @testable import CodeSpark
 
-final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
-    private let summaries: [WorkspaceSummaryViewData]
-    private var detailsByID: [String: WorkspaceDetailViewData]
+final class MockProjectCoreClient: ProjectCoreClientProtocol {
+    private let summaries: [ProjectSummaryViewData]
+    private var detailsByID: [String: ProjectDetailViewData]
     private let detailErrorsByID: [String: Error]
     private let detailLatencyByID: [String: UInt64]
     private let noteUpdateError: Error?
     private let noteUpdateLatency: UInt64?
     private(set) var closedSessionIDs: [String] = []
-    private(set) var renamedWorkspaces: [(id: String, newName: String)] = []
-    private(set) var deletedWorkspaceIDs: [String] = []
+    private(set) var renamedProjects: [(id: String, newName: String)] = []
+    private(set) var deletedProjectIDs: [String] = []
     private var sessionCounter = 0
 
     init(
-        summaries: [WorkspaceSummaryViewData],
-        details: [WorkspaceDetailViewData] = [],
+        summaries: [ProjectSummaryViewData],
+        details: [ProjectDetailViewData] = [],
         detailErrorsByID: [String: Error] = [:],
         detailLatencyByID: [String: UInt64] = [:],
         noteUpdateError: Error? = nil,
@@ -29,20 +29,20 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
         self.noteUpdateLatency = noteUpdateLatency
     }
 
-    func createWorkspace(name: String) async throws -> String {
-        "mock-workspace-id"
+    func createProject(name: String) async throws -> String {
+        "mock-project-id"
     }
 
-    func startSession(workspaceId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String {
+    func startSession(projectId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String {
         sessionCounter += 1
         return "mock-session-\(sessionCounter)"
     }
 
-    func listWorkspaceSummaries() async throws -> [WorkspaceSummaryViewData] {
+    func listProjectSummaries() async throws -> [ProjectSummaryViewData] {
         summaries
     }
 
-    func workspaceDetail(id: String) async throws -> WorkspaceDetailViewData {
+    func projectDetail(id: String) async throws -> ProjectDetailViewData {
         if let detailLatency = detailLatencyByID[id] {
             try? await Task.sleep(nanoseconds: detailLatency)
         }
@@ -57,7 +57,7 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
         return detail
     }
 
-    func updateWorkspaceNote(id: String, noteBody: String) async throws {
+    func updateProjectNote(id: String, noteBody: String) async throws {
         if let noteUpdateLatency {
             try? await Task.sleep(nanoseconds: noteUpdateLatency)
         }
@@ -87,24 +87,24 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
 
     func updateSessionTitle(sessionId: String, newTitle: String) async throws { }
 
-    func renameWorkspace(id: String, newName: String) async throws {
-        renamedWorkspaces.append((id: id, newName: newName))
+    func renameProject(id: String, newName: String) async throws {
+        renamedProjects.append((id: id, newName: newName))
     }
 
-    func deleteWorkspace(id: String) async throws {
-        deletedWorkspaceIDs.append(id)
+    func deleteProject(id: String) async throws {
+        deletedProjectIDs.append(id)
     }
 
     private static func makeDetailsMap(
-        _ details: [WorkspaceDetailViewData]
-    ) -> [String: WorkspaceDetailViewData] {
+        _ details: [ProjectDetailViewData]
+    ) -> [String: ProjectDetailViewData] {
         Dictionary(uniqueKeysWithValues: details.map { ($0.id, $0) })
     }
 
-    static func workspaceWithOneLiveSession() -> MockWorkspaceCoreClient {
-        MockWorkspaceCoreClient(
+    static func projectWithOneLiveSession() -> MockProjectCoreClient {
+        MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(
+                ProjectSummaryViewData(
                     id: "ws-release",
                     name: "release",
                     liveSessions: 1,
@@ -113,7 +113,7 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
                     liveSessionDetails: []
                 )
             ],
-            details: [WorkspaceDetailViewData(
+            details: [ProjectDetailViewData(
                 id: "ws-release",
                 name: "release",
                 noteBody: "check prod logs",
@@ -133,10 +133,10 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
         )
     }
 
-    static func workspaceWithInterruptedSession() -> MockWorkspaceCoreClient {
-        MockWorkspaceCoreClient(
+    static func projectWithInterruptedSession() -> MockProjectCoreClient {
+        MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(
+                ProjectSummaryViewData(
                     id: "ws-spark3",
                     name: "spark3",
                     liveSessions: 0,
@@ -145,7 +145,7 @@ final class MockWorkspaceCoreClient: WorkspaceCoreClientProtocol {
                     liveSessionDetails: []
                 )
             ],
-            details: [WorkspaceDetailViewData(
+            details: [ProjectDetailViewData(
                 id: "ws-spark3",
                 name: "spark3",
                 noteBody: "resume after crash",

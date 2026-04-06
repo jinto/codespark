@@ -5,33 +5,33 @@ import UserNotifications
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var workspaces: [WorkspaceSummaryViewData] = []
-    @Published var selectedWorkspaceID: String?
-    @Published var selectedWorkspace: WorkspaceDetailViewData?
+    @Published var projects: [ProjectSummaryViewData] = []
+    @Published var selectedProjectID: String?
+    @Published var selectedProject: ProjectDetailViewData?
     @Published var noteDraft = ""
     @Published var activeSessionID: String?
     @Published var liveSessions: [SessionViewData] = []
     @Published var closedSessions: [ClosedSessionViewData] = []
 
-    /// All sessions across all workspaces — keeps Ghostty surfaces alive during workspace switches
+    /// All sessions across all projects — keeps Ghostty surfaces alive during project switches
     @Published private(set) var allSessions: [SessionViewData] = []
     @Published var loadErrorMessage: String?
     @Published var noteSaveErrorMessage: String?
     @Published var idleSessionIDs: Set<String> = []
     @Published var pendingCloseSessionID: String?
-    @Published var pendingCloseWorkspaceID: String?
+    @Published var pendingCloseProjectID: String?
     @Published var pendingRestoreSessions: [ClosedSessionViewData] = []
-    @Published var hiddenWorkspaceIDs: Set<String> = []
-    @Published var hiddenWorkspaceNames: [String: String] = [:]
+    @Published var hiddenProjectIDs: Set<String> = []
+    @Published var hiddenProjectNames: [String: String] = [:]
     @Published var gitBranches: [String: String] = [:]
     @Published var hookNeedsInputCwds: Set<String> = []
-    @Published var acknowledgedWorkspaceIDs: Set<String> = []
-    @Published var hookSnippets: [String: String] = [:]  // workspaceID → last output snippet
+    @Published var acknowledgedProjectIDs: Set<String> = []
+    @Published var hookSnippets: [String: String] = [:]  // projectID → last output snippet
     @Published var claudeHooksStatus: ClaudeHooksStatus = .installed
 
     var hookServer: HookSocketServer?
 
-    private let core: WorkspaceCoreClientProtocol
+    private let core: ProjectCoreClientProtocol
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
     private var hosts: [String: any TerminalHostProtocol] = [:]
     private var detailTask: Task<Void, Never>?
@@ -42,7 +42,7 @@ final class AppModel: ObservableObject {
     private let gitBranchService = GitBranchService()
 
     init(
-        core: WorkspaceCoreClientProtocol,
+        core: ProjectCoreClientProtocol,
         terminalFactory: @escaping (SessionViewData) -> any TerminalHostProtocol = { _ in NoOpTerminalHost() }
     ) {
         self.core = core
@@ -62,9 +62,9 @@ final class AppModel: ObservableObject {
     }
 
     func attachLiveSessions() async {
-        guard let workspace = selectedWorkspace else { return }
-        liveSessions = workspace.liveSessions
-        closedSessions = workspace.closedSessions
+        guard let project = selectedProject else { return }
+        liveSessions = project.liveSessions
+        closedSessions = project.closedSessions
         for session in liveSessions where hosts[session.id] == nil {
             if !allSessions.contains(where: { $0.id == session.id }) {
                 allSessions.append(session)
@@ -83,66 +83,66 @@ final class AppModel: ObservableObject {
                 try await core.reconcileInterruptedSessions()
                 hasReconciledOnLaunch = true
             }
-            let allWorkspaces = try await core.listWorkspaceSummaries()
-            let workspaces = allWorkspaces.filter { !hiddenWorkspaceIDs.contains($0.id) }
-            self.workspaces = workspaces
+            let allProjects = try await core.listProjectSummaries()
+            let projects = allProjects.filter { !hiddenProjectIDs.contains($0.id) }
+            self.projects = projects
 
-            if workspaces.isEmpty {
-                let wsId = try await core.createWorkspace(name: "Default")
+            if projects.isEmpty {
+                let projId = try await core.createProject(name: "Default")
                 let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
                 let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
                 _ = try await core.startSession(
-                    workspaceId: wsId,
+                    projectId: projId,
                     transport: "local",
                     targetLabel: "local",
                     title: "Terminal",
                     shell: shell,
                     initialCwd: homeDir
                 )
-                let refreshed = try await core.listWorkspaceSummaries()
-                self.workspaces = refreshed
+                let refreshed = try await core.listProjectSummaries()
+                self.projects = refreshed
             }
 
-            guard !workspaces.isEmpty else {
+            guard !projects.isEmpty else {
                 cancelInflightWork()
-                selectedWorkspaceID = nil
+                selectedProjectID = nil
                 clearDetailState()
                 loadErrorMessage = nil
                 return
             }
 
-            let resolvedWorkspaceID = if let selectedWorkspaceID,
-                                         workspaces.contains(where: { $0.id == selectedWorkspaceID }) {
-                selectedWorkspaceID
+            let resolvedProjectID = if let selectedProjectID,
+                                       projects.contains(where: { $0.id == selectedProjectID }) {
+                selectedProjectID
             } else {
-                workspaces[0].id
+                projects[0].id
             }
 
-            await selectWorkspace(id: resolvedWorkspaceID)
+            await selectProject(id: resolvedProjectID)
         } catch {
             cancelInflightWork()
-            workspaces = []
-            selectedWorkspaceID = nil
+            projects = []
+            selectedProjectID = nil
             clearDetailState()
             loadErrorMessage = error.localizedDescription
         }
     }
 
-    func selectWorkspace(id: String?) async {
+    func selectProject(id: String?) async {
         cancelInflightWork()
 
         guard let id else {
-            selectedWorkspaceID = nil
+            selectedProjectID = nil
             clearDetailState()
             loadErrorMessage = nil
             return
         }
 
-        selectedWorkspaceID = id
+        selectedProjectID = id
 
         let task = Task {
             do {
-                let detail = try await core.workspaceDetail(id: id)
+                let detail = try await core.projectDetail(id: id)
                 guard !Task.isCancelled else { return }
                 apply(detail: detail)
                 await attachLiveSessions()
@@ -158,16 +158,16 @@ final class AppModel: ObservableObject {
     }
 
     func saveNote() async {
-        guard var workspace = selectedWorkspace else {
+        guard var project = selectedProject else {
             return
         }
 
         let task = Task {
             do {
-                try await core.updateWorkspaceNote(id: workspace.id, noteBody: noteDraft)
+                try await core.updateProjectNote(id: project.id, noteBody: noteDraft)
                 guard !Task.isCancelled else { return }
-                workspace.noteBody = noteDraft
-                selectedWorkspace = workspace
+                project.noteBody = noteDraft
+                selectedProject = project
                 noteSaveErrorMessage = nil
             } catch {
                 guard !Task.isCancelled else { return }
@@ -183,8 +183,8 @@ final class AppModel: ObservableObject {
         saveTask?.cancel()
     }
 
-    private func apply(detail: WorkspaceDetailViewData) {
-        selectedWorkspace = detail
+    private func apply(detail: ProjectDetailViewData) {
+        selectedProject = detail
         noteDraft = detail.noteBody
         liveSessions = detail.liveSessions
         pendingRestoreSessions = detail.closedSessions
@@ -223,26 +223,26 @@ final class AppModel: ObservableObject {
     }
 
     func recoverLocalSession(from closed: ClosedSessionViewData) async throws {
-        guard let workspaceID = selectedWorkspaceID else { return }
+        guard let projectID = selectedProjectID else { return }
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let title = closed.lastCwd.map { ($0 as NSString).lastPathComponent } ?? "Terminal"
         let sessionID = try await startAndAttachSession(
-            workspaceID: workspaceID,
+            projectID: projectID,
             transport: "local",
             targetLabel: "local",
             title: title,
             shell: shell,
             cwd: closed.lastCwd
         )
-        guard selectedWorkspaceID == workspaceID else { return }
+        guard selectedProjectID == projectID else { return }
         activeSessionID = sessionID
     }
 
     func recoverSSHSession(from closed: ClosedSessionViewData) async throws {
-        guard let workspaceID = selectedWorkspaceID else { return }
+        guard let projectID = selectedProjectID else { return }
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let sessionID = try await startAndAttachSession(
-            workspaceID: workspaceID,
+            projectID: projectID,
             transport: "ssh",
             targetLabel: closed.targetLabel,
             title: closed.title,
@@ -250,7 +250,7 @@ final class AppModel: ObservableObject {
             cwd: closed.lastCwd,
             command: closed.restoreRecipe.launchCommand
         )
-        guard selectedWorkspaceID == workspaceID else { return }
+        guard selectedProjectID == projectID else { return }
         activeSessionID = sessionID
     }
 
@@ -289,12 +289,12 @@ final class AppModel: ObservableObject {
         pendingRestoreSessions = []
     }
 
-    // MARK: - Workspace lifecycle
+    // MARK: - Project lifecycle
 
-    func createWorkspace(name: String) async {
+    func createProject(name: String) async {
         do {
-            let newID = try await core.createWorkspace(name: name)
-            let newWorkspace = WorkspaceSummaryViewData(
+            let newID = try await core.createProject(name: name)
+            let newProject = ProjectSummaryViewData(
                 id: newID,
                 name: name,
                 liveSessions: 0,
@@ -302,84 +302,84 @@ final class AppModel: ObservableObject {
                 hasInterruptedSessions: false,
                 liveSessionDetails: []
             )
-            if let activeIndex = workspaces.firstIndex(where: { $0.id == selectedWorkspaceID }) {
-                workspaces.insert(newWorkspace, at: activeIndex + 1)
+            if let activeIndex = projects.firstIndex(where: { $0.id == selectedProjectID }) {
+                projects.insert(newProject, at: activeIndex + 1)
             } else {
-                workspaces.append(newWorkspace)
+                projects.append(newProject)
             }
-            await selectWorkspace(id: newID)
+            await selectProject(id: newID)
         } catch {
             loadErrorMessage = error.localizedDescription
         }
     }
 
-    func renameWorkspace(id: String, newName: String) async {
-        if let index = workspaces.firstIndex(where: { $0.id == id }) {
-            workspaces[index].name = newName
+    func renameProject(id: String, newName: String) async {
+        if let index = projects.firstIndex(where: { $0.id == id }) {
+            projects[index].name = newName
         }
-        if selectedWorkspace?.id == id {
-            selectedWorkspace = selectedWorkspace.map {
-                WorkspaceDetailViewData(id: $0.id, name: newName, noteBody: $0.noteBody, liveSessions: $0.liveSessions, closedSessions: $0.closedSessions)
+        if selectedProject?.id == id {
+            selectedProject = selectedProject.map {
+                ProjectDetailViewData(id: $0.id, name: newName, noteBody: $0.noteBody, liveSessions: $0.liveSessions, closedSessions: $0.closedSessions)
             }
         }
-        try? await core.renameWorkspace(id: id, newName: newName)
+        try? await core.renameProject(id: id, newName: newName)
     }
 
-    /// Returns the adjacent workspace ID (next preferred, then previous).
-    private func adjacentWorkspaceID(excluding id: String) -> String? {
-        guard let index = workspaces.firstIndex(where: { $0.id == id }) else { return workspaces.first?.id }
-        if index + 1 < workspaces.count { return workspaces[index + 1].id }
-        if index > 0 { return workspaces[index - 1].id }
+    /// Returns the adjacent project ID (next preferred, then previous).
+    private func adjacentProjectID(excluding id: String) -> String? {
+        guard let index = projects.firstIndex(where: { $0.id == id }) else { return projects.first?.id }
+        if index + 1 < projects.count { return projects[index + 1].id }
+        if index > 0 { return projects[index - 1].id }
         return nil
     }
 
-    func closeWorkspace(id: String) async {
-        let nextID = adjacentWorkspaceID(excluding: id)
+    func closeProject(id: String) async {
+        let nextID = adjacentProjectID(excluding: id)
 
-        if selectedWorkspaceID == id {
+        if selectedProjectID == id {
             for session in liveSessions {
                 closeSession(id: session.id)
             }
         }
 
-        if let ws = workspaces.first(where: { $0.id == id }) {
-            hiddenWorkspaceNames[id] = ws.name
+        if let proj = projects.first(where: { $0.id == id }) {
+            hiddenProjectNames[id] = proj.name
         }
-        hiddenWorkspaceIDs.insert(id)
-        workspaces.removeAll(where: { $0.id == id })
+        hiddenProjectIDs.insert(id)
+        projects.removeAll(where: { $0.id == id })
 
-        if selectedWorkspaceID == id {
-            await selectWorkspace(id: nextID)
+        if selectedProjectID == id {
+            await selectProject(id: nextID)
         }
     }
 
-    func reopenWorkspace(id: String) async {
-        hiddenWorkspaceIDs.remove(id)
-        hiddenWorkspaceNames.removeValue(forKey: id)
+    func reopenProject(id: String) async {
+        hiddenProjectIDs.remove(id)
+        hiddenProjectNames.removeValue(forKey: id)
         await load()
-        await selectWorkspace(id: id)
+        await selectProject(id: id)
     }
 
-    func deleteWorkspace(id: String) async {
-        let nextID = adjacentWorkspaceID(excluding: id)
+    func deleteProject(id: String) async {
+        let nextID = adjacentProjectID(excluding: id)
 
-        if selectedWorkspaceID == id {
+        if selectedProjectID == id {
             for session in liveSessions {
                 closeSession(id: session.id)
             }
         }
 
-        workspaces.removeAll(where: { $0.id == id })
+        projects.removeAll(where: { $0.id == id })
 
         var deleteError: String?
         do {
-            try await core.deleteWorkspace(id: id)
+            try await core.deleteProject(id: id)
         } catch {
             deleteError = error.localizedDescription
         }
 
-        if selectedWorkspaceID == id {
-            await selectWorkspace(id: nextID)
+        if selectedProjectID == id {
+            await selectProject(id: nextID)
         }
 
         if let deleteError {
@@ -391,7 +391,7 @@ final class AppModel: ObservableObject {
 
     @discardableResult
     private func startAndAttachSession(
-        workspaceID: String,
+        projectID: String,
         transport: String,
         targetLabel: String,
         title: String,
@@ -400,7 +400,7 @@ final class AppModel: ObservableObject {
         command: String? = nil
     ) async throws -> String {
         let sessionID = try await core.startSession(
-            workspaceId: workspaceID,
+            projectId: projectID,
             transport: transport,
             targetLabel: targetLabel,
             title: title,
@@ -426,12 +426,12 @@ final class AppModel: ObservableObject {
     }
 
     func newSession() async {
-        guard let workspaceID = selectedWorkspaceID else { return }
+        guard let projectID = selectedProjectID else { return }
         let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         do {
             let sessionID = try await startAndAttachSession(
-                workspaceID: workspaceID,
+                projectID: projectID,
                 transport: "local",
                 targetLabel: "local",
                 title: "Terminal",
@@ -511,12 +511,12 @@ final class AppModel: ObservableObject {
             guard sessionID != activeSessionID else { continue }
             guard let session = liveSessions.first(where: { $0.id == sessionID }) else { continue }
 
-            let wsName = workspaces.first { ws in
-                ws.liveSessionDetails.contains { $0.id == sessionID }
+            let projName = projects.first { proj in
+                proj.liveSessionDetails.contains { $0.id == sessionID }
             }?.name ?? "Terminal"
 
             let content = UNMutableNotificationContent()
-            content.title = wsName
+            content.title = projName
             content.body = "\(session.title) is waiting for input"
             content.sound = .default
             let request = UNNotificationRequest(
@@ -529,7 +529,7 @@ final class AppModel: ObservableObject {
     }
 
     private func refreshGitBranches() {
-        let paths = workspaces.flatMap { $0.liveSessionDetails.compactMap(\.lastCwd) }
+        let paths = projects.flatMap { $0.liveSessionDetails.compactMap(\.lastCwd) }
         guard !paths.isEmpty else { return }
         Task {
             await gitBranchService.refreshBranches(for: paths)
@@ -547,17 +547,17 @@ final class AppModel: ObservableObject {
         host.markOutput()
     }
 
-    func workspaceStatus(for workspace: WorkspaceSummaryViewData) -> WorkspaceStatus {
-        if workspace.hasInterruptedSessions { return .needsInput }
+    func projectStatus(for project: ProjectSummaryViewData) -> ProjectStatus {
+        if project.hasInterruptedSessions { return .needsInput }
 
         // Hook-based: any live session whose cwd is waiting for input
-        let hookNeedsInput = workspace.liveSessionDetails.contains { session in
+        let hookNeedsInput = project.liveSessionDetails.contains { session in
             session.lastCwd.map { hookNeedsInputCwds.contains($0) } ?? false
         }
         if hookNeedsInput { return .needsInput }
 
-        if workspace.liveSessions > 0 {
-            let sessionIDs = Set(workspace.liveSessionDetails.map(\.id))
+        if project.liveSessions > 0 {
+            let sessionIDs = Set(project.liveSessionDetails.map(\.id))
             let allIdle = !sessionIDs.isEmpty && sessionIDs.isSubset(of: idleSessionIDs)
             return allIdle ? .idle : .running
         }
@@ -571,29 +571,29 @@ final class AppModel: ObservableObject {
         switch event.hookEventName {
         case "Stop":
             hookNeedsInputCwds.insert(cwd)
-            if let ws = workspaceForCwd(cwd) {
-                captureSnippet(for: ws)
-                if ws.id != selectedWorkspaceID {
-                    sendHookNotification(for: ws, snippet: hookSnippets[ws.id])
+            if let proj = projectForCwd(cwd) {
+                captureSnippet(for: proj)
+                if proj.id != selectedProjectID {
+                    sendHookNotification(for: proj, snippet: hookSnippets[proj.id])
                 }
             }
         case "UserPromptSubmit":
             hookNeedsInputCwds.remove(cwd)
-            if let ws = workspaceForCwd(cwd) {
-                acknowledgedWorkspaceIDs.remove(ws.id)
-                hookSnippets.removeValue(forKey: ws.id)
+            if let proj = projectForCwd(cwd) {
+                acknowledgedProjectIDs.remove(proj.id)
+                hookSnippets.removeValue(forKey: proj.id)
             }
         case "SessionStart":
             hookNeedsInputCwds.remove(cwd)
         case "SessionEnd":
             hookNeedsInputCwds.remove(cwd)
         case "Notification":
-            if let ws = workspaceForCwd(cwd) {
+            if let proj = projectForCwd(cwd) {
                 let snippet = event.message ?? event.title ?? "Claude is waiting for your input"
-                hookSnippets[ws.id] = String(snippet.prefix(120))
+                hookSnippets[proj.id] = String(snippet.prefix(120))
                 hookNeedsInputCwds.insert(cwd)
-                if ws.id != selectedWorkspaceID {
-                    sendHookNotification(for: ws, snippet: snippet)
+                if proj.id != selectedProjectID {
+                    sendHookNotification(for: proj, snippet: snippet)
                 }
             }
         default:
@@ -601,9 +601,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func captureSnippet(for workspace: WorkspaceSummaryViewData) {
-        // Find the host for this workspace's session and extract last non-empty line
-        for session in workspace.liveSessionDetails {
+    private func captureSnippet(for project: ProjectSummaryViewData) {
+        // Find the host for this project's session and extract last non-empty line
+        for session in project.liveSessionDetails {
             guard let host = hosts[session.id],
                   let snapshot = host.extractSnapshot() else { continue }
             let lastLine = snapshot.lines
@@ -611,40 +611,40 @@ final class AppModel: ObservableObject {
                 .first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }?
                 .trimmingCharacters(in: .whitespaces)
             if let lastLine, !lastLine.isEmpty {
-                hookSnippets[workspace.id] = String(lastLine.prefix(80))
+                hookSnippets[project.id] = String(lastLine.prefix(80))
                 return
             }
         }
     }
 
-    func acknowledgeWorkspace(_ id: String) {
-        acknowledgedWorkspaceIDs.insert(id)
+    func acknowledgeProject(_ id: String) {
+        acknowledgedProjectIDs.insert(id)
         UNUserNotificationCenter.current()
             .removeDeliveredNotifications(withIdentifiers: ["hook-needsinput-\(id)"])
     }
 
-    private func workspaceForCwd(_ cwd: String) -> WorkspaceSummaryViewData? {
+    private func projectForCwd(_ cwd: String) -> ProjectSummaryViewData? {
         // Exact match first
-        if let ws = workspaces.first(where: { ws in
-            ws.liveSessionDetails.contains { $0.lastCwd == cwd }
-        }) { return ws }
+        if let proj = projects.first(where: { proj in
+            proj.liveSessionDetails.contains { $0.lastCwd == cwd }
+        }) { return proj }
         // Prefix fallback
-        return workspaces.first(where: { ws in
-            ws.liveSessionDetails.contains { session in
+        return projects.first(where: { proj in
+            proj.liveSessionDetails.contains { session in
                 guard let lastCwd = session.lastCwd else { return false }
                 return cwd.hasPrefix(lastCwd) || lastCwd.hasPrefix(cwd)
             }
         })
     }
 
-    private func sendHookNotification(for workspace: WorkspaceSummaryViewData, snippet: String? = nil) {
-        guard !acknowledgedWorkspaceIDs.contains(workspace.id) else { return }
+    private func sendHookNotification(for project: ProjectSummaryViewData, snippet: String? = nil) {
+        guard !acknowledgedProjectIDs.contains(project.id) else { return }
         let content = UNMutableNotificationContent()
-        content.title = workspace.name
+        content.title = project.name
         content.body = snippet ?? "Claude is waiting for your input"
         content.sound = .default
         let request = UNNotificationRequest(
-            identifier: "hook-needsinput-\(workspace.id)",
+            identifier: "hook-needsinput-\(project.id)",
             content: content,
             trigger: nil
         )
@@ -652,7 +652,7 @@ final class AppModel: ObservableObject {
     }
 
     private func clearDetailState() {
-        selectedWorkspace = nil
+        selectedProject = nil
         noteDraft = ""
         activeSessionID = nil
         liveSessions = []

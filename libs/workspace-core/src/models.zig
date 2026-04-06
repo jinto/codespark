@@ -66,7 +66,7 @@ pub const CloseReason = enum {
 };
 
 pub const TimelineEventKind = enum {
-    workspace_created,
+    project_created,
     session_started,
     session_closed,
     session_interrupted,
@@ -75,7 +75,7 @@ pub const TimelineEventKind = enum {
 
     pub fn asText(self: TimelineEventKind) []const u8 {
         return switch (self) {
-            .workspace_created => "workspace_created",
+            .project_created => "project_created",
             .session_started => "session_started",
             .session_closed => "session_closed",
             .session_interrupted => "session_interrupted",
@@ -86,7 +86,7 @@ pub const TimelineEventKind = enum {
 };
 
 pub const NewSession = struct {
-    workspace_id: []const u8,
+    project_id: []const u8,
     transport: SessionTransport,
     target_label: []const u8,
     title: []const u8,
@@ -186,7 +186,7 @@ pub const ClosedSessionSummary = struct {
     }
 };
 
-pub const WorkspaceSummary = struct {
+pub const ProjectSummary = struct {
     id: []u8,
     name: []u8,
     live_sessions: i64,
@@ -195,7 +195,7 @@ pub const WorkspaceSummary = struct {
     has_interrupted_sessions: bool,
     updated_at: i64,
 
-    pub fn deinit(self: *WorkspaceSummary, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *ProjectSummary, allocator: std.mem.Allocator) void {
         allocator.free(self.id);
         allocator.free(self.name);
         for (self.live_session_details) |*session| session.deinit(allocator);
@@ -204,14 +204,14 @@ pub const WorkspaceSummary = struct {
     }
 };
 
-pub const WorkspaceDetail = struct {
+pub const ProjectDetail = struct {
     id: []u8,
     name: []u8,
     note_body: []u8,
     live_sessions: []SessionSummary,
     closed_sessions: []ClosedSessionSummary,
 
-    pub fn deinit(self: *WorkspaceDetail, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *ProjectDetail, allocator: std.mem.Allocator) void {
         allocator.free(self.id);
         allocator.free(self.name);
         allocator.free(self.note_body);

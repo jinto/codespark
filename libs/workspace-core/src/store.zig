@@ -34,11 +34,11 @@ pub const Store = struct {
         _ = sqlite.sqlite3_close(self.db);
     }
 
-    pub fn createWorkspace(self: *Store, allocator: std.mem.Allocator, name: []const u8) StoreError![]u8 {
+    pub fn createProject(self: *Store, allocator: std.mem.Allocator, name: []const u8) StoreError![]u8 {
         const updated_at = now();
         var stmt = try Statement.init(
             self.db,
-            "insert into workspaces (id, name, note_body, updated_at, last_opened_at)\n" ++
+            "insert into projects (id, name, note_body, updated_at, last_opened_at)\n" ++
                 " values (lower(hex(randomblob(16))), ?1, '', ?2, ?2)",
         );
         defer stmt.deinit();
@@ -48,18 +48,18 @@ pub const Store = struct {
 
         var select_stmt = try Statement.init(
             self.db,
-            "select id from workspaces where rowid = last_insert_rowid()",
+            "select id from projects where rowid = last_insert_rowid()",
         );
         defer select_stmt.deinit();
         const has_row = try select_stmt.step();
         if (!has_row) return error.Database;
-        const workspace_id = try select_stmt.columnOwnedText(allocator, 0);
-        errdefer allocator.free(workspace_id);
-        self.recordTimelineEvent(workspace_id, null, .workspace_created) catch {};
-        return workspace_id;
+        const project_id = try select_stmt.columnOwnedText(allocator, 0);
+        errdefer allocator.free(project_id);
+        self.recordTimelineEvent(project_id, null, .project_created) catch {};
+        return project_id;
     }
 
-    pub fn listWorkspaceSummaries(self: *Store, allocator: std.mem.Allocator) StoreError![]models.WorkspaceSummary {
+    pub fn listProjectSummaries(self: *Store, allocator: std.mem.Allocator) StoreError![]models.ProjectSummary {
         var stmt = try Statement.init(
             self.db,
             "select\n" ++
@@ -69,29 +69,29 @@ pub const Store = struct {
                 "    coalesce(sum(case when s.state = 'live' then 1 else 0 end), 0),\n" ++
                 "    coalesce(sum(case when s.state in ('closed','exited','lost','crashed') then 1 else 0 end), 0),\n" ++
                 "    coalesce(max(case when s.state = 'interrupted' then 1 else 0 end), 0)\n" ++
-                " from workspaces w\n" ++
-                " left join sessions s on s.workspace_id = w.id\n" ++
+                " from projects w\n" ++
+                " left join sessions s on s.project_id = w.id\n" ++
                 " group by w.id, w.name, w.updated_at\n" ++
                 " order by w.updated_at desc, w.rowid desc",
         );
         defer stmt.deinit();
 
-        var items: std.ArrayList(models.WorkspaceSummary) = .empty;
+        var items: std.ArrayList(models.ProjectSummary) = .empty;
         defer items.deinit(allocator);
 
         while (try stmt.step()) {
-            const workspace_id = try stmt.columnOwnedText(allocator, 0);
-            errdefer allocator.free(workspace_id);
+            const project_id = try stmt.columnOwnedText(allocator, 0);
+            errdefer allocator.free(project_id);
             const name = try stmt.columnOwnedText(allocator, 1);
             errdefer allocator.free(name);
-            const live_session_details = try self.sessionsForWorkspace(allocator, workspace_id, .live);
+            const live_session_details = try self.sessionsForProject(allocator, project_id, .live);
             errdefer {
                 for (live_session_details) |*session| session.deinit(allocator);
                 allocator.free(live_session_details);
             }
 
             try items.append(allocator, .{
-                .id = workspace_id,
+                .id = project_id,
                 .name = name,
                 .updated_at = stmt.columnInt64(2),
                 .live_sessions = stmt.columnInt64(3),
@@ -104,44 +104,44 @@ pub const Store = struct {
         return items.toOwnedSlice(allocator);
     }
 
-    pub fn updateWorkspaceNote(self: *Store, workspace_id: []const u8, note_body: []const u8) StoreError!void {
+    pub fn updateProjectNote(self: *Store, project_id: []const u8, note_body: []const u8) StoreError!void {
         const updated_at = now();
         var stmt = try Statement.init(
             self.db,
-            "update workspaces\n" ++
+            "update projects\n" ++
                 " set note_body = ?2, updated_at = ?3\n" ++
                 " where id = ?1",
         );
         defer stmt.deinit();
-        try stmt.bindText(1, workspace_id);
+        try stmt.bindText(1, project_id);
         try stmt.bindText(2, note_body);
         try stmt.bindInt64(3, updated_at);
         try stmt.expectDone();
-        self.recordTimelineEvent(workspace_id, null, .note_updated) catch {};
+        self.recordTimelineEvent(project_id, null, .note_updated) catch {};
     }
 
-    pub fn renameWorkspace(self: *Store, workspace_id: []const u8, new_name: []const u8) StoreError!void {
+    pub fn renameProject(self: *Store, project_id: []const u8, new_name: []const u8) StoreError!void {
         const updated_at = now();
         var stmt = try Statement.init(
             self.db,
-            "update workspaces\n" ++
+            "update projects\n" ++
                 " set name = ?2, updated_at = ?3\n" ++
                 " where id = ?1",
         );
         defer stmt.deinit();
-        try stmt.bindText(1, workspace_id);
+        try stmt.bindText(1, project_id);
         try stmt.bindText(2, new_name);
         try stmt.bindInt64(3, updated_at);
         try stmt.expectDone();
     }
 
-    pub fn deleteWorkspace(self: *Store, workspace_id: []const u8) StoreError!void {
+    pub fn deleteProject(self: *Store, project_id: []const u8) StoreError!void {
         var stmt = try Statement.init(
             self.db,
-            "delete from workspaces where id = ?1",
+            "delete from projects where id = ?1",
         );
         defer stmt.deinit();
-        try stmt.bindText(1, workspace_id);
+        try stmt.bindText(1, project_id);
         try stmt.expectDone();
     }
 
@@ -162,7 +162,7 @@ pub const Store = struct {
         var stmt = try Statement.init(
             self.db,
             "insert into sessions (\n" ++
-                "    id, workspace_id, transport, target_label, title, shell,\n" ++
+                "    id, project_id, transport, target_label, title, shell,\n" ++
                 "    initial_cwd, last_cwd, state, close_reason, exit_status,\n" ++
                 "    updated_at, created_at\n" ++
                 " )\n" ++
@@ -173,7 +173,7 @@ pub const Store = struct {
                 " )",
         );
         defer stmt.deinit();
-        try stmt.bindText(1, input.workspace_id);
+        try stmt.bindText(1, input.project_id);
         try stmt.bindText(2, input.transport.asSql());
         try stmt.bindText(3, input.target_label);
         try stmt.bindText(4, input.title);
@@ -192,8 +192,8 @@ pub const Store = struct {
         const session_id = try select_stmt.columnOwnedText(allocator, 0);
         errdefer allocator.free(session_id);
 
-        try self.touchWorkspace(input.workspace_id);
-        self.recordTimelineEvent(input.workspace_id, session_id, .session_started) catch {};
+        try self.touchProject(input.project_id);
+        self.recordTimelineEvent(input.project_id, session_id, .session_started) catch {};
         return session_id;
     }
 
@@ -222,28 +222,28 @@ pub const Store = struct {
         try stmt.bindInt64(8, created_at);
         try stmt.expectDone();
 
-        try self.touchWorkspaceBySession(input.session_id);
+        try self.touchProjectBySession(input.session_id);
         if (input.kind == .final) {
-            if (self.workspaceIdForSession(std.heap.c_allocator, input.session_id)) |workspace_id| {
-                defer std.heap.c_allocator.free(workspace_id);
-                self.recordTimelineEvent(workspace_id, input.session_id, .snapshot_finalized) catch {};
+            if (self.projectIdForSession(std.heap.c_allocator, input.session_id)) |project_id| {
+                defer std.heap.c_allocator.free(project_id);
+                self.recordTimelineEvent(project_id, input.session_id, .snapshot_finalized) catch {};
             } else |_| {}
         }
     }
 
     pub fn recordTimelineEvent(
         self: *Store,
-        workspace_id: []const u8,
+        project_id: []const u8,
         session_id: ?[]const u8,
         event_type: models.TimelineEventKind,
     ) StoreError!void {
         var stmt = try Statement.init(
             self.db,
-            "insert into timeline_events (id, workspace_id, session_id, event_type, created_at)\n" ++
+            "insert into timeline_events (id, project_id, session_id, event_type, created_at)\n" ++
                 " values (lower(hex(randomblob(16))), ?1, ?2, ?3, ?4)",
         );
         defer stmt.deinit();
-        try stmt.bindText(1, workspace_id);
+        try stmt.bindText(1, project_id);
         try stmt.bindOptionalText(2, session_id);
         try stmt.bindText(3, event_type.asText());
         try stmt.bindInt64(4, now());
@@ -283,22 +283,22 @@ pub const Store = struct {
             return error.Database;
         }
 
-        try self.touchWorkspaceBySession(session_id);
-        if (self.workspaceIdForSession(std.heap.c_allocator, session_id)) |workspace_id| {
-            defer std.heap.c_allocator.free(workspace_id);
-            self.recordTimelineEvent(workspace_id, session_id, .session_closed) catch {};
+        try self.touchProjectBySession(session_id);
+        if (self.projectIdForSession(std.heap.c_allocator, session_id)) |project_id| {
+            defer std.heap.c_allocator.free(project_id);
+            self.recordTimelineEvent(project_id, session_id, .session_closed) catch {};
         } else |_| {}
     }
 
     pub fn reconcileInterruptedSessions(self: *Store) StoreError!void {
         const InterruptedSession = struct {
             id: []u8,
-            workspace_id: []u8,
+            project_id: []u8,
         };
 
         var select_stmt = try Statement.init(
             self.db,
-            "select id, workspace_id\n" ++
+            "select id, project_id\n" ++
                 " from sessions\n" ++
                 " where state = ?1",
         );
@@ -309,7 +309,7 @@ pub const Store = struct {
         defer {
             for (sessions.items) |item| {
                 std.heap.c_allocator.free(item.id);
-                std.heap.c_allocator.free(item.workspace_id);
+                std.heap.c_allocator.free(item.project_id);
             }
             sessions.deinit(std.heap.c_allocator);
         }
@@ -317,12 +317,12 @@ pub const Store = struct {
         while (try select_stmt.step()) {
             const session_id = try select_stmt.columnOwnedText(std.heap.c_allocator, 0);
             errdefer std.heap.c_allocator.free(session_id);
-            const workspace_id = try select_stmt.columnOwnedText(std.heap.c_allocator, 1);
-            errdefer std.heap.c_allocator.free(workspace_id);
+            const project_id = try select_stmt.columnOwnedText(std.heap.c_allocator, 1);
+            errdefer std.heap.c_allocator.free(project_id);
 
             try sessions.append(std.heap.c_allocator, .{
                 .id = session_id,
-                .workspace_id = workspace_id,
+                .project_id = project_id,
             });
         }
 
@@ -342,20 +342,20 @@ pub const Store = struct {
         try update_stmt.expectDone();
 
         for (sessions.items) |item| {
-            try self.touchWorkspaceBySession(item.id);
-            self.recordTimelineEvent(item.workspace_id, item.id, .session_interrupted) catch {};
+            try self.touchProjectBySession(item.id);
+            self.recordTimelineEvent(item.project_id, item.id, .session_interrupted) catch {};
         }
     }
 
-    pub fn workspaceDetail(self: *Store, allocator: std.mem.Allocator, workspace_id: []const u8) StoreError!models.WorkspaceDetail {
+    pub fn projectDetail(self: *Store, allocator: std.mem.Allocator, project_id: []const u8) StoreError!models.ProjectDetail {
         var stmt = try Statement.init(
             self.db,
             "select id, name, note_body\n" ++
-                " from workspaces\n" ++
+                " from projects\n" ++
                 " where id = ?1",
         );
         defer stmt.deinit();
-        try stmt.bindText(1, workspace_id);
+        try stmt.bindText(1, project_id);
         if (!try stmt.step()) return error.Database;
 
         const id = try stmt.columnOwnedText(allocator, 0);
@@ -364,12 +364,12 @@ pub const Store = struct {
         errdefer allocator.free(name);
         const note_body = try stmt.columnOwnedText(allocator, 2);
         errdefer allocator.free(note_body);
-        const live_sessions = try self.sessionsForWorkspace(allocator, workspace_id, .live);
+        const live_sessions = try self.sessionsForProject(allocator, project_id, .live);
         errdefer {
             for (live_sessions) |*session| session.deinit(allocator);
             allocator.free(live_sessions);
         }
-        const closed_sessions = try self.closedSessionsForWorkspace(allocator, workspace_id);
+        const closed_sessions = try self.closedSessionsForProject(allocator, project_id);
 
         return .{
             .id = id,
@@ -382,7 +382,7 @@ pub const Store = struct {
 
     fn migrate(self: *Store) StoreError!void {
         try self.execScript(
-            "create table if not exists workspaces (\n" ++
+            "create table if not exists projects (\n" ++
                 "    id text primary key not null,\n" ++
                 "    name text not null,\n" ++
                 "    note_body text not null,\n" ++
@@ -392,7 +392,7 @@ pub const Store = struct {
                 "\n" ++
                 "create table if not exists sessions (\n" ++
                 "    id text primary key not null,\n" ++
-                "    workspace_id text not null references workspaces(id) on delete cascade,\n" ++
+                "    project_id text not null references projects(id) on delete cascade,\n" ++
                 "    transport text not null,\n" ++
                 "    target_label text not null,\n" ++
                 "    title text not null,\n" ++
@@ -418,37 +418,37 @@ pub const Store = struct {
                 "    created_at integer not null\n" ++
                 ");\n" ++
                 "\n" ++
-                "create index if not exists idx_sessions_workspace_id on sessions(workspace_id);\n" ++
+                "create index if not exists idx_sessions_project_id on sessions(project_id);\n" ++
                 "create index if not exists idx_sessions_state on sessions(state);\n" ++
                 "create index if not exists idx_snapshots_session_id on snapshots(session_id);\n" ++
                 "\n" ++
                 "create table if not exists timeline_events (\n" ++
                 "    id text primary key not null,\n" ++
-                "    workspace_id text not null references workspaces(id) on delete cascade,\n" ++
+                "    project_id text not null references projects(id) on delete cascade,\n" ++
                 "    session_id text,\n" ++
                 "    event_type text not null,\n" ++
                 "    created_at integer not null\n" ++
                 ");\n" ++
-                "create index if not exists idx_timeline_workspace_id on timeline_events(workspace_id);\n" ++
+                "create index if not exists idx_timeline_project_id on timeline_events(project_id);\n" ++
                 "create index if not exists idx_timeline_created_at on timeline_events(created_at);",
         );
     }
 
-    fn sessionsForWorkspace(
+    fn sessionsForProject(
         self: *Store,
         allocator: std.mem.Allocator,
-        workspace_id: []const u8,
+        project_id: []const u8,
         state: models.SessionState,
     ) StoreError![]models.SessionSummary {
         var stmt = try Statement.init(
             self.db,
             "select id, title, transport, target_label, last_cwd, close_reason\n" ++
                 " from sessions\n" ++
-                " where workspace_id = ?1 and state = ?2\n" ++
+                " where project_id = ?1 and state = ?2\n" ++
                 " order by updated_at desc, rowid desc",
         );
         defer stmt.deinit();
-        try stmt.bindText(1, workspace_id);
+        try stmt.bindText(1, project_id);
         try stmt.bindText(2, state.asSql());
 
         var items: std.ArrayList(models.SessionSummary) = .empty;
@@ -474,7 +474,7 @@ pub const Store = struct {
         return items.toOwnedSlice(allocator);
     }
 
-    fn closedSessionsForWorkspace(self: *Store, allocator: std.mem.Allocator, workspace_id: []const u8) StoreError![]models.ClosedSessionSummary {
+    fn closedSessionsForProject(self: *Store, allocator: std.mem.Allocator, project_id: []const u8) StoreError![]models.ClosedSessionSummary {
         var stmt = try Statement.init(
             self.db,
             "select\n" ++
@@ -488,12 +488,12 @@ pub const Store = struct {
                 "     order by created_at desc, rowid desc\n" ++
                 "     limit 1\n" ++
                 " )\n" ++
-                " where s.workspace_id = ?1\n" ++
+                " where s.project_id = ?1\n" ++
                 "   and s.state in ('closed', 'exited', 'lost', 'crashed', 'interrupted')\n" ++
                 " order by s.updated_at desc, s.rowid desc",
         );
         defer stmt.deinit();
-        try stmt.bindText(1, workspace_id);
+        try stmt.bindText(1, project_id);
 
         var items: std.ArrayList(models.ClosedSessionSummary) = .empty;
         defer items.deinit(allocator);
@@ -505,24 +505,24 @@ pub const Store = struct {
         return items.toOwnedSlice(allocator);
     }
 
-    fn touchWorkspace(self: *Store, workspace_id: []const u8) StoreError!void {
+    fn touchProject(self: *Store, project_id: []const u8) StoreError!void {
         var stmt = try Statement.init(
             self.db,
-            "update workspaces\n" ++
+            "update projects\n" ++
                 " set updated_at = ?2\n" ++
                 " where id = ?1",
         );
         defer stmt.deinit();
-        try stmt.bindText(1, workspace_id);
+        try stmt.bindText(1, project_id);
         try stmt.bindInt64(2, now());
         try stmt.expectDone();
     }
 
-    fn touchWorkspaceBySession(self: *Store, session_id: []const u8) StoreError!void {
+    fn touchProjectBySession(self: *Store, session_id: []const u8) StoreError!void {
         var stmt = try Statement.init(
             self.db,
-            "update workspaces set updated_at = ?2\n" ++
-                " where id = (select workspace_id from sessions where id = ?1)",
+            "update projects set updated_at = ?2\n" ++
+                " where id = (select project_id from sessions where id = ?1)",
         );
         defer stmt.deinit();
         try stmt.bindText(1, session_id);
@@ -530,10 +530,10 @@ pub const Store = struct {
         try stmt.expectDone();
     }
 
-    fn workspaceIdForSession(self: *Store, allocator: std.mem.Allocator, session_id: []const u8) StoreError![]u8 {
+    fn projectIdForSession(self: *Store, allocator: std.mem.Allocator, session_id: []const u8) StoreError![]u8 {
         var stmt = try Statement.init(
             self.db,
-            "select workspace_id from sessions where id = ?1",
+            "select project_id from sessions where id = ?1",
         );
         defer stmt.deinit();
         try stmt.bindText(1, session_id);

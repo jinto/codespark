@@ -3,26 +3,26 @@ import SwiftUI
 
 struct SidebarView: View {
     @ObservedObject var model: AppModel
-    @AppStorage("expandedWorkspaceIDs") private var expandedRaw: String = ""
-    @State private var expandedWorkspaceIDs: Set<String> = []
-    @State private var editingWorkspaceID: String?
-    @State private var editWorkspaceName = ""
-    @State private var pendingDeleteWorkspaceID: String?
+    @AppStorage("expandedProjectIDs") private var expandedRaw: String = ""
+    @State private var expandedProjectIDs: Set<String> = []
+    @State private var editingProjectID: String?
+    @State private var editProjectName = ""
+    @State private var pendingDeleteProjectID: String?
     @State private var showDeleteConfirmation = false
     @State private var showHotkeys = false
     @State private var hotkeyMonitor: Any?
 
-    private var sortedWorkspaces: [WorkspaceSummaryViewData] {
-        let selected = model.selectedWorkspaceID
-        let needsInput = model.workspaces.filter {
-            model.workspaceStatus(for: $0) == .needsInput && $0.id != selected
+    private var sortedProjects: [ProjectSummaryViewData] {
+        let selected = model.selectedProjectID
+        let needsInput = model.projects.filter {
+            model.projectStatus(for: $0) == .needsInput && $0.id != selected
         }
-        let rest = model.workspaces.filter {
-            model.workspaceStatus(for: $0) != .needsInput || $0.id == selected
+        let rest = model.projects.filter {
+            model.projectStatus(for: $0) != .needsInput || $0.id == selected
         }
         let sortedRest = rest.sorted { a, b in
-            let sa = model.workspaceStatus(for: a)
-            let sb = model.workspaceStatus(for: b)
+            let sa = model.projectStatus(for: a)
+            let sb = model.projectStatus(for: b)
             if sa == .running && sb == .idle { return true }
             if sa == .idle && sb == .running { return false }
             return false
@@ -37,15 +37,15 @@ struct SidebarView: View {
     }
 
     private var needsInputCount: Int {
-        model.workspaces.filter { ws in
-            guard ws.id != model.selectedWorkspaceID else { return false }
-            return model.workspaceStatus(for: ws) == .needsInput
-                && !model.acknowledgedWorkspaceIDs.contains(ws.id)
+        model.projects.filter { proj in
+            guard proj.id != model.selectedProjectID else { return false }
+            return model.projectStatus(for: proj) == .needsInput
+                && !model.acknowledgedProjectIDs.contains(proj.id)
         }.count
     }
 
-    private func workspaceInfoLine(for workspace: WorkspaceSummaryViewData) -> String? {
-        guard let cwd = workspace.liveSessionDetails.first?.lastCwd else { return nil }
+    private func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
+        guard let cwd = project.liveSessionDetails.first?.lastCwd else { return nil }
         let path = abbreviatePath(cwd)
         if let branch = model.gitBranches[cwd] {
             return "\(branch) \u{2022} \(path)"
@@ -58,12 +58,12 @@ struct SidebarView: View {
     }
 
     private func toggleExpanded(_ id: String) {
-        if expandedWorkspaceIDs.contains(id) {
-            expandedWorkspaceIDs.remove(id)
+        if expandedProjectIDs.contains(id) {
+            expandedProjectIDs.remove(id)
         } else {
-            expandedWorkspaceIDs.insert(id)
+            expandedProjectIDs.insert(id)
         }
-        expandedRaw = expandedWorkspaceIDs.joined(separator: ",")
+        expandedRaw = expandedProjectIDs.joined(separator: ",")
     }
 
     var body: some View {
@@ -85,7 +85,7 @@ struct SidebarView: View {
                         }
                     }
                     Button {
-                        Task { await model.createWorkspace(name: "New Workspace") }
+                        Task { await model.createProject(name: "New Project") }
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")
@@ -100,7 +100,7 @@ struct SidebarView: View {
                     }
                     .buttonStyle(.plain)
                     .focusable(false)
-                    .help("New workspace (\u{2318}N)")
+                    .help("New project (\u{2318}N)")
                 }
                 .padding(.horizontal, 12)
                 .frame(height: 28)
@@ -137,47 +137,47 @@ struct SidebarView: View {
 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(sortedWorkspaces.enumerated()), id: \.element.id) { index, workspace in
+                    ForEach(Array(sortedProjects.enumerated()), id: \.element.id) { index, project in
                         VStack(alignment: .leading, spacing: 0) {
-                            WorkspaceSidebarRow(
-                                workspace: workspace,
-                                isSelected: model.selectedWorkspaceID == workspace.id,
-                                isExpanded: expandedWorkspaceIDs.contains(workspace.id),
+                            ProjectSidebarRow(
+                                project: project,
+                                isSelected: model.selectedProjectID == project.id,
+                                isExpanded: expandedProjectIDs.contains(project.id),
                                 hotkeyIndex: index < 9 && showHotkeys ? index + 1 : nil,
-                                status: model.workspaceStatus(for: workspace),
-                                infoLine: workspaceInfoLine(for: workspace),
-                                snippet: model.hookSnippets[workspace.id]
+                                status: model.projectStatus(for: project),
+                                infoLine: projectInfoLine(for: project),
+                                snippet: model.hookSnippets[project.id]
                             )
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                toggleExpanded(workspace.id)
-                                model.acknowledgeWorkspace(workspace.id)
-                                Task { await model.selectWorkspace(id: workspace.id) }
+                                toggleExpanded(project.id)
+                                model.acknowledgeProject(project.id)
+                                Task { await model.selectProject(id: project.id) }
                             }
                             .contextMenu {
                                 Button("Rename") {
-                                    editWorkspaceName = workspace.name
-                                    editingWorkspaceID = workspace.id
+                                    editProjectName = project.name
+                                    editingProjectID = project.id
                                 }
-                                Button("Close Workspace") {
-                                    Task { await model.closeWorkspace(id: workspace.id) }
+                                Button("Close Project") {
+                                    Task { await model.closeProject(id: project.id) }
                                 }
                                 Divider()
                                 Button("Delete", role: .destructive) {
-                                    pendingDeleteWorkspaceID = workspace.id
+                                    pendingDeleteProjectID = project.id
                                     showDeleteConfirmation = true
                                 }
                             }
 
-                            if expandedWorkspaceIDs.contains(workspace.id) {
-                                ForEach(workspace.liveSessionDetails) { session in
+                            if expandedProjectIDs.contains(project.id) {
+                                ForEach(project.liveSessionDetails) { session in
                                     SessionSidebarRow(
                                         session: session,
                                         isActive: model.activeSessionID == session.id,
                                         isIdle: model.idleSessionIDs.contains(session.id),
                                         onSelect: {
                                             model.activeSessionID = session.id
-                                            Task { await model.selectWorkspace(id: workspace.id) }
+                                            Task { await model.selectProject(id: project.id) }
                                         },
                                         onRename: { newTitle in
                                             Task { await model.renameSession(id: session.id, title: newTitle) }
@@ -194,9 +194,9 @@ struct SidebarView: View {
             }
             .onAppear {
                 if !expandedRaw.isEmpty {
-                    expandedWorkspaceIDs = Set(expandedRaw.split(separator: ",").map(String.init))
+                    expandedProjectIDs = Set(expandedRaw.split(separator: ",").map(String.init))
                 }
-                if expandedWorkspaceIDs.isEmpty, let first = model.workspaces.first {
+                if expandedProjectIDs.isEmpty, let first = model.projects.first {
                     toggleExpanded(first.id)
                 }
                 hotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
@@ -215,7 +215,7 @@ struct SidebarView: View {
 
             Divider().background(AppTheme.divider)
             HStack {
-                Text("\(model.workspaces.count) workspace\(model.workspaces.count == 1 ? "" : "s")")
+                Text("\(model.projects.count) project\(model.projects.count == 1 ? "" : "s")")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                 Spacer()
@@ -225,49 +225,49 @@ struct SidebarView: View {
         }
         .background(AppTheme.sidebarBackground)
         .confirmationDialog(
-            "Delete workspace?",
+            "Delete project?",
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive) {
-                if let id = pendingDeleteWorkspaceID {
-                    Task { await model.deleteWorkspace(id: id) }
+                if let id = pendingDeleteProjectID {
+                    Task { await model.deleteProject(id: id) }
                 }
-                pendingDeleteWorkspaceID = nil
+                pendingDeleteProjectID = nil
             }
             Button("Cancel", role: .cancel) {
-                pendingDeleteWorkspaceID = nil
+                pendingDeleteProjectID = nil
             }
         } message: {
-            if let id = pendingDeleteWorkspaceID,
-               let ws = model.workspaces.first(where: { $0.id == id }) {
-                Text("This will permanently delete \"\(ws.name)\" and all its sessions.")
+            if let id = pendingDeleteProjectID,
+               let proj = model.projects.first(where: { $0.id == id }) {
+                Text("This will permanently delete \"\(proj.name)\" and all its sessions.")
             }
         }
         .sheet(isPresented: .init(
-            get: { editingWorkspaceID != nil },
-            set: { if !$0 { editingWorkspaceID = nil } }
+            get: { editingProjectID != nil },
+            set: { if !$0 { editingProjectID = nil } }
         )) {
-            RenameWorkspaceSheet(
-                name: $editWorkspaceName,
+            RenameProjectSheet(
+                name: $editProjectName,
                 onRename: {
-                    if let id = editingWorkspaceID, !editWorkspaceName.isEmpty {
-                        Task { await model.renameWorkspace(id: id, newName: editWorkspaceName) }
+                    if let id = editingProjectID, !editProjectName.isEmpty {
+                        Task { await model.renameProject(id: id, newName: editProjectName) }
                     }
-                    editingWorkspaceID = nil
+                    editingProjectID = nil
                 },
-                onCancel: { editingWorkspaceID = nil }
+                onCancel: { editingProjectID = nil }
             )
         }
     }
 }
 
-struct WorkspaceSidebarRow: View {
-    let workspace: WorkspaceSummaryViewData
+struct ProjectSidebarRow: View {
+    let project: ProjectSummaryViewData
     let isSelected: Bool
     let isExpanded: Bool
     let hotkeyIndex: Int?
-    let status: WorkspaceStatus
+    let status: ProjectStatus
     let infoLine: String?
     var snippet: String? = nil
 
@@ -281,10 +281,10 @@ struct WorkspaceSidebarRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(workspace.name)
+                    Text(project.name)
                         .font(.system(.body, weight: .semibold))
                         .foregroundStyle(isSelected ? .white : .primary)
-                        .accessibilityIdentifier("workspaceName")
+                        .accessibilityIdentifier("projectName")
 
                     Spacer()
 
@@ -335,7 +335,7 @@ struct WorkspaceSidebarRow: View {
     }
 }
 
-private struct RenameWorkspaceSheet: View {
+private struct RenameProjectSheet: View {
     @Binding var name: String
     let onRename: () -> Void
     let onCancel: () -> Void
@@ -343,9 +343,9 @@ private struct RenameWorkspaceSheet: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Text("Rename Workspace")
+            Text("Rename Project")
                 .font(.headline)
-            TextField("Workspace name", text: $name)
+            TextField("Project name", text: $name)
                 .textFieldStyle(.roundedBorder)
                 .focused($isFocused)
                 .onSubmit(onRename)

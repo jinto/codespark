@@ -8,173 +8,173 @@
 extern "C" {
 #endif
 
-typedef struct workspace_service workspace_service_t;
+typedef struct project_service project_service_t;
 
-typedef enum workspace_status_t {
-    WORKSPACE_STATUS_OK = 0,
-    WORKSPACE_STATUS_OPEN_STORE_FAILED = 1,
-    WORKSPACE_STATUS_CREATE_WORKSPACE_FAILED = 2,
-    WORKSPACE_STATUS_UPDATE_WORKSPACE_NOTE_FAILED = 3,
-    WORKSPACE_STATUS_WORKSPACE_DETAIL_FAILED = 4,
-    WORKSPACE_STATUS_POISONED_STATE = 5,
-    WORKSPACE_STATUS_LIST_WORKSPACES_FAILED = 6,
-    WORKSPACE_STATUS_RECONCILE_INTERRUPTED_FAILED = 7,
-    WORKSPACE_STATUS_START_SESSION_FAILED = 8,
-    WORKSPACE_STATUS_RECORD_SNAPSHOT_FAILED = 9,
-    WORKSPACE_STATUS_CLOSE_SESSION_FAILED = 10,
-    WORKSPACE_STATUS_RENAME_WORKSPACE_FAILED = 11,
-    WORKSPACE_STATUS_DELETE_WORKSPACE_FAILED = 12,
-} workspace_status_t;
+typedef enum project_status_t {
+    PROJECT_STATUS_OK = 0,
+    PROJECT_STATUS_OPEN_STORE_FAILED = 1,
+    PROJECT_STATUS_CREATE_PROJECT_FAILED = 2,
+    PROJECT_STATUS_UPDATE_PROJECT_NOTE_FAILED = 3,
+    PROJECT_STATUS_PROJECT_DETAIL_FAILED = 4,
+    PROJECT_STATUS_POISONED_STATE = 5,
+    PROJECT_STATUS_LIST_PROJECTS_FAILED = 6,
+    PROJECT_STATUS_RECONCILE_INTERRUPTED_FAILED = 7,
+    PROJECT_STATUS_START_SESSION_FAILED = 8,
+    PROJECT_STATUS_RECORD_SNAPSHOT_FAILED = 9,
+    PROJECT_STATUS_CLOSE_SESSION_FAILED = 10,
+    PROJECT_STATUS_RENAME_PROJECT_FAILED = 11,
+    PROJECT_STATUS_DELETE_PROJECT_FAILED = 12,
+} project_status_t;
 
-typedef enum workspace_session_transport_t {
-    WORKSPACE_SESSION_TRANSPORT_LOCAL = 0,
-    WORKSPACE_SESSION_TRANSPORT_SSH = 1,
-} workspace_session_transport_t;
+typedef enum project_session_transport_t {
+    PROJECT_SESSION_TRANSPORT_LOCAL = 0,
+    PROJECT_SESSION_TRANSPORT_SSH = 1,
+} project_session_transport_t;
 
-typedef enum workspace_close_reason_t {
-    WORKSPACE_CLOSE_REASON_USER_CLOSED = 0,
-    WORKSPACE_CLOSE_REASON_PROCESS_EXITED = 1,
-    WORKSPACE_CLOSE_REASON_SSH_DISCONNECTED = 2,
-    WORKSPACE_CLOSE_REASON_APP_CRASHED = 3,
-    WORKSPACE_CLOSE_REASON_HOST_QUIT = 4,
-} workspace_close_reason_t;
+typedef enum project_close_reason_t {
+    PROJECT_CLOSE_REASON_USER_CLOSED = 0,
+    PROJECT_CLOSE_REASON_PROCESS_EXITED = 1,
+    PROJECT_CLOSE_REASON_SSH_DISCONNECTED = 2,
+    PROJECT_CLOSE_REASON_APP_CRASHED = 3,
+    PROJECT_CLOSE_REASON_HOST_QUIT = 4,
+} project_close_reason_t;
 
-typedef enum workspace_snapshot_kind_t {
-    WORKSPACE_SNAPSHOT_KIND_CHECKPOINT = 0,
-    WORKSPACE_SNAPSHOT_KIND_FINAL = 1,
-} workspace_snapshot_kind_t;
+typedef enum project_snapshot_kind_t {
+    PROJECT_SNAPSHOT_KIND_CHECKPOINT = 0,
+    PROJECT_SNAPSHOT_KIND_FINAL = 1,
+} project_snapshot_kind_t;
 
-typedef struct workspace_terminal_grid_t {
+typedef struct project_terminal_grid_t {
     uint16_t cols;
     uint16_t rows;
     char **lines;
     int32_t line_count;
-} workspace_terminal_grid_t;
+} project_terminal_grid_t;
 
-typedef struct workspace_restore_recipe_t {
+typedef struct project_restore_recipe_t {
     char *launch_command;
-} workspace_restore_recipe_t;
+} project_restore_recipe_t;
 
-typedef struct workspace_session_summary_t {
+typedef struct project_session_summary_t {
     char *id;
     char *title;
-    workspace_session_transport_t transport;
+    project_session_transport_t transport;
     char *target_label;
     char *last_cwd;
-    workspace_close_reason_t close_reason;
-} workspace_session_summary_t;
+    project_close_reason_t close_reason;
+} project_session_summary_t;
 
-typedef struct workspace_closed_session_summary_t {
+typedef struct project_closed_session_summary_t {
     char *id;
     char *title;
-    workspace_session_transport_t transport;
+    project_session_transport_t transport;
     char *target_label;
     char *last_cwd;
-    workspace_close_reason_t close_reason;
-    workspace_terminal_grid_t snapshot_preview;
-    workspace_restore_recipe_t restore_recipe;
-} workspace_closed_session_summary_t;
+    project_close_reason_t close_reason;
+    project_terminal_grid_t snapshot_preview;
+    project_restore_recipe_t restore_recipe;
+} project_closed_session_summary_t;
 
-typedef struct workspace_summary_t {
+typedef struct project_summary_t {
     char *id;
     char *name;
     int64_t live_sessions;
     int64_t recently_closed_sessions;
     bool has_interrupted_sessions;
     int64_t updated_at;
-    workspace_session_summary_t *live_session_details;
+    project_session_summary_t *live_session_details;
     int32_t live_session_detail_count;
-} workspace_summary_t;
+} project_summary_t;
 
-typedef struct workspace_detail_t {
+typedef struct project_detail_t {
     char *id;
     char *name;
     char *note_body;
-    workspace_session_summary_t *live_sessions;
+    project_session_summary_t *live_sessions;
     int32_t live_session_count;
-    workspace_closed_session_summary_t *closed_sessions;
+    project_closed_session_summary_t *closed_sessions;
     int32_t closed_session_count;
-} workspace_detail_t;
+} project_detail_t;
 
-typedef struct workspace_new_session_t {
-    const char *workspace_id;
-    workspace_session_transport_t transport;
+typedef struct project_new_session_t {
+    const char *project_id;
+    project_session_transport_t transport;
     const char *target_label;
     const char *title;
     const char *shell;
     const char *initial_cwd;
-} workspace_new_session_t;
+} project_new_session_t;
 
-typedef struct workspace_new_snapshot_t {
+typedef struct project_new_snapshot_t {
     const char *session_id;
-    workspace_snapshot_kind_t kind;
+    project_snapshot_kind_t kind;
     const char *cwd;
     uint16_t cols;
     uint16_t rows;
     const char *const *lines;
     int32_t line_count;
-} workspace_new_snapshot_t;
+} project_new_snapshot_t;
 
-workspace_service_t *workspace_service_new(const char *store_path, workspace_status_t *out_status);
-void workspace_service_free(workspace_service_t *service);
+project_service_t *project_service_new(const char *store_path, project_status_t *out_status);
+void project_service_free(project_service_t *service);
 
-workspace_status_t workspace_service_start_session(
-    workspace_service_t *service,
-    const workspace_new_session_t *input,
+project_status_t project_service_start_session(
+    project_service_t *service,
+    const project_new_session_t *input,
     char **out_session_id
 );
 
-workspace_status_t workspace_service_record_snapshot(
-    workspace_service_t *service,
-    const workspace_new_snapshot_t *input
+project_status_t project_service_record_snapshot(
+    project_service_t *service,
+    const project_new_snapshot_t *input
 );
 
-workspace_status_t workspace_service_close_session(
-    workspace_service_t *service,
+project_status_t project_service_close_session(
+    project_service_t *service,
     const char *session_id,
-    workspace_close_reason_t reason,
+    project_close_reason_t reason,
     const char *last_cwd
 );
 
-workspace_status_t workspace_service_update_session_title(
-    workspace_service_t *service,
+project_status_t project_service_update_session_title(
+    project_service_t *service,
     const char *session_id,
     const char *new_title
 );
-workspace_status_t workspace_service_reconcile_interrupted_sessions(workspace_service_t *service);
-workspace_status_t workspace_service_list_workspace_summaries(
-    workspace_service_t *service,
-    workspace_summary_t **out_summaries,
+project_status_t project_service_reconcile_interrupted_sessions(project_service_t *service);
+project_status_t project_service_list_project_summaries(
+    project_service_t *service,
+    project_summary_t **out_summaries,
     int32_t *out_count
 );
-workspace_status_t workspace_service_create_workspace(
-    workspace_service_t *service,
+project_status_t project_service_create_project(
+    project_service_t *service,
     const char *name,
-    char **out_workspace_id
+    char **out_project_id
 );
-workspace_status_t workspace_service_update_workspace_note(
-    workspace_service_t *service,
-    const char *workspace_id,
+project_status_t project_service_update_project_note(
+    project_service_t *service,
+    const char *project_id,
     const char *note_body
 );
-workspace_status_t workspace_service_rename_workspace(
-    workspace_service_t *service,
-    const char *workspace_id,
+project_status_t project_service_rename_project(
+    project_service_t *service,
+    const char *project_id,
     const char *new_name
 );
-workspace_status_t workspace_service_delete_workspace(
-    workspace_service_t *service,
-    const char *workspace_id
+project_status_t project_service_delete_project(
+    project_service_t *service,
+    const char *project_id
 );
-workspace_status_t workspace_service_workspace_detail(
-    workspace_service_t *service,
-    const char *workspace_id,
-    workspace_detail_t *out_detail
+project_status_t project_service_project_detail(
+    project_service_t *service,
+    const char *project_id,
+    project_detail_t *out_detail
 );
 
-void workspace_free_string(char *value);
-void workspace_free_summaries(workspace_summary_t *summaries, int32_t count);
-void workspace_free_detail(workspace_detail_t *detail);
+void project_free_string(char *value);
+void project_free_summaries(project_summary_t *summaries, int32_t count);
+void project_free_detail(project_detail_t *detail);
 
 #ifdef __cplusplus
 }

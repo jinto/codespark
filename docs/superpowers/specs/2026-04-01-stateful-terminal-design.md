@@ -2,21 +2,21 @@
 
 Date: 2026-04-01
 Status: Draft for review
-Scope: macOS-first desktop terminal with durable workspace memory
+Scope: macOS-first desktop terminal with durable project memory
 
 ## Summary
 
-Build a macOS terminal app whose core value is not multiplexing or agent orchestration, but remembering workspaces after terminals close.
+Build a macOS terminal app whose core value is not multiplexing or agent orchestration, but remembering projects after terminals close.
 
 The product behaves like a real terminal in one critical respect: closing a tab closes the process. It differs from a normal terminal in one critical respect: the app still remembers what that tab was, where it was, what it was connected to, and what the screen looked like near the end.
 
-The top-level object is a user-defined workspace. A workspace is a task context, similar to a left-side tab in cmux. It can contain multiple terminal sessions, including a mix of local shells and SSH sessions. A workspace has one shared note. Sessions inside it can be closed and later manually recreated from stored metadata and screen snapshots.
+The top-level object is a user-defined project. A project is a task context, similar to a left-side tab in 터미널 멀티플렉서. It can contain multiple terminal sessions, including a mix of local shells and SSH sessions. A project has one shared note. Sessions inside it can be closed and later manually recreated from stored metadata and screen snapshots.
 
 ## Goals
 
-- Preserve workspace identity after tabs or windows close.
+- Preserve project identity after tabs or windows close.
 - Preserve enough session state that the user can recognize and manually reconstruct prior work.
-- Support mixed local and SSH sessions inside the same workspace.
+- Support mixed local and SSH sessions inside the same project.
 - Keep terminal behavior close to a real terminal: closing a session ends the process.
 - Make manual recovery fast through structured session recipes.
 - Prioritize macOS as the first shipping platform.
@@ -29,21 +29,21 @@ The top-level object is a user-defined workspace. A workspace is a task context,
 - Multi-user sync.
 - Built-in credential management for SSH keys or passwords.
 - Heavy AI-specific workflow assumptions.
-- Full workspace inference or automatic session grouping in v1.
+- Full project inference or automatic session grouping in v1.
 
 ## Product Model
 
-### Workspace
+### Project
 
-A workspace is a user-created task grouping. It is not equal to a host, machine, or project root. A single workspace can contain:
+A project is a user-created task grouping. It is not equal to a host, machine, or project root. A single project can contain:
 
 - a local terminal in a project directory
 - an SSH session on a remote host
 - another local or remote tab related to the same task
 
-Users explicitly add new tabs to the current workspace. The app does not auto-group sessions by host, path, or command in v1.
+Users explicitly add new tabs to the current project. The app does not auto-group sessions by host, path, or command in v1.
 
-Each workspace stores:
+Each project stores:
 
 - `id`
 - `name`
@@ -56,12 +56,12 @@ Each workspace stores:
 
 ### Session
 
-A session is one terminal process inside a workspace.
+A session is one terminal process inside a project.
 
 Each session stores:
 
 - `id`
-- `workspace_id`
+- `project_id`
 - `transport` (`local` or `ssh`)
 - `target_label` such as `local`, `prod`, or `lab`
 - `shell`
@@ -93,12 +93,12 @@ V1 should not store a plain bitmap screenshot as the canonical format. The canon
 
 ### Timeline Event
 
-Timeline events are append-only records for workspace and session history.
+Timeline events are append-only records for project and session history.
 
 Examples:
 
-- `workspace_created`
-- `workspace_opened`
+- `project_created`
+- `project_opened`
 - `session_started`
 - `ssh_connected`
 - `cwd_changed`
@@ -111,9 +111,9 @@ Examples:
 
 ### App Entry
 
-The app opens to a workspace-first view.
+The app opens to a project-first view.
 
-Workspace list items show:
+Project list items show:
 
 - name
 - recent activity
@@ -121,15 +121,15 @@ Workspace list items show:
 - count of recently closed sessions
 - warning badge if interrupted sessions exist
 
-### Workspace Detail
+### Project Detail
 
-Opening a workspace shows three main regions:
+Opening a project shows three main regions:
 
 - top or center area for live session tabs
 - a recent closed sessions area with cards
-- a persistent single note for the workspace
+- a persistent single note for the project
 
-This screen must show live and recently closed sessions in the same context. The app should make it clear that a workspace persists even when its sessions do not.
+This screen must show live and recently closed sessions in the same context. The app should make it clear that a project persists even when its sessions do not.
 
 ### Recently Closed Session Card
 
@@ -159,7 +159,7 @@ Supported actions:
 
 ### Note Model
 
-Each workspace has exactly one note in v1. Notes are not session-scoped.
+Each project has exactly one note in v1. Notes are not session-scoped.
 
 Use cases:
 
@@ -179,11 +179,11 @@ When the user closes a tab:
 1. the terminal process is terminated
 2. a final snapshot is written
 3. the session state is updated with a close reason
-4. the session moves into the workspace’s recently closed area
+4. the session moves into the project’s recently closed area
 
 Closing the whole window follows the same rule for all live sessions in that window.
 
-V1 should avoid heavy confirmation prompts. The product promise is not preventing closure, but making closure recoverable at the workspace-memory level.
+V1 should avoid heavy confirmation prompts. The product promise is not preventing closure, but making closure recoverable at the project-memory level.
 
 ### Checkpoint Triggers
 
@@ -214,7 +214,7 @@ The user can then start a new replacement session from the stored recipe.
 Use a split architecture:
 
 - macOS host app in Swift/AppKit/SwiftUI
-- Rust core for workspace memory, persistence, snapshot policy, and recovery logic
+- Rust core for project memory, persistence, snapshot policy, and recovery logic
 - terminal adapter layer that targets Ghostty first
 
 This keeps the product’s durable state logic in Rust while respecting Ghostty’s current macOS-native reality.
@@ -225,7 +225,7 @@ Ghostty should be treated as the preferred terminal engine direction, not as the
 
 Implications:
 
-- keep the app’s workspace and recovery model independent of Ghostty internals
+- keep the app’s project and recovery model independent of Ghostty internals
 - isolate Ghostty integration behind a terminal adapter interface
 - allow fallback or replacement later if Ghostty embedding constraints change
 
@@ -244,7 +244,7 @@ Use a single SQLite database under the app’s macOS Application Support directo
 
 Store:
 
-- workspaces
+- projects
 - sessions
 - snapshots
 - timeline events
@@ -288,7 +288,7 @@ These reasons should be visible in the UI and recorded in timeline events. The u
 
 Test:
 
-- workspace CRUD
+- project CRUD
 - session lifecycle transitions
 - snapshot checkpoint policy
 - restore recipe generation
@@ -306,8 +306,8 @@ Smoke test:
 
 Smoke test:
 
-- app relaunch restores workspace list
-- workspace note persists
+- app relaunch restores project list
+- project note persists
 - recently closed sessions appear after close
 - interrupted sessions are marked correctly after abnormal termination
 
@@ -317,7 +317,7 @@ Include:
 
 - local sessions
 - SSH sessions
-- workspace-scoped note
+- project-scoped note
 - recently closed session history
 - manual recovery actions
 - snapshot previews
@@ -328,12 +328,12 @@ Exclude:
 - background keepalive daemon
 - multi-user collaboration
 - secrets vault
-- automatic workspace grouping
+- automatic project grouping
 - deep command history analytics
 
 ## Open Source and Dependency Notes
 
-As of 2026-04-01, Ghostty officially supports macOS and Linux, with Windows planned for the future. Official docs also describe Ghostty as having a native macOS app written in Swift and a shared `libghostty` core, while cautioning that the standalone library API is not yet considered stable. This strongly supports a design where Ghostty is the preferred engine target but not the owner of workspace-memory state.
+As of 2026-04-01, Ghostty officially supports macOS and Linux, with Windows planned for the future. Official docs also describe Ghostty as having a native macOS app written in Swift and a shared `libghostty` core, while cautioning that the standalone library API is not yet considered stable. This strongly supports a design where Ghostty is the preferred engine target but not the owner of project-memory state.
 
 References:
 
@@ -343,8 +343,8 @@ References:
 
 ## Initial Implementation Order
 
-1. Define Rust data model and SQLite schema for workspaces, sessions, snapshots, and timeline events.
-2. Build a minimal macOS host shell with workspace list, workspace detail, and note panel.
+1. Define Rust data model and SQLite schema for projects, sessions, snapshots, and timeline events.
+2. Build a minimal macOS host shell with project list, project detail, and note panel.
 3. Integrate a terminal adapter layer with a single live terminal surface.
 4. Persist session lifecycle and final snapshots on close.
 5. Add recently closed cards and manual recovery actions.
@@ -354,11 +354,11 @@ References:
 
 - Platform: macOS first
 - Product type: general-purpose terminal
-- Core unit: user-defined workspace
+- Core unit: user-defined project
 - Session grouping: explicit by user
 - Close behavior: closing a tab ends the process
 - Recovery type: manual only in v1
 - Memory surface: metadata plus terminal screen snapshot
-- Notes: one note per workspace
+- Notes: one note per project
 - Engine direction: Ghostty first, behind an adapter
-- State owner: app-level workspace memory, not the terminal engine
+- State owner: app-level project memory, not the terminal engine

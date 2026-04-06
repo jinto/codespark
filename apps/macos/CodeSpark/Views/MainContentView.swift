@@ -4,11 +4,11 @@ struct MainContentView: View {
     @ObservedObject var model: AppModel
     @State private var showNote = false
     @State private var showCloseSessionAlert = false
-    @State private var showCloseWorkspaceAlert = false
+    @State private var showCloseProjectAlert = false
 
     var body: some View {
         Group {
-        if let workspace = model.selectedWorkspace {
+        if let project = model.selectedProject {
             VStack(spacing: 0) {
                 WindowDragArea {
                     HStack(spacing: 0) {
@@ -18,7 +18,7 @@ struct MainContentView: View {
                             .padding(.leading, 16)
                             .padding(.trailing, 6)
 
-                        Text(workspace.name)
+                        Text(project.name)
                             .font(.system(.caption, weight: .semibold))
                             .lineLimit(1)
 
@@ -46,7 +46,7 @@ struct MainContentView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
-                        .help("Toggle workspace note")
+                        .help("Toggle project note")
                         .padding(.trailing, 12)
                     }
                     .frame(height: 34)
@@ -80,7 +80,7 @@ struct MainContentView: View {
                 Image(systemName: "terminal")
                     .font(.system(size: 48))
                     .foregroundStyle(.quaternary)
-                Text("Select a workspace")
+                Text("Select a project")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                 if let err = model.loadErrorMessage {
@@ -107,21 +107,21 @@ struct MainContentView: View {
         } message: {
             Text("This will close the terminal process.")
         }
-        .onChange(of: model.pendingCloseWorkspaceID) { _, newValue in
-            showCloseWorkspaceAlert = newValue != nil
+        .onChange(of: model.pendingCloseProjectID) { _, newValue in
+            showCloseProjectAlert = newValue != nil
         }
-        .alert("Close workspace?", isPresented: $showCloseWorkspaceAlert) {
+        .alert("Close project?", isPresented: $showCloseProjectAlert) {
             Button("Close", role: .destructive) {
-                if let id = model.pendingCloseWorkspaceID {
-                    Task { await model.closeWorkspace(id: id) }
+                if let id = model.pendingCloseProjectID {
+                    Task { await model.closeProject(id: id) }
                 }
-                model.pendingCloseWorkspaceID = nil
+                model.pendingCloseProjectID = nil
             }
             Button("Cancel", role: .cancel) {
-                model.pendingCloseWorkspaceID = nil
+                model.pendingCloseProjectID = nil
             }
         } message: {
-            Text("Sessions will be closed. You can reopen this workspace later.")
+            Text("Sessions will be closed. You can reopen this project later.")
         }
     }
 

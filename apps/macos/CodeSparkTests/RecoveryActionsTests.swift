@@ -4,7 +4,7 @@ import XCTest
 final class RecoveryActionsTests: XCTestCase {
     @MainActor
     func test_local_session_shows_open_shell_and_copy_recipe() async {
-        let client = MockWorkspaceCoreClient.workspaceWithInterruptedSession()
+        let client = MockProjectCoreClient.projectWithInterruptedSession()
         let model = AppModel(core: client)
 
         await model.load()
@@ -18,15 +18,15 @@ final class RecoveryActionsTests: XCTestCase {
 
     @MainActor
     func test_ssh_session_shows_reconnect_actions() async {
-        let client = MockWorkspaceCoreClient(
+        let client = MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(
+                ProjectSummaryViewData(
                     id: "ws-ssh", name: "ssh-work", liveSessions: 0,
                     recentlyClosedSessions: 1, hasInterruptedSessions: false,
                     liveSessionDetails: []
                 )
             ],
-            details: [WorkspaceDetailViewData(
+            details: [ProjectDetailViewData(
                 id: "ws-ssh", name: "ssh-work", noteBody: "",
                 liveSessions: [],
                 closedSessions: [

@@ -6,9 +6,9 @@ import UserNotifications
 @main
 struct CodeSparkApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var model = AppModel(core: WorkspaceCoreClient.live)
-    @AppStorage("selectedWorkspaceID") private var savedWorkspaceID: String = ""
-    @AppStorage("hiddenWorkspaceIDs") private var savedHiddenIDs: String = ""
+    @StateObject private var model = AppModel(core: ProjectCoreClient.live)
+    @AppStorage("selectedProjectID") private var savedProjectID: String = ""
+    @AppStorage("hiddenProjectIDs") private var savedHiddenIDs: String = ""
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @Environment(\.scenePhase) private var scenePhase
 
@@ -37,18 +37,18 @@ struct CodeSparkApp: App {
             }
             .preferredColorScheme(.dark)
             .frame(minWidth: 600, minHeight: 400)
-            .onChange(of: model.selectedWorkspaceID) { _, newValue in
-                savedWorkspaceID = newValue ?? ""
+            .onChange(of: model.selectedProjectID) { _, newValue in
+                savedProjectID = newValue ?? ""
             }
-            .onChange(of: model.hiddenWorkspaceIDs) { _, newValue in
+            .onChange(of: model.hiddenProjectIDs) { _, newValue in
                 savedHiddenIDs = newValue.joined(separator: ",")
             }
         }
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("New Workspace") {
-                    Task { await model.createWorkspace(name: "New Workspace") }
+                Button("New Project") {
+                    Task { await model.createProject(name: "New Project") }
                 }
                 .keyboardShortcut("n", modifiers: .command)
 
@@ -59,27 +59,27 @@ struct CodeSparkApp: App {
                 }
                 .keyboardShortcut("t", modifiers: .command)
 
-                if !model.hiddenWorkspaceIDs.isEmpty {
+                if !model.hiddenProjectIDs.isEmpty {
                     Divider()
-                    Menu("Open Recent Workspace") {
-                        ForEach(Array(model.hiddenWorkspaceIDs), id: \.self) { id in
-                            Button(model.hiddenWorkspaceNames[id] ?? id.prefix(8) + "...") {
-                                Task { await model.reopenWorkspace(id: id) }
+                    Menu("Open Recent Project") {
+                        ForEach(Array(model.hiddenProjectIDs), id: \.self) { id in
+                            Button(model.hiddenProjectNames[id] ?? id.prefix(8) + "...") {
+                                Task { await model.reopenProject(id: id) }
                             }
                         }
                     }
                 }
             }
             CommandGroup(replacing: .saveItem) {
-                Button(model.activeSessionID != nil ? "Close Session" : "Close Workspace") {
+                Button(model.activeSessionID != nil ? "Close Session" : "Close Project") {
                     if model.activeSessionID != nil {
                         model.pendingCloseSessionID = model.activeSessionID
-                    } else if let wsID = model.selectedWorkspaceID {
-                        model.pendingCloseWorkspaceID = wsID
+                    } else if let projID = model.selectedProjectID {
+                        model.pendingCloseProjectID = projID
                     }
                 }
                 .keyboardShortcut("w", modifiers: .command)
-                .disabled(model.selectedWorkspaceID == nil)
+                .disabled(model.selectedProjectID == nil)
             }
             CommandGroup(after: .windowArrangement) {
                 Button("Reopen Closed Session") {
@@ -102,9 +102,9 @@ struct CodeSparkApp: App {
 
                 Divider()
 
-                ForEach(Array(model.workspaces.prefix(9).enumerated()), id: \.element.id) { index, workspace in
-                    Button(workspace.name) {
-                        Task { await model.selectWorkspace(id: workspace.id) }
+                ForEach(Array(model.projects.prefix(9).enumerated()), id: \.element.id) { index, project in
+                    Button(project.name) {
+                        Task { await model.selectProject(id: project.id) }
                     }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
                 }
@@ -124,6 +124,21 @@ struct CodeSparkApp: App {
     @MainActor
     private func initializeAndLoad() async {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+
+        // Migrate AppStorage keys from workspace→project naming (one-time)
+        if !UserDefaults.standard.bool(forKey: "migratedToProjectNaming") {
+            for (old, new) in [
+                ("selectedWorkspaceID", "selectedProjectID"),
+                ("expandedWorkspaceIDs", "expandedProjectIDs"),
+                ("hiddenWorkspaceIDs", "hiddenProjectIDs"),
+            ] {
+                if let val = UserDefaults.standard.string(forKey: old), !val.isEmpty {
+                    UserDefaults.standard.set(val, forKey: new)
+                    UserDefaults.standard.removeObject(forKey: old)
+                }
+            }
+            UserDefaults.standard.set(true, forKey: "migratedToProjectNaming")
+        }
 
         // Start hook socket server for Claude Code integration
         let hookServer = HookSocketServer(delegate: model)
@@ -149,10 +164,10 @@ struct CodeSparkApp: App {
         #endif
         appDelegate.model = model
         if !savedHiddenIDs.isEmpty {
-            model.hiddenWorkspaceIDs = Set(savedHiddenIDs.split(separator: ",").map(String.init))
+            model.hiddenProjectIDs = Set(savedHiddenIDs.split(separator: ",").map(String.init))
         }
-        if !savedWorkspaceID.isEmpty {
-            model.selectedWorkspaceID = savedWorkspaceID
+        if !savedProjectID.isEmpty {
+            model.selectedProjectID = savedProjectID
         }
         await model.load()
         model.checkClaudeHooksHealth()
@@ -176,7 +191,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.removeSystemCloseMenuItem()
         }
 
-        // Make content extend into the title bar area (cmux-style)
+        // Make content extend into the title bar area
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             self.configureWindowTitleBar()
         }
@@ -195,8 +210,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let model else { return }
         if model.activeSessionID != nil {
             model.pendingCloseSessionID = model.activeSessionID
-        } else if let wsID = model.selectedWorkspaceID {
-            model.pendingCloseWorkspaceID = wsID
+        } else if let projID = model.selectedProjectID {
+            model.pendingCloseProjectID = projID
         }
     }
 

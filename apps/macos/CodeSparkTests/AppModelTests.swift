@@ -3,12 +3,12 @@ import XCTest
 
 final class AppModelTests: XCTestCase {
     @MainActor
-    func test_loads_workspace_summaries_and_the_selected_note() async {
-        let client = MockWorkspaceCoreClient(
+    func test_loads_project_summaries_and_the_selected_note() async {
+        let client = MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false, liveSessionDetails: [])
+                ProjectSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
-            details: [WorkspaceDetailViewData(
+            details: [ProjectDetailViewData(
                 id: "ws-release",
                 name: "release",
                 noteBody: "check prod logs",
@@ -20,28 +20,28 @@ final class AppModelTests: XCTestCase {
 
         await model.load()
 
-        XCTAssertEqual(model.workspaces.map(\.name), ["release"])
-        XCTAssertEqual(model.selectedWorkspace?.noteBody, "check prod logs")
-        XCTAssertEqual(model.selectedWorkspaceID, "ws-release")
+        XCTAssertEqual(model.projects.map(\.name), ["release"])
+        XCTAssertEqual(model.selectedProject?.noteBody, "check prod logs")
+        XCTAssertEqual(model.selectedProjectID, "ws-release")
         XCTAssertNil(model.loadErrorMessage)
     }
 
     @MainActor
-    func test_select_workspace_loads_requested_detail() async {
-        let client = MockWorkspaceCoreClient(
+    func test_select_project_loads_requested_detail() async {
+        let client = MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
-                WorkspaceSummaryViewData(id: "ws-spark3", name: "spark3", liveSessions: 0, recentlyClosedSessions: 1, hasInterruptedSessions: true, liveSessionDetails: [])
+                ProjectSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
+                ProjectSummaryViewData(id: "ws-spark3", name: "spark3", liveSessions: 0, recentlyClosedSessions: 1, hasInterruptedSessions: true, liveSessionDetails: [])
             ],
             details: [
-                WorkspaceDetailViewData(
+                ProjectDetailViewData(
                     id: "ws-release",
                     name: "release",
                     noteBody: "check prod logs",
                     liveSessions: [],
                     closedSessions: []
                 ),
-                WorkspaceDetailViewData(
+                ProjectDetailViewData(
                     id: "ws-spark3",
                     name: "spark3",
                     noteBody: "resume after crash",
@@ -53,30 +53,30 @@ final class AppModelTests: XCTestCase {
         let model = AppModel(core: client)
 
         await model.load()
-        await model.selectWorkspace(id: "ws-spark3")
+        await model.selectProject(id: "ws-spark3")
 
-        XCTAssertEqual(model.selectedWorkspace?.id, "ws-spark3")
+        XCTAssertEqual(model.selectedProject?.id, "ws-spark3")
         XCTAssertEqual(model.noteDraft, "resume after crash")
-        XCTAssertEqual(model.selectedWorkspaceID, "ws-spark3")
+        XCTAssertEqual(model.selectedProjectID, "ws-spark3")
         XCTAssertNil(model.loadErrorMessage)
     }
 
     @MainActor
-    func test_latest_workspace_selection_wins_when_detail_requests_finish_out_of_order() async {
-        let client = MockWorkspaceCoreClient(
+    func test_latest_project_selection_wins_when_detail_requests_finish_out_of_order() async {
+        let client = MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
-                WorkspaceSummaryViewData(id: "ws-spark3", name: "spark3", liveSessions: 0, recentlyClosedSessions: 1, hasInterruptedSessions: true, liveSessionDetails: [])
+                ProjectSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
+                ProjectSummaryViewData(id: "ws-spark3", name: "spark3", liveSessions: 0, recentlyClosedSessions: 1, hasInterruptedSessions: true, liveSessionDetails: [])
             ],
             details: [
-                WorkspaceDetailViewData(
+                ProjectDetailViewData(
                     id: "ws-release",
                     name: "release",
                     noteBody: "check prod logs",
                     liveSessions: [],
                     closedSessions: []
                 ),
-                WorkspaceDetailViewData(
+                ProjectDetailViewData(
                     id: "ws-spark3",
                     name: "spark3",
                     noteBody: "resume after crash",
@@ -90,23 +90,23 @@ final class AppModelTests: XCTestCase {
 
         await model.load()
 
-        let firstSelection = Task { await model.selectWorkspace(id: "ws-release") }
-        let secondSelection = Task { await model.selectWorkspace(id: "ws-spark3") }
+        let firstSelection = Task { await model.selectProject(id: "ws-release") }
+        let secondSelection = Task { await model.selectProject(id: "ws-spark3") }
         await firstSelection.value
         await secondSelection.value
 
-        XCTAssertEqual(model.selectedWorkspaceID, "ws-spark3")
-        XCTAssertEqual(model.selectedWorkspace?.id, "ws-spark3")
+        XCTAssertEqual(model.selectedProjectID, "ws-spark3")
+        XCTAssertEqual(model.selectedProject?.id, "ws-spark3")
         XCTAssertEqual(model.noteDraft, "resume after crash")
     }
 
     @MainActor
     func test_detail_fetch_failure_clears_stale_detail_state() async {
-        let client = MockWorkspaceCoreClient(
+        let client = MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false, liveSessionDetails: [])
+                ProjectSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
-            details: [WorkspaceDetailViewData(
+            details: [ProjectDetailViewData(
                 id: "ws-release",
                 name: "release",
                 noteBody: "check prod logs",
@@ -116,9 +116,9 @@ final class AppModelTests: XCTestCase {
             detailErrorsByID: ["ws-release": CocoaError(.fileReadUnknown)]
         )
         let model = AppModel(core: client)
-        model.selectedWorkspaceID = "stale-workspace"
-        model.selectedWorkspace = WorkspaceDetailViewData(
-            id: "stale-workspace",
+        model.selectedProjectID = "stale-project"
+        model.selectedProject = ProjectDetailViewData(
+            id: "stale-project",
             name: "stale",
             noteBody: "stale note",
             liveSessions: [],
@@ -140,9 +140,9 @@ final class AppModelTests: XCTestCase {
 
         await model.load()
 
-        XCTAssertEqual(model.workspaces.map(\.id), ["ws-release"])
-        XCTAssertEqual(model.selectedWorkspaceID, "ws-release")
-        XCTAssertNil(model.selectedWorkspace)
+        XCTAssertEqual(model.projects.map(\.id), ["ws-release"])
+        XCTAssertEqual(model.selectedProjectID, "ws-release")
+        XCTAssertNil(model.selectedProject)
         XCTAssertEqual(model.noteDraft, "")
         XCTAssertEqual(model.liveSessions, [])
         XCTAssertEqual(model.closedSessions, [])
@@ -151,11 +151,11 @@ final class AppModelTests: XCTestCase {
 
     @MainActor
     func test_save_note_failure_surfaces_an_error() async {
-        let client = MockWorkspaceCoreClient(
+        let client = MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false, liveSessionDetails: [])
+                ProjectSummaryViewData(id: "ws-release", name: "release", liveSessions: 1, recentlyClosedSessions: 1, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
-            details: [WorkspaceDetailViewData(
+            details: [ProjectDetailViewData(
                 id: "ws-release",
                 name: "release",
                 noteBody: "check prod logs",
@@ -170,28 +170,28 @@ final class AppModelTests: XCTestCase {
         model.noteDraft = "updated note"
         await model.saveNote()
 
-        XCTAssertEqual(model.selectedWorkspace?.noteBody, "check prod logs")
+        XCTAssertEqual(model.selectedProject?.noteBody, "check prod logs")
         XCTAssertNotNil(model.noteSaveErrorMessage)
     }
 
     @MainActor
-    func test_save_note_does_not_overwrite_when_workspace_switches_during_save() async {
-        let client = MockWorkspaceCoreClient(
+    func test_save_note_does_not_overwrite_when_project_switches_during_save() async {
+        let client = MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-A", name: "Workspace A", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
-                WorkspaceSummaryViewData(id: "ws-B", name: "Workspace B", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
+                ProjectSummaryViewData(id: "ws-A", name: "Project A", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
+                ProjectSummaryViewData(id: "ws-B", name: "Project B", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
             details: [
-                WorkspaceDetailViewData(
+                ProjectDetailViewData(
                     id: "ws-A",
-                    name: "Workspace A",
+                    name: "Project A",
                     noteBody: "original A note",
                     liveSessions: [],
                     closedSessions: []
                 ),
-                WorkspaceDetailViewData(
+                ProjectDetailViewData(
                     id: "ws-B",
-                    name: "Workspace B",
+                    name: "Project B",
                     noteBody: "original B note",
                     liveSessions: [],
                     closedSessions: []
@@ -202,31 +202,31 @@ final class AppModelTests: XCTestCase {
         let model = AppModel(core: client)
 
         await model.load()
-        XCTAssertEqual(model.selectedWorkspace?.id, "ws-A")
+        XCTAssertEqual(model.selectedProject?.id, "ws-A")
 
         model.noteDraft = "updated A note"
         let saveTask = Task { await model.saveNote() }
         await Task.yield()
 
-        await model.selectWorkspace(id: "ws-B")
-        XCTAssertEqual(model.selectedWorkspace?.id, "ws-B")
+        await model.selectProject(id: "ws-B")
+        XCTAssertEqual(model.selectedProject?.id, "ws-B")
         XCTAssertEqual(model.noteDraft, "original B note")
 
         await saveTask.value
 
-        XCTAssertEqual(model.selectedWorkspace?.id, "ws-B")
-        XCTAssertEqual(model.selectedWorkspace?.noteBody, "original B note")
+        XCTAssertEqual(model.selectedProject?.id, "ws-B")
+        XCTAssertEqual(model.selectedProject?.noteBody, "original B note")
         XCTAssertEqual(model.noteDraft, "original B note")
         XCTAssertNil(model.noteSaveErrorMessage)
     }
 
     @MainActor
-    func test_rename_workspace_updates_name_in_list() async {
-        let client = MockWorkspaceCoreClient(
+    func test_rename_project_updates_name_in_list() async {
+        let client = MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-release", name: "release", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
+                ProjectSummaryViewData(id: "ws-release", name: "release", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
-            details: [WorkspaceDetailViewData(
+            details: [ProjectDetailViewData(
                 id: "ws-release",
                 name: "release",
                 noteBody: "",
@@ -237,29 +237,29 @@ final class AppModelTests: XCTestCase {
         let model = AppModel(core: client)
 
         await model.load()
-        await model.renameWorkspace(id: "ws-release", newName: "renamed-release")
+        await model.renameProject(id: "ws-release", newName: "renamed-release")
 
-        XCTAssertEqual(model.workspaces[0].name, "renamed-release")
+        XCTAssertEqual(model.projects[0].name, "renamed-release")
     }
 
     @MainActor
-    func test_create_workspace_inserts_below_active() async {
-        let client = MockWorkspaceCoreClient(
+    func test_create_project_inserts_below_active() async {
+        let client = MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-1", name: "Workspace 1", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
-                WorkspaceSummaryViewData(id: "ws-2", name: "Workspace 2", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
+                ProjectSummaryViewData(id: "ws-1", name: "Project 1", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
+                ProjectSummaryViewData(id: "ws-2", name: "Project 2", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
             details: [
-                WorkspaceDetailViewData(
+                ProjectDetailViewData(
                     id: "ws-1",
-                    name: "Workspace 1",
+                    name: "Project 1",
                     noteBody: "",
                     liveSessions: [],
                     closedSessions: []
                 ),
-                WorkspaceDetailViewData(
-                    id: "mock-workspace-id",
-                    name: "Workspace 3",
+                ProjectDetailViewData(
+                    id: "mock-project-id",
+                    name: "Project 3",
                     noteBody: "",
                     liveSessions: [],
                     closedSessions: []
@@ -269,23 +269,23 @@ final class AppModelTests: XCTestCase {
         let model = AppModel(core: client)
 
         await model.load()
-        await model.selectWorkspace(id: "ws-1")
-        await model.createWorkspace(name: "Workspace 3")
+        await model.selectProject(id: "ws-1")
+        await model.createProject(name: "Project 3")
 
-        XCTAssertEqual(model.workspaces.map(\.id), ["ws-1", "mock-workspace-id", "ws-2"])
-        XCTAssertEqual(model.workspaces[1].name, "Workspace 3")
+        XCTAssertEqual(model.projects.map(\.id), ["ws-1", "mock-project-id", "ws-2"])
+        XCTAssertEqual(model.projects[1].name, "Project 3")
     }
 
     @MainActor
-    func test_delete_workspace_removes_from_list() async {
-        let client = MockWorkspaceCoreClient(
+    func test_delete_project_removes_from_list() async {
+        let client = MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-1", name: "Workspace 1", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
-                WorkspaceSummaryViewData(id: "ws-2", name: "Workspace 2", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
+                ProjectSummaryViewData(id: "ws-1", name: "Project 1", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
+                ProjectSummaryViewData(id: "ws-2", name: "Project 2", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
-            details: [WorkspaceDetailViewData(
+            details: [ProjectDetailViewData(
                 id: "ws-1",
-                name: "Workspace 1",
+                name: "Project 1",
                 noteBody: "",
                 liveSessions: [],
                 closedSessions: []
@@ -294,21 +294,21 @@ final class AppModelTests: XCTestCase {
         let model = AppModel(core: client)
 
         await model.load()
-        await model.deleteWorkspace(id: "ws-2")
+        await model.deleteProject(id: "ws-2")
 
-        XCTAssertEqual(model.workspaces.count, 1)
+        XCTAssertEqual(model.projects.count, 1)
     }
 
     @MainActor
-    func test_close_workspace_hides_from_list() async {
-        let client = MockWorkspaceCoreClient(
+    func test_close_project_hides_from_list() async {
+        let client = MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-1", name: "Workspace 1", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
-                WorkspaceSummaryViewData(id: "ws-2", name: "Workspace 2", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
+                ProjectSummaryViewData(id: "ws-1", name: "Project 1", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
+                ProjectSummaryViewData(id: "ws-2", name: "Project 2", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
-            details: [WorkspaceDetailViewData(
+            details: [ProjectDetailViewData(
                 id: "ws-1",
-                name: "Workspace 1",
+                name: "Project 1",
                 noteBody: "",
                 liveSessions: [],
                 closedSessions: []
@@ -317,15 +317,15 @@ final class AppModelTests: XCTestCase {
         let model = AppModel(core: client)
 
         await model.load()
-        await model.closeWorkspace(id: "ws-2")
+        await model.closeProject(id: "ws-2")
 
-        XCTAssertEqual(model.workspaces.count, 1)
-        XCTAssertTrue(model.hiddenWorkspaceIDs.contains("ws-2"))
+        XCTAssertEqual(model.projects.count, 1)
+        XCTAssertTrue(model.hiddenProjectIDs.contains("ws-2"))
     }
 
     @MainActor
     func test_close_session_removes_from_live_sessions() async {
-        let client = MockWorkspaceCoreClient.workspaceWithOneLiveSession()
+        let client = MockProjectCoreClient.projectWithOneLiveSession()
         let host = MockTerminalHost()
         let model = AppModel(core: client, terminalFactory: { _ in host })
 
@@ -343,7 +343,7 @@ final class AppModelTests: XCTestCase {
 
     @MainActor
     func test_reopen_last_closed_session_creates_new_live_session() async {
-        let client = MockWorkspaceCoreClient.workspaceWithOneLiveSession()
+        let client = MockProjectCoreClient.projectWithOneLiveSession()
         let host = MockTerminalHost()
         let model = AppModel(core: client, terminalFactory: { _ in host })
 
@@ -364,7 +364,7 @@ final class AppModelTests: XCTestCase {
 
     @MainActor
     func test_pending_close_session_id_triggers_close_flow() async {
-        let client = MockWorkspaceCoreClient.workspaceWithOneLiveSession()
+        let client = MockProjectCoreClient.projectWithOneLiveSession()
         let host = MockTerminalHost()
         let model = AppModel(core: client, terminalFactory: { _ in host })
 
@@ -382,15 +382,15 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
-    func test_pending_close_workspace_id_triggers_close_flow() async {
-        let client = MockWorkspaceCoreClient(
+    func test_pending_close_project_id_triggers_close_flow() async {
+        let client = MockProjectCoreClient(
             summaries: [
-                WorkspaceSummaryViewData(id: "ws-1", name: "Workspace 1", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
-                WorkspaceSummaryViewData(id: "ws-2", name: "Workspace 2", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
+                ProjectSummaryViewData(id: "ws-1", name: "Project 1", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
+                ProjectSummaryViewData(id: "ws-2", name: "Project 2", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
             ],
-            details: [WorkspaceDetailViewData(
+            details: [ProjectDetailViewData(
                 id: "ws-1",
-                name: "Workspace 1",
+                name: "Project 1",
                 noteBody: "",
                 liveSessions: [],
                 closedSessions: []
@@ -399,9 +399,9 @@ final class AppModelTests: XCTestCase {
         let model = AppModel(core: client)
 
         await model.load()
-        model.pendingCloseWorkspaceID = "ws-2"
-        await model.closeWorkspace(id: "ws-2")
+        model.pendingCloseProjectID = "ws-2"
+        await model.closeProject(id: "ws-2")
 
-        XCTAssertTrue(model.hiddenWorkspaceIDs.contains("ws-2"))
+        XCTAssertTrue(model.hiddenProjectIDs.contains("ws-2"))
     }
 }

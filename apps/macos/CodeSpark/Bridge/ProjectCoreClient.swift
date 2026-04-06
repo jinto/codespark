@@ -1,13 +1,13 @@
 import Foundation
 
-protocol WorkspaceCoreClientProtocol {
-    func createWorkspace(name: String) async throws -> String
-    func listWorkspaceSummaries() async throws -> [WorkspaceSummaryViewData]
-    func workspaceDetail(id: String) async throws -> WorkspaceDetailViewData
-    func updateWorkspaceNote(id: String, noteBody: String) async throws
-    func renameWorkspace(id: String, newName: String) async throws
-    func deleteWorkspace(id: String) async throws
-    func startSession(workspaceId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String
+protocol ProjectCoreClientProtocol {
+    func createProject(name: String) async throws -> String
+    func listProjectSummaries() async throws -> [ProjectSummaryViewData]
+    func projectDetail(id: String) async throws -> ProjectDetailViewData
+    func updateProjectNote(id: String, noteBody: String) async throws
+    func renameProject(id: String, newName: String) async throws
+    func deleteProject(id: String) async throws
+    func startSession(projectId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String
 
     // MARK: - Session lifecycle
     func recordFinalSnapshotAndClose(
@@ -20,8 +20,8 @@ protocol WorkspaceCoreClientProtocol {
     func recordCheckpointSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData) async throws
 }
 
-enum WorkspaceCoreClient {
-    static var live: WorkspaceCoreClientProtocol {
+enum ProjectCoreClient {
+    static var live: ProjectCoreClientProtocol {
         let dbPath = FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("CodeSpark", isDirectory: true)
@@ -32,82 +32,82 @@ enum WorkspaceCoreClient {
                 atPath: (dbPath as NSString).deletingLastPathComponent,
                 withIntermediateDirectories: true
             )
-            return try LiveWorkspaceCoreClient(storePath: dbPath)
+            return try LiveProjectCoreClient(storePath: dbPath)
         } catch {
-            fatalError("Failed to initialize workspace store: \(error)")
+            fatalError("Failed to initialize project store: \(error)")
         }
     }
 }
 
-final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
+final class LiveProjectCoreClient: ProjectCoreClientProtocol {
     private let service: OpaquePointer
 
     init(storePath: String) throws {
-        var status = WORKSPACE_STATUS_OK
-        guard let svc = storePath.withCString({ workspace_service_new($0, &status) }),
-              status == WORKSPACE_STATUS_OK else {
-            throw NSError(domain: "WorkspaceCore", code: Int(status.rawValue), userInfo: [
-                NSLocalizedDescriptionKey: "Failed to open workspace store"
+        var status = PROJECT_STATUS_OK
+        guard let svc = storePath.withCString({ project_service_new($0, &status) }),
+              status == PROJECT_STATUS_OK else {
+            throw NSError(domain: "ProjectCore", code: Int(status.rawValue), userInfo: [
+                NSLocalizedDescriptionKey: "Failed to open project store"
             ])
         }
         self.service = svc
     }
 
     deinit {
-        workspace_service_free(service)
+        project_service_free(service)
     }
 
-    func createWorkspace(name: String) async throws -> String {
+    func createProject(name: String) async throws -> String {
         var outId: UnsafeMutablePointer<CChar>?
         let status = name.withCString { namePtr in
-            workspace_service_create_workspace(service, namePtr, &outId)
+            project_service_create_project(service, namePtr, &outId)
         }
-        guard status == WORKSPACE_STATUS_OK, let outId else { throw workspaceError(status) }
-        defer { workspace_free_string(outId) }
+        guard status == PROJECT_STATUS_OK, let outId else { throw projectError(status) }
+        defer { project_free_string(outId) }
         return String(cString: outId)
     }
 
-    func startSession(workspaceId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String {
-        var input = workspace_new_session_t(
-            workspace_id: nil,
-            transport: transport == "ssh" ? WORKSPACE_SESSION_TRANSPORT_SSH : WORKSPACE_SESSION_TRANSPORT_LOCAL,
+    func startSession(projectId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String {
+        var input = project_new_session_t(
+            project_id: nil,
+            transport: transport == "ssh" ? PROJECT_SESSION_TRANSPORT_SSH : PROJECT_SESSION_TRANSPORT_LOCAL,
             target_label: nil,
             title: nil,
             shell: nil,
             initial_cwd: nil
         )
         var outId: UnsafeMutablePointer<CChar>?
-        let status = workspaceId.withCString { wsPtr in
+        let status = projectId.withCString { projPtr in
             targetLabel.withCString { tlPtr in
                 title.withCString { titlePtr in
                     shell.withCString { shellPtr in
-                        input.workspace_id = wsPtr
+                        input.project_id = projPtr
                         input.target_label = tlPtr
                         input.title = titlePtr
                         input.shell = shellPtr
                         if let cwd = initialCwd {
                             return cwd.withCString { cwdPtr in
                                 input.initial_cwd = cwdPtr
-                                return workspace_service_start_session(service, &input, &outId)
+                                return project_service_start_session(service, &input, &outId)
                             }
                         } else {
-                            return workspace_service_start_session(service, &input, &outId)
+                            return project_service_start_session(service, &input, &outId)
                         }
                     }
                 }
             }
         }
-        guard status == WORKSPACE_STATUS_OK, let outId else { throw workspaceError(status) }
-        defer { workspace_free_string(outId) }
+        guard status == PROJECT_STATUS_OK, let outId else { throw projectError(status) }
+        defer { project_free_string(outId) }
         return String(cString: outId)
     }
 
-    func listWorkspaceSummaries() async throws -> [WorkspaceSummaryViewData] {
-        var summaries: UnsafeMutablePointer<workspace_summary_t>?
+    func listProjectSummaries() async throws -> [ProjectSummaryViewData] {
+        var summaries: UnsafeMutablePointer<project_summary_t>?
         var count: Int32 = 0
-        let status = workspace_service_list_workspace_summaries(service, &summaries, &count)
-        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
-        defer { workspace_free_summaries(summaries, count) }
+        let status = project_service_list_project_summaries(service, &summaries, &count)
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
+        defer { project_free_summaries(summaries, count) }
 
         return (0..<Int(count)).map { i in
             let s = summaries![i]
@@ -120,7 +120,7 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
                     lastCwd: d.last_cwd != nil ? String(cString: d.last_cwd) : nil
                 )
             }
-            return WorkspaceSummaryViewData(
+            return ProjectSummaryViewData(
                 id: String(cString: s.id),
                 name: String(cString: s.name),
                 liveSessions: Int(s.live_sessions),
@@ -131,11 +131,11 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
         }
     }
 
-    func workspaceDetail(id: String) async throws -> WorkspaceDetailViewData {
-        var detail = workspace_detail_t()
-        let status = id.withCString { workspace_service_workspace_detail(service, $0, &detail) }
-        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
-        defer { workspace_free_detail(&detail) }
+    func projectDetail(id: String) async throws -> ProjectDetailViewData {
+        var detail = project_detail_t()
+        let status = id.withCString { project_service_project_detail(service, $0, &detail) }
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
+        defer { project_free_detail(&detail) }
 
         let liveSessions = (0..<Int(detail.live_session_count)).map { i -> SessionViewData in
             let s = detail.live_sessions[i]
@@ -170,7 +170,7 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
             )
         }
 
-        return WorkspaceDetailViewData(
+        return ProjectDetailViewData(
             id: String(cString: detail.id),
             name: String(cString: detail.name),
             noteBody: String(cString: detail.note_body),
@@ -179,68 +179,68 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
         )
     }
 
-    func updateWorkspaceNote(id: String, noteBody: String) async throws {
+    func updateProjectNote(id: String, noteBody: String) async throws {
         let status = id.withCString { idPtr in
             noteBody.withCString { bodyPtr in
-                workspace_service_update_workspace_note(service, idPtr, bodyPtr)
+                project_service_update_project_note(service, idPtr, bodyPtr)
             }
         }
-        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
     }
 
     func updateSessionTitle(sessionId: String, newTitle: String) async throws {
         let status = sessionId.withCString { idPtr in
             newTitle.withCString { titlePtr in
-                workspace_service_update_session_title(service, idPtr, titlePtr)
+                project_service_update_session_title(service, idPtr, titlePtr)
             }
         }
-        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
     }
 
-    func renameWorkspace(id: String, newName: String) async throws {
+    func renameProject(id: String, newName: String) async throws {
         let status = id.withCString { idPtr in
             newName.withCString { namePtr in
-                workspace_service_rename_workspace(service, idPtr, namePtr)
+                project_service_rename_project(service, idPtr, namePtr)
             }
         }
-        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
     }
 
-    func deleteWorkspace(id: String) async throws {
+    func deleteProject(id: String) async throws {
         let status = id.withCString { idPtr in
-            workspace_service_delete_workspace(service, idPtr)
+            project_service_delete_project(service, idPtr)
         }
-        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
     }
 
     // MARK: - Session lifecycle
 
     func recordFinalSnapshotAndClose(sessionID: String, snapshot: TerminalSnapshotViewData, closeReason: CloseReasonViewData) async throws {
-        try recordSnapshot(sessionID: sessionID, snapshot: snapshot, kind: WORKSPACE_SNAPSHOT_KIND_FINAL)
+        try recordSnapshot(sessionID: sessionID, snapshot: snapshot, kind: PROJECT_SNAPSHOT_KIND_FINAL)
 
         let closeStatus = sessionID.withCString { idPtr in
-            workspace_service_close_session(service, idPtr, closeReason.toCReason(), nil)
+            project_service_close_session(service, idPtr, closeReason.toCReason(), nil)
         }
-        guard closeStatus == WORKSPACE_STATUS_OK else { throw workspaceError(closeStatus) }
+        guard closeStatus == PROJECT_STATUS_OK else { throw projectError(closeStatus) }
     }
 
     func reconcileInterruptedSessions() async throws {
-        let status = workspace_service_reconcile_interrupted_sessions(service)
-        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
+        let status = project_service_reconcile_interrupted_sessions(service)
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
     }
 
     func recordCheckpointSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData) async throws {
         guard !snapshot.lines.isEmpty else { return }
-        try recordSnapshot(sessionID: sessionID, snapshot: snapshot, kind: WORKSPACE_SNAPSHOT_KIND_CHECKPOINT)
+        try recordSnapshot(sessionID: sessionID, snapshot: snapshot, kind: PROJECT_SNAPSHOT_KIND_CHECKPOINT)
     }
 
-    private func recordSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData, kind: workspace_snapshot_kind_t) throws {
+    private func recordSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData, kind: project_snapshot_kind_t) throws {
         var cLines = snapshot.lines.map { strdup($0) }
         defer { cLines.forEach { free($0) } }
 
-        var input: workspace_new_snapshot_t
+        var input: project_new_snapshot_t
         if cLines.isEmpty {
-            input = workspace_new_snapshot_t(
+            input = project_new_snapshot_t(
                 session_id: nil,
                 kind: kind,
                 cwd: nil,
@@ -250,8 +250,8 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
                 line_count: 0
             )
         } else {
-            input = cLines.withUnsafeMutableBufferPointer { buf -> workspace_new_snapshot_t in
-                workspace_new_snapshot_t(
+            input = cLines.withUnsafeMutableBufferPointer { buf -> project_new_snapshot_t in
+                project_new_snapshot_t(
                     session_id: nil,
                     kind: kind,
                     cwd: nil,
@@ -263,16 +263,16 @@ final class LiveWorkspaceCoreClient: WorkspaceCoreClientProtocol {
             }
         }
 
-        let status = sessionID.withCString { idPtr -> workspace_status_t in
+        let status = sessionID.withCString { idPtr -> project_status_t in
             input.session_id = idPtr
-            return workspace_service_record_snapshot(service, &input)
+            return project_service_record_snapshot(service, &input)
         }
-        guard status == WORKSPACE_STATUS_OK else { throw workspaceError(status) }
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
     }
 
-    private func workspaceError(_ status: workspace_status_t) -> Error {
-        NSError(domain: "WorkspaceCore", code: Int(status.rawValue), userInfo: [
-            NSLocalizedDescriptionKey: "Workspace operation failed (code \(status.rawValue))"
+    private func projectError(_ status: project_status_t) -> Error {
+        NSError(domain: "ProjectCore", code: Int(status.rawValue), userInfo: [
+            NSLocalizedDescriptionKey: "Project operation failed (code \(status.rawValue))"
         ])
     }
 }
