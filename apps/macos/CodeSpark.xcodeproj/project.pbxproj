@@ -37,6 +37,7 @@
 		A1A3C945D732C2265CE7F237 /* GitBranchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C84785B7B190829BA72AF822 /* GitBranchService.swift */; };
 		A8AC8F45878B94C9B42EF42E /* CoreText.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18CA500C962BD0EB2F45C89C /* CoreText.framework */; };
 		ADC7C90A0E6B40786204C136 /* GhosttyTerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6465D8D71A356DB935A2D94C /* GhosttyTerminalHost.swift */; };
+		BA5F43C11DAFD8871379D34B /* codespark-hook in Resources */ = {isa = PBXBuildFile; fileRef = 89EFB0B5A4636EDF3FFF91CB /* codespark-hook */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		BC44D332E670E02BDA14C0E3 /* RecoveryActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09663ACDCA19F3846F64A881 /* RecoveryActionsTests.swift */; };
 		C99241FBDBBE4B339BFDFFBC /* TerminalHostFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */; };
 		CFB03CD2F8F7C456C5A7C118 /* MockWorkspaceCoreClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C69BD42FEE7053D390B7B9B7 /* MockWorkspaceCoreClient.swift */; };
@@ -60,6 +61,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = 2263AD2F95218B1DF797CA6C;
 			remoteInfo = CodeSpark;
+		};
+		4B7D860ED7239D33360EBA8B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1DB8162BC007CAA3AE103925 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 9F1ECF6F384D1FB661B8D7D2;
+			remoteInfo = "codespark-hook";
 		};
 		E343C6367A850C12BC39CBBF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -312,10 +320,12 @@
 				EFA6F634A150CF143B22983A /* Sources */,
 				C17E8870134F39DF9DFB380A /* Resources */,
 				34E16C43B362353B10DC387C /* Frameworks */,
+				95E5C0B0987A8AF10E817869 /* Bundle codespark-hook CLI */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D6EE85430A4DA6B4350F1BED /* PBXTargetDependency */,
 			);
 			name = CodeSpark;
 			packageProductDependencies = (
@@ -419,6 +429,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2AD588B127E8EA9EA6EBD176 /* Assets.xcassets in Resources */,
+				BA5F43C11DAFD8871379D34B /* codespark-hook in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -443,6 +454,25 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "export ZIG_GLOBAL_CACHE_DIR=\"$SRCROOT/../../libs/workspace-core/.zig-global-cache\"\nexport ZIG_LOCAL_CACHE_DIR=\"$SRCROOT/../../libs/workspace-core/.zig-cache\"\ncd \"$SRCROOT/../../libs/workspace-core\"\nif [ \"$CONFIGURATION\" = \"Release\" ]; then\n  zig build -Doptimize=ReleaseFast\nelse\n  zig build -Doptimize=Debug\nfi\n# Re-archive with Apple libtool to fix Zig archive alignment\nLIBPATH=\"zig-out/lib/libworkspace-core.a\"\nTMPDIR=$(mktemp -d)\ncd \"$TMPDIR\"\nar x \"$OLDPWD/$LIBPATH\"\nchmod 644 *.o\nlibtool -static -o \"$OLDPWD/$LIBPATH\" *.o\nrm -rf \"$TMPDIR\"\n";
+		};
+		95E5C0B0987A8AF10E817869 /* Bundle codespark-hook CLI */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle codespark-hook CLI";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "CLI_BIN=\"${BUILT_PRODUCTS_DIR}/codespark-hook\"\nDEST=\"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/bin\"\nif [ -f \"$CLI_BIN\" ]; then\n  mkdir -p \"$DEST\"\n  cp \"$CLI_BIN\" \"$DEST/codespark-hook\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -516,6 +546,11 @@
 			isa = PBXTargetDependency;
 			target = 2263AD2F95218B1DF797CA6C /* CodeSpark */;
 			targetProxy = E343C6367A850C12BC39CBBF /* PBXContainerItemProxy */;
+		};
+		D6EE85430A4DA6B4350F1BED /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 9F1ECF6F384D1FB661B8D7D2 /* codespark-hook */;
+			targetProxy = 4B7D860ED7239D33360EBA8B /* PBXContainerItemProxy */;
 		};
 		DAFF45537389257A88081F68 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;

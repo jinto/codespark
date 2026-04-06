@@ -31,7 +31,18 @@ targets:
           chmod 644 *.o
           libtool -static -o "$OLDPWD/$LIBPATH" *.o
           rm -rf "$TMPDIR"
+    postBuildScripts:
+      - name: Bundle codespark-hook CLI
+        basedOnDependencyAnalysis: false
+        script: |
+          CLI_BIN="${BUILT_PRODUCTS_DIR}/codespark-hook"
+          DEST="${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/bin"
+          if [ -f "$CLI_BIN" ]; then
+            mkdir -p "$DEST"
+            cp "$CLI_BIN" "$DEST/codespark-hook"
+          fi
     dependencies:
+      - target: codespark-hook
       - framework: ../../vendor/ghostty/macos/GhosttyKit.xcframework
         embed: false
       - sdk: AppKit.framework

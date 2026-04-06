@@ -130,10 +130,15 @@ struct CodeSparkApp: App {
         do {
             try hookServer.start()
             model.hookServer = hookServer
-            // Inject socket path so child processes (Claude Code) can reach us
             setenv("CODESPARK_SOCK", hookServer.socketPath, 1)
         } catch {
             NSLog("[CodeSpark] Hook server failed to start: \(error)")
+        }
+
+        // Add bundled CLI tools to PATH so child processes can find codespark-hook
+        if let binDir = Bundle.main.url(forResource: "bin", withExtension: nil)?.path {
+            let currentPath = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin"
+            setenv("PATH", "\(binDir):\(currentPath)", 1)
         }
 
         #if GHOSTTY_FIRST
