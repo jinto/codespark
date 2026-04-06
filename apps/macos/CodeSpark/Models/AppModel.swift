@@ -179,6 +179,35 @@ final class AppModel: ObservableObject {
         let path = url.path
         let name = url.lastPathComponent
         await createProject(name: name, path: path)
+        await importWorktreesIfNeeded(path: path)
+    }
+
+    private func importWorktreesIfNeeded(path: String) async {
+        guard !path.isEmpty else { return }
+
+        gitWorktreeService.invalidateCache(for: path)
+        await gitWorktreeService.refreshWorktrees(for: [path])
+
+        guard let worktrees = gitWorktreeService.worktrees(for: path),
+              worktrees.count > 1 else { return }
+
+        let nonMainCount = worktrees.filter { !$0.isMainWorktree }.count
+
+        let alert = NSAlert()
+        alert.messageText = "워크스페이스 가져오기"
+        alert.informativeText = "\(nonMainCount)개의 워크트리가 발견되었습니다. 각 워크트리에 터미널을 열까요?"
+        alert.addButton(withTitle: "가져오기")
+        alert.addButton(withTitle: "건너뛰기")
+
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            recomputeWorkspaces()
+            return
+        }
+
+        recomputeWorkspaces()
+        for wt in worktrees {
+            await newSession(inWorkspacePath: wt.path)
+        }
     }
 
     func createProject(name: String, path: String = "", transport: String = "local") async {
