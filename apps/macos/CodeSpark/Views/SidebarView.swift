@@ -128,8 +128,14 @@ struct SidebarView: View {
             isActive: model.activeSessionID == session.id,
             isIdle: model.idleSessionIDs.contains(session.id),
             onSelect: {
-                model.activeSessionID = session.id
-                Task { await model.selectProject(id: projectID) }
+                if model.selectedProjectID == projectID {
+                    model.activeSessionID = session.id
+                } else {
+                    Task {
+                        await model.selectProject(id: projectID)
+                        model.activeSessionID = session.id
+                    }
+                }
             },
             onRename: { newTitle in
                 Task { await model.renameSession(id: session.id, title: newTitle) }

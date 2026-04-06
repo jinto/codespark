@@ -47,7 +47,7 @@ let connected = withUnsafePointer(to: &addr) { ptr in
         connect(fd, $0, addrLen)
     }
 }
-guard connected == 0 else { close(fd); exit(1) }
+guard connected == 0 else { close(fd); exit(0) }
 
 // Send JSON + newline delimiter
 payload.withUnsafeBytes { _ = write(fd, $0.baseAddress!, payload.count) }
