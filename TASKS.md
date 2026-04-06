@@ -41,7 +41,7 @@
 - [x] **ProjectCoreClient unsafe pointer 수정** — baseAddress 강제 언래핑 제거, 포인터 수명 보장
 
 ### Major
-- [ ] **AppModel 분리** — SessionManager, HookProcessor, NotificationManager 추출 (711줄 → 각 200줄 이하)
+- [x] **AppModel 분리** — Extension 파일 분리: AppModel+Hook.swift (105줄), AppModel+Monitor.swift (90줄), AppModel.swift (511줄)
 - [x] **에러 삼킴 수정** — try? → do/catch + NSLog (AppModel 4곳)
 - [x] **세션 복구 코드 통합** — recoverSession(from:) 하나로 통합
 - [x] **프로젝트 닫기/삭제 중복 제거** — teardownProject(id:) 공통 함수 추출

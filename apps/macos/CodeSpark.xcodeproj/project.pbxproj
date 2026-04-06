@@ -41,6 +41,7 @@
 		ADC7C90A0E6B40786204C136 /* GhosttyTerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6465D8D71A356DB935A2D94C /* GhosttyTerminalHost.swift */; };
 		BA5F43C11DAFD8871379D34B /* codespark-hook in Resources */ = {isa = PBXBuildFile; fileRef = 89EFB0B5A4636EDF3FFF91CB /* codespark-hook */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		BC44D332E670E02BDA14C0E3 /* RecoveryActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09663ACDCA19F3846F64A881 /* RecoveryActionsTests.swift */; };
+		C32074958E57BD4DEAFFCCC1 /* AppModel+Monitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6AB5E91D161AAA64F9501C4 /* AppModel+Monitor.swift */; };
 		C99241FBDBBE4B339BFDFFBC /* TerminalHostFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */; };
 		D6FB9049A77D020BD711EB57 /* HookSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A611C18C82E4858E7E1A2B3 /* HookSocketServer.swift */; };
 		D7803EB73C46D279A856A2FA /* WindowDragArea.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A9B2227B48DAD2AB9FB7207 /* WindowDragArea.swift */; };
@@ -52,6 +53,7 @@
 		E8CF80B13D9BFCC8278965D6 /* SessionSidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */; };
 		EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */; };
 		EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1188AFD5C69D085D60330D02 /* AppTheme.swift */; };
+		F42B900FB3E9710ABADC4D48 /* AppModel+Hook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5130A58E2FC5881608127D41 /* AppModel+Hook.swift */; };
 		F47361B02296F2A523F06A08 /* ClaudeHooksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */; };
 /* End PBXBuildFile section */
 
@@ -97,6 +99,7 @@
 		381AF8F6420D8B1CC3F1D29A /* CodeSpark-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CodeSpark-Bridging-Header.h"; sourceTree = "<group>"; };
 		3A611C18C82E4858E7E1A2B3 /* HookSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HookSocketServer.swift; sourceTree = "<group>"; };
 		48CA429791ED61F383243326 /* MockTerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTerminalHost.swift; sourceTree = "<group>"; };
+		5130A58E2FC5881608127D41 /* AppModel+Hook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Hook.swift"; sourceTree = "<group>"; };
 		57130C98814A126F278112F1 /* RecentlyClosedSessionCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentlyClosedSessionCardView.swift; sourceTree = "<group>"; };
 		61B66760C324727703F07319 /* GhosttyRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyRuntime.swift; sourceTree = "<group>"; };
 		63111BBE479AA199E252A364 /* ProjectCoreClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCoreClient.swift; sourceTree = "<group>"; };
@@ -130,6 +133,7 @@
 		E2E88E37B7F37CF55D219D6B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F3450FDDB010612C39DC6A6B /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostFactory.swift; sourceTree = "<group>"; };
+		F6AB5E91D161AAA64F9501C4 /* AppModel+Monitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Monitor.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -259,6 +263,8 @@
 			isa = PBXGroup;
 			children = (
 				6D4B27F8AE7CBF0B33461523 /* AppModel.swift */,
+				5130A58E2FC5881608127D41 /* AppModel+Hook.swift */,
+				F6AB5E91D161AAA64F9501C4 /* AppModel+Monitor.swift */,
 				372FF5235CD476B7A3D7D120 /* ProjectViewData.swift */,
 			);
 			path = Models;
@@ -513,6 +519,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F42B900FB3E9710ABADC4D48 /* AppModel+Hook.swift in Sources */,
+				C32074958E57BD4DEAFFCCC1 /* AppModel+Monitor.swift in Sources */,
 				566296EC328127177468735C /* AppModel.swift in Sources */,
 				EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */,
 				F47361B02296F2A523F06A08 /* ClaudeHooksManager.swift in Sources */,

@@ -31,15 +31,15 @@ final class AppModel: ObservableObject {
 
     var hookServer: HookSocketServer?
 
-    private let core: ProjectCoreClientProtocol
+    let core: ProjectCoreClientProtocol
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
-    private var hosts: [String: any TerminalHostProtocol] = [:]
+    var hosts: [String: any TerminalHostProtocol] = [:]
     private var detailTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
-    private var idleTimer: AnyCancellable?
-    private var checkpointTimer: AnyCancellable?
+    var idleTimer: AnyCancellable?
+    var checkpointTimer: AnyCancellable?
     private var hasReconciledOnLaunch = false
-    private let gitBranchService = GitBranchService()
+    let gitBranchService = GitBranchService()
 
     init(
         core: ProjectCoreClientProtocol,
@@ -47,18 +47,7 @@ final class AppModel: ObservableObject {
     ) {
         self.core = core
         self.terminalFactory = terminalFactory
-        self.idleTimer = Timer.publish(every: 10, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                guard NSApp.isActive else { return }
-                self?.updateIdleStates()
-                self?.refreshGitBranches()
-            }
-        self.checkpointTimer = Timer.publish(every: 30, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.captureCheckpoints()
-            }
+        startMonitorTimers()
     }
 
     func attachLiveSessions() async {
@@ -448,76 +437,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private var closingSessionIDs: Set<String> = []
-
-    private func captureCheckpoints() {
-        guard !hosts.isEmpty else { return }
-        for (sessionID, host) in hosts where !closingSessionIDs.contains(sessionID) {
-            guard let snapshot = host.extractSnapshot() else { continue }
-            Task { [weak self] in
-                do {
-                    try await self?.core.recordCheckpointSnapshot(sessionID: sessionID, snapshot: snapshot)
-                } catch {
-                    NSLog("[CodeSpark] checkpoint snapshot failed for session \(sessionID): \(error)")
-                }
-            }
-        }
-    }
-
-    private func updateIdleStates() {
-        guard !hosts.isEmpty else { return }
-        let threshold = Date().addingTimeInterval(-10)
-        let newSet = Set(
-            hosts.compactMap { (id, host) in
-                guard let lastOutput = host.lastOutputTime else { return id }
-                return lastOutput < threshold ? id : nil
-            }
-        )
-        // Detect newly idle sessions for notifications
-        let newlyIdle = newSet.subtracting(idleSessionIDs)
-        if !newlyIdle.isEmpty {
-            sendIdleNotifications(for: newlyIdle)
-        }
-        if newSet != idleSessionIDs { idleSessionIDs = newSet }
-    }
-
-    private func sendIdleNotifications(for sessionIDs: Set<String>) {
-        guard NSApp.isActive else { return }
-        for sessionID in sessionIDs {
-            // Skip if this is the session the user is currently looking at
-            guard sessionID != activeSessionID else { continue }
-            guard let session = liveSessions.first(where: { $0.id == sessionID }) else { continue }
-
-            let projName = projects.first { proj in
-                proj.liveSessionDetails.contains { $0.id == sessionID }
-            }?.name ?? "Terminal"
-
-            let content = UNMutableNotificationContent()
-            content.title = projName
-            content.body = "\(session.title) is waiting for input"
-            content.sound = .default
-            let request = UNNotificationRequest(
-                identifier: "idle-\(sessionID)",
-                content: content,
-                trigger: nil
-            )
-            UNUserNotificationCenter.current().add(request)
-        }
-    }
-
-    private func refreshGitBranches() {
-        let paths = projects.flatMap { $0.liveSessionDetails.compactMap(\.lastCwd) }
-        guard !paths.isEmpty else { return }
-        Task {
-            await gitBranchService.refreshBranches(for: paths)
-            let updated = Dictionary(
-                uniqueKeysWithValues: paths.compactMap { path in
-                    gitBranchService.branch(for: path).map { (path, $0) }
-                }
-            )
-            if updated != gitBranches { gitBranches = updated }
-        }
-    }
+    var closingSessionIDs: Set<String> = []
 
     func markActiveSessionOutput() {
         guard let id = activeSessionID, let host = hosts[id] else { return }
@@ -541,93 +461,6 @@ final class AppModel: ObservableObject {
         return .idle
     }
 
-    // MARK: - Hook event handling
-
-    func handleHookEvent(_ event: ClaudeHookEvent) {
-        guard let cwd = event.cwd else { return }
-        switch event.hookEventName {
-        case "Stop":
-            hookNeedsInputCwds.insert(cwd)
-            if let proj = projectForCwd(cwd) {
-                captureSnippet(for: proj)
-                if proj.id != selectedProjectID {
-                    sendHookNotification(for: proj, snippet: hookSnippets[proj.id])
-                }
-            }
-        case "UserPromptSubmit":
-            hookNeedsInputCwds.remove(cwd)
-            if let proj = projectForCwd(cwd) {
-                acknowledgedProjectIDs.remove(proj.id)
-                hookSnippets.removeValue(forKey: proj.id)
-            }
-        case "SessionStart":
-            hookNeedsInputCwds.remove(cwd)
-        case "SessionEnd":
-            hookNeedsInputCwds.remove(cwd)
-        case "Notification":
-            if let proj = projectForCwd(cwd) {
-                let snippet = event.message ?? event.title ?? "Claude is waiting for your input"
-                hookSnippets[proj.id] = String(snippet.prefix(120))
-                hookNeedsInputCwds.insert(cwd)
-                if proj.id != selectedProjectID {
-                    sendHookNotification(for: proj, snippet: snippet)
-                }
-            }
-        default:
-            break
-        }
-    }
-
-    private func captureSnippet(for project: ProjectSummaryViewData) {
-        // Find the host for this project's session and extract last non-empty line
-        for session in project.liveSessionDetails {
-            guard let host = hosts[session.id],
-                  let snapshot = host.extractSnapshot() else { continue }
-            let lastLine = snapshot.lines
-                .reversed()
-                .first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }?
-                .trimmingCharacters(in: .whitespaces)
-            if let lastLine, !lastLine.isEmpty {
-                hookSnippets[project.id] = String(lastLine.prefix(80))
-                return
-            }
-        }
-    }
-
-    func acknowledgeProject(_ id: String) {
-        acknowledgedProjectIDs.insert(id)
-        UNUserNotificationCenter.current()
-            .removeDeliveredNotifications(withIdentifiers: ["hook-needsinput-\(id)"])
-    }
-
-    private func projectForCwd(_ cwd: String) -> ProjectSummaryViewData? {
-        // Exact match first
-        if let proj = projects.first(where: { proj in
-            proj.liveSessionDetails.contains { $0.lastCwd == cwd }
-        }) { return proj }
-        // Prefix fallback
-        return projects.first(where: { proj in
-            proj.liveSessionDetails.contains { session in
-                guard let lastCwd = session.lastCwd else { return false }
-                return cwd.hasPrefix(lastCwd) || lastCwd.hasPrefix(cwd)
-            }
-        })
-    }
-
-    private func sendHookNotification(for project: ProjectSummaryViewData, snippet: String? = nil) {
-        guard !acknowledgedProjectIDs.contains(project.id) else { return }
-        let content = UNMutableNotificationContent()
-        content.title = project.name
-        content.body = snippet ?? "Claude is waiting for your input"
-        content.sound = .default
-        let request = UNNotificationRequest(
-            identifier: "hook-needsinput-\(project.id)",
-            content: content,
-            trigger: nil
-        )
-        UNUserNotificationCenter.current().add(request)
-    }
-
     private func clearDetailState() {
         selectedProject = nil
         noteDraft = ""
@@ -637,17 +470,6 @@ final class AppModel: ObservableObject {
         noteSaveErrorMessage = nil
     }
 
-    // MARK: - Claude hooks health check
-
-    func checkClaudeHooksHealth() {
-        claudeHooksStatus = ClaudeHooksManager.checkStatus()
-    }
-
-    func installClaudeHooks() {
-        ClaudeHooksManager.install()
-        _ = ClaudeHooksManager.installCLISymlink()
-        checkClaudeHooksHealth()
-    }
 }
 
 struct RecoveryActionViewData {
@@ -687,8 +509,3 @@ extension AppModel: TerminalHostDelegate {
     }
 }
 
-extension AppModel: HookSocketServerDelegate {
-    func hookServer(_ server: HookSocketServer, didReceive event: ClaudeHookEvent) {
-        handleHookEvent(event)
-    }
-}
