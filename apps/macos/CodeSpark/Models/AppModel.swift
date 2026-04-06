@@ -167,6 +167,20 @@ final class AppModel: ObservableObject {
 
     // MARK: - Project lifecycle
 
+    func createProjectFromFolder() async {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = "Select a folder for the new project"
+        panel.prompt = "Select"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let path = url.path
+        let name = url.lastPathComponent
+        await createProject(name: name, path: path)
+    }
+
     func createProject(name: String, path: String = "", transport: String = "local") async {
         do {
             let newID = try await core.createProject(name: name, path: path, transport: transport)

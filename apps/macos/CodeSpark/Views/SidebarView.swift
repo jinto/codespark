@@ -165,7 +165,7 @@ struct SidebarView: View {
                         }
                     }
                     Button {
-                        Task { await model.createProject(name: "New Project") }
+                        Task { await model.createProjectFromFolder() }
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")

@@ -48,7 +48,7 @@ struct CodeSparkApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Project") {
-                    Task { await model.createProject(name: "New Project") }
+                    Task { await model.createProjectFromFolder() }
                 }
                 .keyboardShortcut("n", modifiers: .command)
 
