@@ -36,10 +36,14 @@ jobs:
       - name: Clone Ghostty headers (cache hit)
         if: steps.ghostty-cache.outputs.cache-hit == 'true'
         run: |
+          # Preserve cached xcframework, clone headers into temp, then merge
+          mv vendor/ghostty/macos/GhosttyKit.xcframework /tmp/ghosttykit-cached
           rm -rf vendor/ghostty
           git clone --depth 1 --filter=blob:none --sparse https://github.com/ghostty-org/ghostty.git vendor/ghostty
           cd vendor/ghostty
           git sparse-checkout set include macos/Sources
+          # Restore cached xcframework
+          mv /tmp/ghosttykit-cached macos/GhosttyKit.xcframework
 
       - name: Setup signing keychain
         env:
