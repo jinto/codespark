@@ -404,7 +404,8 @@ pub export fn project_service_record_snapshot(
 
     const session_id = spanRequired(raw.session_id) orelse return .PROJECT_STATUS_RECORD_SNAPSHOT_FAILED;
     const kind = fromSnapshotKind(raw.kind) orelse return .PROJECT_STATUS_RECORD_SNAPSHOT_FAILED;
-    if (raw.line_count < 0) return .PROJECT_STATUS_RECORD_SNAPSHOT_FAILED;
+    if (raw.line_count < 0 or raw.line_count > 10000) return .PROJECT_STATUS_RECORD_SNAPSHOT_FAILED;
+    if (raw.line_count > 0 and raw.lines == null) return .PROJECT_STATUS_RECORD_SNAPSHOT_FAILED;
 
     const line_count: usize = @intCast(raw.line_count);
     const lines = c_allocator.alloc([]const u8, line_count) catch return .PROJECT_STATUS_RECORD_SNAPSHOT_FAILED;

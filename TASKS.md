@@ -33,6 +33,25 @@
 - [x] **AppStorage 마이그레이션** — 키 변경 + 마이그레이션 코드 (기존 사용자 설정 보존)
 - [x] **문서 업데이트** — CLAUDE.md, TASKS.md, PRD.md
 
+## M10.7: 코드 리뷰 기반 리팩토링
+
+### Critical
+- [x] **DB 마이그레이션 시스템** — schema_version 테이블 + 버전별 ALTER TABLE 체인 (store.zig)
+- [x] **C API line_count 검증** — 범위 체크 추가, 비정상 값 방어 (c_api.zig)
+- [x] **ProjectCoreClient unsafe pointer 수정** — baseAddress 강제 언래핑 제거, 포인터 수명 보장
+
+### Major
+- [ ] **AppModel 분리** — SessionManager, HookProcessor, NotificationManager 추출 (711줄 → 각 200줄 이하)
+- [ ] **에러 삼킴 수정** — try? 패턴을 적절한 에러 처리로 교체 (AppModel 6곳)
+- [ ] **세션 복구 코드 통합** — recoverLocalSession/recoverSSHSession → recoverSession(from:) 통합
+- [ ] **프로젝트 닫기/삭제 중복 제거** — 세션 정리 로직 공통 함수 추출
+- [ ] **타임라인 이벤트 에러 처리** — catch {} → 로깅 (store.zig 6곳)
+
+### Design
+- [ ] **Hook 시스템 분리** — HookEventProcessor 추출, AppModel은 결과만 처리
+- [ ] **AppStorage 키 상수화** — 하드코딩 문자열 → 상수
+- [ ] **비즈니스 로직 Zig 이동** — 세션 상태 머신, hook 이벤트 타입 정의를 Zig로
+
 ## M11: 터미널 분할 + 검색
 
 - [ ] **터미널 분할 (수평)** — Cmd+D로 현재 터미널을 좌우 분할

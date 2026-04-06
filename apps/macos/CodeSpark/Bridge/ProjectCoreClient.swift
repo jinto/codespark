@@ -238,34 +238,40 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
         var cLines = snapshot.lines.map { strdup($0) }
         defer { cLines.forEach { free($0) } }
 
-        var input: project_new_snapshot_t
-        if cLines.isEmpty {
-            input = project_new_snapshot_t(
-                session_id: nil,
-                kind: kind,
-                cwd: nil,
-                cols: UInt16(snapshot.cols),
-                rows: UInt16(snapshot.rows),
-                lines: nil,
-                line_count: 0
-            )
-        } else {
-            input = cLines.withUnsafeMutableBufferPointer { buf -> project_new_snapshot_t in
-                project_new_snapshot_t(
+        let status: project_status_t = cLines.withUnsafeMutableBufferPointer { buf in
+            guard let baseAddress = buf.baseAddress, !buf.isEmpty else {
+                // Empty buffer — pass nil lines to C API
+                var input = project_new_snapshot_t(
                     session_id: nil,
                     kind: kind,
                     cwd: nil,
                     cols: UInt16(snapshot.cols),
                     rows: UInt16(snapshot.rows),
-                    lines: UnsafePointer(buf.baseAddress!.withMemoryRebound(to: UnsafePointer<CChar>?.self, capacity: buf.count) { $0 }),
-                    line_count: Int32(snapshot.lines.count)
+                    lines: nil,
+                    line_count: 0
                 )
+                return sessionID.withCString { idPtr -> project_status_t in
+                    input.session_id = idPtr
+                    return project_service_record_snapshot(service, &input)
+                }
             }
-        }
 
-        let status = sessionID.withCString { idPtr -> project_status_t in
-            input.session_id = idPtr
-            return project_service_record_snapshot(service, &input)
+            // Safe: pointer is consumed within withUnsafeMutableBufferPointer scope
+            return baseAddress.withMemoryRebound(to: UnsafePointer<CChar>?.self, capacity: buf.count) { linesPtr in
+                var input = project_new_snapshot_t(
+                    session_id: nil,
+                    kind: kind,
+                    cwd: nil,
+                    cols: UInt16(snapshot.cols),
+                    rows: UInt16(snapshot.rows),
+                    lines: linesPtr,
+                    line_count: Int32(buf.count)
+                )
+                return sessionID.withCString { idPtr -> project_status_t in
+                    input.session_id = idPtr
+                    return project_service_record_snapshot(service, &input)
+                }
+            }
         }
         guard status == PROJECT_STATUS_OK else { throw projectError(status) }
     }

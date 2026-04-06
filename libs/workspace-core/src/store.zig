@@ -381,6 +381,38 @@ pub const Store = struct {
     }
 
     fn migrate(self: *Store) StoreError!void {
+        // Bootstrap the version table (always safe to run)
+        try self.execScript(
+            "create table if not exists schema_version (version integer not null)",
+        );
+
+        const version = try self.schemaVersion();
+
+        if (version < 1) {
+            try self.migrateV1();
+            try self.setSchemaVersion(1);
+        }
+        // if (version < 2) { try self.migrateV2(); try self.setSchemaVersion(2); }
+    }
+
+    fn schemaVersion(self: *Store) StoreError!u32 {
+        var stmt = try Statement.init(self.db, "select version from schema_version limit 1");
+        defer stmt.deinit();
+        if (!try stmt.step()) return 0;
+        const v = stmt.columnInt64(0);
+        if (v < 0 or v > std.math.maxInt(u32)) return error.InvalidData;
+        return @intCast(v);
+    }
+
+    fn setSchemaVersion(self: *Store, version: u32) StoreError!void {
+        try self.execScript("delete from schema_version");
+        var stmt = try Statement.init(self.db, "insert into schema_version (version) values (?1)");
+        defer stmt.deinit();
+        try stmt.bindInt64(1, @intCast(version));
+        try stmt.expectDone();
+    }
+
+    fn migrateV1(self: *Store) StoreError!void {
         try self.execScript(
             "create table if not exists projects (\n" ++
                 "    id text primary key not null,\n" ++
