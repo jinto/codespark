@@ -36,6 +36,7 @@ jobs:
       - name: Clone Ghostty headers (cache hit)
         if: steps.ghostty-cache.outputs.cache-hit == 'true'
         run: |
+          rm -rf vendor/ghostty
           git clone --depth 1 --filter=blob:none --sparse https://github.com/ghostty-org/ghostty.git vendor/ghostty
           cd vendor/ghostty
           git sparse-checkout set include macos/Sources
