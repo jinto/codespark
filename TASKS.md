@@ -50,7 +50,7 @@
 ### Design
 - [x] **Hook 시스템 분리** — HookEventProcessor 순수 로직 타입 추출, AppModel은 결과만 적용
 - [x] **AppStorage 키 상수화** — StorageKeys enum으로 8개 키 상수화
-- [ ] **비즈니스 로직 Zig 이동** — 세션 상태 머신, hook 이벤트 타입 정의를 Zig로
+- [x] **비즈니스 로직 Zig 이동** — 미사용 모델 삭제, findProjectByCwd DB 쿼리 추가, restore.zig 삭제
 
 ## M11: Project = 폴더 경로 단순화
 

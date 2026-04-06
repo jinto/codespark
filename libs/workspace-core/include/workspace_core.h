@@ -148,6 +148,12 @@ project_status_t project_service_project_detail(
     project_detail_t *out_detail
 );
 
+project_status_t project_service_find_project_by_cwd(
+    project_service_t *service,
+    const char *cwd,
+    char **out_project_id
+);
+
 void project_free_string(char *value);
 void project_free_summaries(project_summary_t *summaries, int32_t count);
 void project_free_detail(project_detail_t *detail);

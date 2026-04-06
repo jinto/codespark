@@ -502,6 +502,27 @@ pub export fn project_service_project_detail(
     return .PROJECT_STATUS_OK;
 }
 
+pub export fn project_service_find_project_by_cwd(
+    service: ?*project_service,
+    cwd: ?[*:0]const u8,
+    out_project_id: ?*?[*:0]u8,
+) project_status_t {
+    if (out_project_id) |ptr| ptr.* = null;
+    const ptr = service orelse return .PROJECT_STATUS_PROJECT_DETAIL_FAILED;
+    const cwd_slice = spanRequired(cwd) orelse return .PROJECT_STATUS_PROJECT_DETAIL_FAILED;
+
+    ptr.mutex.lock();
+    defer ptr.mutex.unlock();
+
+    const project_id = ptr.store.findProjectByCwd(c_allocator, cwd_slice) catch return .PROJECT_STATUS_PROJECT_DETAIL_FAILED;
+    if (project_id) |id| {
+        defer c_allocator.free(id);
+        const output = dupCString(id) catch return .PROJECT_STATUS_PROJECT_DETAIL_FAILED;
+        if (out_project_id) |out| out.* = output;
+    }
+    return .PROJECT_STATUS_OK;
+}
+
 pub export fn project_free_string(value: ?[*:0]u8) void {
     if (value) |ptr| {
         c_allocator.free(std.mem.span(ptr));

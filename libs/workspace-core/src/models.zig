@@ -71,7 +71,6 @@ pub const TimelineEventKind = enum {
     session_closed,
     session_interrupted,
     snapshot_finalized,
-    note_updated,
 
     pub fn asText(self: TimelineEventKind) []const u8 {
         return switch (self) {
@@ -80,7 +79,6 @@ pub const TimelineEventKind = enum {
             .session_closed => "session_closed",
             .session_interrupted => "session_interrupted",
             .snapshot_finalized => "snapshot_finalized",
-            .note_updated => "note_updated",
         };
     }
 };
@@ -139,15 +137,6 @@ pub const TerminalGridInput = struct {
     lines: []const []const u8,
 };
 
-pub const RestoreRecipe = struct {
-    launch_command: []u8,
-
-    pub fn deinit(self: *RestoreRecipe, allocator: std.mem.Allocator) void {
-        allocator.free(self.launch_command);
-        self.* = undefined;
-    }
-};
-
 pub const SessionSummary = struct {
     id: []u8,
     title: []u8,
@@ -161,27 +150,6 @@ pub const SessionSummary = struct {
         allocator.free(self.title);
         allocator.free(self.target_label);
         if (self.last_cwd) |value| allocator.free(value);
-        self.* = undefined;
-    }
-};
-
-pub const ClosedSessionSummary = struct {
-    id: []u8,
-    title: []u8,
-    transport: SessionTransport,
-    target_label: []u8,
-    last_cwd: ?[]u8,
-    close_reason: CloseReason,
-    snapshot_preview: TerminalGrid,
-    restore_recipe: RestoreRecipe,
-
-    pub fn deinit(self: *ClosedSessionSummary, allocator: std.mem.Allocator) void {
-        allocator.free(self.id);
-        allocator.free(self.title);
-        allocator.free(self.target_label);
-        if (self.last_cwd) |value| allocator.free(value);
-        self.snapshot_preview.deinit(allocator);
-        self.restore_recipe.deinit(allocator);
         self.* = undefined;
     }
 };

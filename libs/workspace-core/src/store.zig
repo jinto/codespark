@@ -381,6 +381,46 @@ pub const Store = struct {
         };
     }
 
+    pub fn findProjectByCwd(self: *Store, allocator: std.mem.Allocator, cwd: []const u8) StoreError!?[]u8 {
+        // 1. Exact match: find a live session whose last_cwd equals the given cwd
+        {
+            var stmt = try Statement.init(
+                self.db,
+                "select s.project_id\n" ++
+                    " from sessions s\n" ++
+                    " where s.last_cwd = ?1 and s.state = 'live'\n" ++
+                    " order by s.updated_at desc\n" ++
+                    " limit 1",
+            );
+            defer stmt.deinit();
+            try stmt.bindText(1, cwd);
+            if (try stmt.step()) {
+                return try stmt.columnOwnedText(allocator, 0);
+            }
+        }
+
+        // 2. Prefix match: find a project whose path is a prefix of cwd (or vice versa)
+        //    We fetch all projects and test in Zig to avoid SQLite LIKE/GLOB edge cases.
+        {
+            var stmt = try Statement.init(
+                self.db,
+                "select id, path from projects\n" ++
+                    " where path != ''\n" ++
+                    " order by updated_at desc",
+            );
+            defer stmt.deinit();
+            while (try stmt.step()) {
+                const path = try stmt.columnTextSlice(1);
+                if (path.len == 0) continue;
+                if (std.mem.startsWith(u8, cwd, path) or std.mem.startsWith(u8, path, cwd)) {
+                    return try stmt.columnOwnedText(allocator, 0);
+                }
+            }
+        }
+
+        return null;
+    }
+
     fn migrate(self: *Store) StoreError!void {
         // Bootstrap the version table (always safe to run)
         try self.execScript(

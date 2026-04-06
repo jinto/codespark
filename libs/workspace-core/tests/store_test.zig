@@ -631,6 +631,110 @@ test "project service renames and deletes a project via C API" {
     }
 }
 
+test "findProjectByCwd returns exact session match" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "myapp", "/Users/me/myapp", .local);
+    defer std.testing.allocator.free(project_id);
+
+    const session_id = try store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "shell",
+        .shell = "zsh",
+        .initial_cwd = "/Users/me/myapp",
+    });
+    defer std.testing.allocator.free(session_id);
+
+    // Exact match on live session's last_cwd
+    const found = try store.findProjectByCwd(std.testing.allocator, "/Users/me/myapp");
+    defer if (found) |id| std.testing.allocator.free(id);
+    try std.testing.expect(found != null);
+    try std.testing.expectEqualStrings(project_id, found.?);
+}
+
+test "findProjectByCwd falls back to prefix match on project path" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "myapp", "/Users/me/myapp", .local);
+    defer std.testing.allocator.free(project_id);
+
+    // No sessions, but project path is a prefix of the query cwd
+    const found = try store.findProjectByCwd(std.testing.allocator, "/Users/me/myapp/src/lib");
+    defer if (found) |id| std.testing.allocator.free(id);
+    try std.testing.expect(found != null);
+    try std.testing.expectEqualStrings(project_id, found.?);
+}
+
+test "findProjectByCwd returns null for unrelated path" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "myapp", "/Users/me/myapp", .local);
+    defer std.testing.allocator.free(project_id);
+
+    const found = try store.findProjectByCwd(std.testing.allocator, "/Users/me/other");
+    try std.testing.expect(found == null);
+}
+
+test "findProjectByCwd prefers exact session match over prefix" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+
+    const proj_a = try store.createProject(std.testing.allocator, "parent", "/Users/me/projects", .local);
+    defer std.testing.allocator.free(proj_a);
+    const proj_b = try store.createProject(std.testing.allocator, "child", "/Users/me/projects/child", .local);
+    defer std.testing.allocator.free(proj_b);
+
+    const session_id = try store.startSession(std.testing.allocator, .{
+        .project_id = proj_b,
+        .transport = .local,
+        .target_label = "local",
+        .title = "shell",
+        .shell = "zsh",
+        .initial_cwd = "/Users/me/projects/child",
+    });
+    defer std.testing.allocator.free(session_id);
+
+    // Exact session cwd match should win over parent project prefix
+    const found = try store.findProjectByCwd(std.testing.allocator, "/Users/me/projects/child");
+    defer if (found) |id| std.testing.allocator.free(id);
+    try std.testing.expect(found != null);
+    try std.testing.expectEqualStrings(proj_b, found.?);
+}
+
+test "findProjectByCwd via C API" {
+    var status: core.project_status_t = .PROJECT_STATUS_OK;
+    const service = core.project_service_new(":memory:", &status);
+    defer core.project_service_free(service);
+    try std.testing.expectEqual(core.project_status_t.PROJECT_STATUS_OK, status);
+
+    var project_id: ?[*:0]u8 = null;
+    try std.testing.expectEqual(
+        core.project_status_t.PROJECT_STATUS_OK,
+        core.project_service_create_project(service, "myapp", "/Users/me/myapp", .PROJECT_SESSION_TRANSPORT_LOCAL, &project_id),
+    );
+    defer core.project_free_string(project_id);
+
+    // Prefix match via C API
+    var found_id: ?[*:0]u8 = null;
+    try std.testing.expectEqual(
+        core.project_status_t.PROJECT_STATUS_OK,
+        core.project_service_find_project_by_cwd(service, "/Users/me/myapp/src", &found_id),
+    );
+    defer core.project_free_string(found_id);
+    try std.testing.expect(found_id != null);
+    try std.testing.expectEqualStrings(std.mem.span(project_id.?), std.mem.span(found_id.?));
+
+    // No match via C API
+    var no_match: ?[*:0]u8 = null;
+    try std.testing.expectEqual(
+        core.project_status_t.PROJECT_STATUS_OK,
+        core.project_service_find_project_by_cwd(service, "/Users/me/other", &no_match),
+    );
+    try std.testing.expect(no_match == null);
+}
+
 fn freeProjectSummaries(items: []core.ProjectSummary) void {
     for (items) |*item| item.deinit(std.testing.allocator);
     std.testing.allocator.free(items);
