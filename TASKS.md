@@ -42,10 +42,10 @@
 
 ### Major
 - [ ] **AppModel 분리** — SessionManager, HookProcessor, NotificationManager 추출 (711줄 → 각 200줄 이하)
-- [ ] **에러 삼킴 수정** — try? 패턴을 적절한 에러 처리로 교체 (AppModel 6곳)
-- [ ] **세션 복구 코드 통합** — recoverLocalSession/recoverSSHSession → recoverSession(from:) 통합
-- [ ] **프로젝트 닫기/삭제 중복 제거** — 세션 정리 로직 공통 함수 추출
-- [ ] **타임라인 이벤트 에러 처리** — catch {} → 로깅 (store.zig 6곳)
+- [x] **에러 삼킴 수정** — try? → do/catch + NSLog (AppModel 4곳)
+- [x] **세션 복구 코드 통합** — recoverSession(from:) 하나로 통합
+- [x] **프로젝트 닫기/삭제 중복 제거** — teardownProject(id:) 공통 함수 추출
+- [x] **타임라인 이벤트 에러 처리** — catch {} → std.log.warn (store.zig 6곳)
 
 ### Design
 - [ ] **Hook 시스템 분리** — HookEventProcessor 추출, AppModel은 결과만 처리

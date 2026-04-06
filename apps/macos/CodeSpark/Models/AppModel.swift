@@ -196,23 +196,13 @@ final class AppModel: ObservableObject {
     func recoveryActions(for session: ClosedSessionViewData) -> [RecoveryActionViewData] {
         var actions: [RecoveryActionViewData] = []
 
-        actions.append(RecoveryActionViewData(title: "Open local shell here") { [weak self] in
+        actions.append(RecoveryActionViewData(title: session.targetLabel != "local" ? "Reconnect SSH and cd here" : "Open local shell here") { [weak self] in
             guard let self else { return }
             Task {
-                do { try await self.recoverLocalSession(from: session) }
+                do { try await self.recoverSession(from: session) }
                 catch { self.loadErrorMessage = error.localizedDescription }
             }
         })
-
-        if session.targetLabel != "local" {
-            actions.append(RecoveryActionViewData(title: "Reconnect SSH and cd here") { [weak self] in
-                guard let self else { return }
-                Task {
-                    do { try await self.recoverSSHSession(from: session) }
-                    catch { self.loadErrorMessage = error.localizedDescription }
-                }
-            })
-        }
 
         actions.append(RecoveryActionViewData(title: "Copy session recipe") {
             NSPasteboard.general.clearContents()
@@ -222,33 +212,19 @@ final class AppModel: ObservableObject {
         return actions
     }
 
-    func recoverLocalSession(from closed: ClosedSessionViewData) async throws {
+    func recoverSession(from closed: ClosedSessionViewData) async throws {
         guard let projectID = selectedProjectID else { return }
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        let title = closed.lastCwd.map { ($0 as NSString).lastPathComponent } ?? "Terminal"
+        let isSSH = closed.targetLabel != "local"
+        let title = isSSH ? closed.title : (closed.lastCwd.map { ($0 as NSString).lastPathComponent } ?? "Terminal")
         let sessionID = try await startAndAttachSession(
             projectID: projectID,
-            transport: "local",
-            targetLabel: "local",
+            transport: isSSH ? "ssh" : "local",
+            targetLabel: isSSH ? closed.targetLabel : "local",
             title: title,
             shell: shell,
-            cwd: closed.lastCwd
-        )
-        guard selectedProjectID == projectID else { return }
-        activeSessionID = sessionID
-    }
-
-    func recoverSSHSession(from closed: ClosedSessionViewData) async throws {
-        guard let projectID = selectedProjectID else { return }
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        let sessionID = try await startAndAttachSession(
-            projectID: projectID,
-            transport: "ssh",
-            targetLabel: closed.targetLabel,
-            title: closed.title,
-            shell: shell,
             cwd: closed.lastCwd,
-            command: closed.restoreRecipe.launchCommand
+            command: isSSH ? closed.restoreRecipe.launchCommand : nil
         )
         guard selectedProjectID == projectID else { return }
         activeSessionID = sessionID
@@ -257,11 +233,7 @@ final class AppModel: ObservableObject {
     func reopenLastClosedSession() async {
         guard let closed = closedSessions.first else { return }
         do {
-            if closed.targetLabel != "local" {
-                try await recoverSSHSession(from: closed)
-            } else {
-                try await recoverLocalSession(from: closed)
-            }
+            try await recoverSession(from: closed)
             closedSessions.removeFirst()
         } catch {
             loadErrorMessage = error.localizedDescription
@@ -272,11 +244,7 @@ final class AppModel: ObservableObject {
         let sessions = pendingRestoreSessions
         for session in sessions {
             do {
-                if session.targetLabel != "local" {
-                    try await recoverSSHSession(from: session)
-                } else {
-                    try await recoverLocalSession(from: session)
-                }
+                try await recoverSession(from: session)
                 pendingRestoreSessions.removeAll { $0.id == session.id }
                 closedSessions.removeAll { $0.id == session.id }
             } catch {
@@ -322,7 +290,11 @@ final class AppModel: ObservableObject {
                 ProjectDetailViewData(id: $0.id, name: newName, noteBody: $0.noteBody, liveSessions: $0.liveSessions, closedSessions: $0.closedSessions)
             }
         }
-        try? await core.renameProject(id: id, newName: newName)
+        do {
+            try await core.renameProject(id: id, newName: newName)
+        } catch {
+            NSLog("[CodeSpark] rename failed: \(error)")
+        }
     }
 
     /// Returns the adjacent project ID (next preferred, then previous).
@@ -333,21 +305,26 @@ final class AppModel: ObservableObject {
         return nil
     }
 
-    func closeProject(id: String) async {
+    /// Close all live sessions for a project and switch away if it was selected.
+    /// Returns the adjacent project ID for selection after removal.
+    private func teardownProject(id: String) -> String? {
         let nextID = adjacentProjectID(excluding: id)
-
         if selectedProjectID == id {
             for session in liveSessions {
                 closeSession(id: session.id)
             }
         }
+        projects.removeAll(where: { $0.id == id })
+        return nextID
+    }
 
+    func closeProject(id: String) async {
         if let proj = projects.first(where: { $0.id == id }) {
             hiddenProjectNames[id] = proj.name
         }
         hiddenProjectIDs.insert(id)
-        projects.removeAll(where: { $0.id == id })
 
+        let nextID = teardownProject(id: id)
         if selectedProjectID == id {
             await selectProject(id: nextID)
         }
@@ -361,15 +338,7 @@ final class AppModel: ObservableObject {
     }
 
     func deleteProject(id: String) async {
-        let nextID = adjacentProjectID(excluding: id)
-
-        if selectedProjectID == id {
-            for session in liveSessions {
-                closeSession(id: session.id)
-            }
-        }
-
-        projects.removeAll(where: { $0.id == id })
+        let nextID = teardownProject(id: id)
 
         var deleteError: String?
         do {
@@ -456,7 +425,11 @@ final class AppModel: ObservableObject {
             updated.title = title
             liveSessions[index] = updated
         }
-        try? await core.updateSessionTitle(sessionId: id, newTitle: title)
+        do {
+            try await core.updateSessionTitle(sessionId: id, newTitle: title)
+        } catch {
+            NSLog("[CodeSpark] session rename failed: \(error)")
+        }
     }
 
     func selectNextSession() { cycleSession(offset: 1) }
@@ -482,7 +455,11 @@ final class AppModel: ObservableObject {
         for (sessionID, host) in hosts where !closingSessionIDs.contains(sessionID) {
             guard let snapshot = host.extractSnapshot() else { continue }
             Task { [weak self] in
-                try? await self?.core.recordCheckpointSnapshot(sessionID: sessionID, snapshot: snapshot)
+                do {
+                    try await self?.core.recordCheckpointSnapshot(sessionID: sessionID, snapshot: snapshot)
+                } catch {
+                    NSLog("[CodeSpark] checkpoint snapshot failed for session \(sessionID): \(error)")
+                }
             }
         }
     }
@@ -700,7 +677,13 @@ extension AppModel: TerminalHostDelegate {
             restoreRecipe: session.restoreRecipe
         )
         closedSessions.insert(closed, at: 0)
-        Task { try? await core.recordFinalSnapshotAndClose(sessionID: sessionID, snapshot: snapshot, closeReason: closeReason) }
+        Task { [weak self] in
+            do {
+                try await self?.core.recordFinalSnapshotAndClose(sessionID: sessionID, snapshot: snapshot, closeReason: closeReason)
+            } catch {
+                NSLog("[CodeSpark] final snapshot failed for session \(sessionID): \(error)")
+            }
+        }
     }
 }
 

@@ -55,7 +55,9 @@ pub const Store = struct {
         if (!has_row) return error.Database;
         const project_id = try select_stmt.columnOwnedText(allocator, 0);
         errdefer allocator.free(project_id);
-        self.recordTimelineEvent(project_id, null, .project_created) catch {};
+        self.recordTimelineEvent(project_id, null, .project_created) catch |err| {
+            std.log.warn("timeline event failed: {}", .{err});
+        };
         return project_id;
     }
 
@@ -117,7 +119,9 @@ pub const Store = struct {
         try stmt.bindText(2, note_body);
         try stmt.bindInt64(3, updated_at);
         try stmt.expectDone();
-        self.recordTimelineEvent(project_id, null, .note_updated) catch {};
+        self.recordTimelineEvent(project_id, null, .note_updated) catch |err| {
+            std.log.warn("timeline event failed: {}", .{err});
+        };
     }
 
     pub fn renameProject(self: *Store, project_id: []const u8, new_name: []const u8) StoreError!void {
@@ -193,7 +197,9 @@ pub const Store = struct {
         errdefer allocator.free(session_id);
 
         try self.touchProject(input.project_id);
-        self.recordTimelineEvent(input.project_id, session_id, .session_started) catch {};
+        self.recordTimelineEvent(input.project_id, session_id, .session_started) catch |err| {
+            std.log.warn("timeline event failed: {}", .{err});
+        };
         return session_id;
     }
 
@@ -226,7 +232,9 @@ pub const Store = struct {
         if (input.kind == .final) {
             if (self.projectIdForSession(std.heap.c_allocator, input.session_id)) |project_id| {
                 defer std.heap.c_allocator.free(project_id);
-                self.recordTimelineEvent(project_id, input.session_id, .snapshot_finalized) catch {};
+                self.recordTimelineEvent(project_id, input.session_id, .snapshot_finalized) catch |err| {
+                    std.log.warn("timeline event failed: {}", .{err});
+                };
             } else |_| {}
         }
     }
@@ -286,7 +294,9 @@ pub const Store = struct {
         try self.touchProjectBySession(session_id);
         if (self.projectIdForSession(std.heap.c_allocator, session_id)) |project_id| {
             defer std.heap.c_allocator.free(project_id);
-            self.recordTimelineEvent(project_id, session_id, .session_closed) catch {};
+            self.recordTimelineEvent(project_id, session_id, .session_closed) catch |err| {
+                std.log.warn("timeline event failed: {}", .{err});
+            };
         } else |_| {}
     }
 
@@ -343,7 +353,9 @@ pub const Store = struct {
 
         for (sessions.items) |item| {
             try self.touchProjectBySession(item.id);
-            self.recordTimelineEvent(item.project_id, item.id, .session_interrupted) catch {};
+            self.recordTimelineEvent(item.project_id, item.id, .session_interrupted) catch |err| {
+                std.log.warn("timeline event failed: {}", .{err});
+            };
         }
     }
 
