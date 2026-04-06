@@ -18,11 +18,27 @@ jobs:
         with:
           version: 0.15.2
 
+      - name: Cache GhosttyKit xcframework
+        id: ghostty-cache
+        uses: actions/cache@v4
+        with:
+          path: vendor/ghostty/macos/GhosttyKit.xcframework
+          key: ghosttykit-relfast-${{ hashFiles('.ghostty-version') }}
+          restore-keys: ghosttykit-relfast-
+
       - name: Build GhosttyKit (ReleaseFast)
+        if: steps.ghostty-cache.outputs.cache-hit != 'true'
         run: |
           git clone --depth 1 https://github.com/ghostty-org/ghostty.git vendor/ghostty
           cd vendor/ghostty
-          zig build -Doptimize=ReleaseFast -Demit-xcframework=true
+          zig build -Doptimize=ReleaseFast -Demit-xcframework=true -Dxcframework-target=native
+
+      - name: Clone Ghostty headers (cache hit)
+        if: steps.ghostty-cache.outputs.cache-hit == 'true'
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/ghostty-org/ghostty.git vendor/ghostty
+          cd vendor/ghostty
+          git sparse-checkout set include macos/Sources
 
       - name: Build Release
         run: |
