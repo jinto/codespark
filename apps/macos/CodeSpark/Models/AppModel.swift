@@ -131,6 +131,11 @@ final class AppModel: ObservableObject {
                 guard !Task.isCancelled else { return }
                 apply(detail: detail)
                 await attachLiveSessions()
+                if !detail.path.isEmpty {
+                    gitWorktreeService.invalidateCache(for: detail.path)
+                    await gitWorktreeService.refreshWorktrees(for: [detail.path])
+                    recomputeWorkspaces()
+                }
                 loadErrorMessage = nil
             } catch {
                 guard !Task.isCancelled else { return }
