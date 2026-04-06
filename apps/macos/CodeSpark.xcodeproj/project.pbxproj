@@ -626,7 +626,8 @@
 					"-D",
 					GHOSTTY_FIRST,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.jinto.codespark;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jinto.codespark.dev;
+				PRODUCT_NAME = "CodeSpark Dev";
 				SDKROOT = macosx;
 				SWIFT_OBJC_BRIDGING_HEADER = "CodeSpark/Bridge/CodeSpark-Bridging-Header.h";
 			};
