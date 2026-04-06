@@ -6,36 +6,42 @@ import UserNotifications
 extension AppModel {
 
     func handleHookEvent(_ event: ClaudeHookEvent) {
-        guard let cwd = event.cwd else { return }
-        switch event.hookEventName {
-        case "Stop":
+        let result = HookEventProcessor.process(event, projectForCwd: projectForCwd)
+        applyHookResult(result)
+    }
+
+    private func applyHookResult(_ result: HookEventResult) {
+        switch result {
+        case .needsInput(let cwd, let projectID, _):
             hookNeedsInputCwds.insert(cwd)
-            if let proj = projectForCwd(cwd) {
+            if let projectID, let proj = projects.first(where: { $0.id == projectID }) {
                 captureSnippet(for: proj)
                 if proj.id != selectedProjectID {
                     sendHookNotification(for: proj, snippet: hookSnippets[proj.id])
                 }
             }
-        case "UserPromptSubmit":
+
+        case .running(let cwd, let projectID):
             hookNeedsInputCwds.remove(cwd)
-            if let proj = projectForCwd(cwd) {
-                acknowledgedProjectIDs.remove(proj.id)
-                hookSnippets.removeValue(forKey: proj.id)
+            if let projectID {
+                acknowledgedProjectIDs.remove(projectID)
+                hookSnippets.removeValue(forKey: projectID)
             }
-        case "SessionStart":
+
+        case .clearCwd(let cwd):
             hookNeedsInputCwds.remove(cwd)
-        case "SessionEnd":
-            hookNeedsInputCwds.remove(cwd)
-        case "Notification":
-            if let proj = projectForCwd(cwd) {
-                let snippet = event.message ?? event.title ?? "Claude is waiting for your input"
-                hookSnippets[proj.id] = String(snippet.prefix(120))
+
+        case .notification(let cwd, let projectID, let message):
+            if let projectID {
+                hookSnippets[projectID] = String(message.prefix(120))
                 hookNeedsInputCwds.insert(cwd)
-                if proj.id != selectedProjectID {
-                    sendHookNotification(for: proj, snippet: snippet)
+                if projectID != selectedProjectID,
+                   let proj = projects.first(where: { $0.id == projectID }) {
+                    sendHookNotification(for: proj, snippet: message)
                 }
             }
-        default:
+
+        case .ignored:
             break
         }
     }

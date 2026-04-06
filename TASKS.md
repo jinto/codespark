@@ -48,7 +48,7 @@
 - [x] **타임라인 이벤트 에러 처리** — catch {} → std.log.warn (store.zig 6곳)
 
 ### Design
-- [ ] **Hook 시스템 분리** — HookEventProcessor 추출, AppModel은 결과만 처리
+- [x] **Hook 시스템 분리** — HookEventProcessor 순수 로직 타입 추출, AppModel은 결과만 적용
 - [x] **AppStorage 키 상수화** — StorageKeys enum으로 8개 키 상수화
 - [ ] **비즈니스 로직 Zig 이동** — 세션 상태 머신, hook 이벤트 타입 정의를 Zig로
 
