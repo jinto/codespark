@@ -12,6 +12,10 @@ struct SidebarView: View {
     @State private var showHotkeys = false
     @State private var hotkeyMonitor: Any?
     @State private var expandedWorkspacePaths: Set<String> = []
+    @State private var showAddWorktreeSheet = false
+    @State private var addWorktreeBranch = ""
+    @State private var pendingRemoveWorktreePath: String?
+    @State private var showRemoveWorktreeConfirmation = false
 
     private var sortedProjects: [ProjectSummaryViewData] {
         let selected = model.selectedProjectID
@@ -98,6 +102,13 @@ struct SidebarView: View {
             .contextMenu {
                 Button("New Terminal") {
                     Task { await model.newSession(inWorkspacePath: workspace.path) }
+                }
+                if !workspace.isMainWorktree {
+                    Divider()
+                    Button("Remove Worktree", role: .destructive) {
+                        pendingRemoveWorktreePath = workspace.path
+                        showRemoveWorktreeConfirmation = true
+                    }
                 }
             }
 
@@ -228,6 +239,12 @@ struct SidebarView: View {
                                     editProjectName = project.name
                                     editingProjectID = project.id
                                 }
+                                if !project.path.isEmpty {
+                                    Button("Add Worktree...") {
+                                        addWorktreeBranch = ""
+                                        showAddWorktreeSheet = true
+                                    }
+                                }
                                 Button("Close Project") {
                                     Task { await model.closeProject(id: project.id) }
                                 }
@@ -321,6 +338,39 @@ struct SidebarView: View {
                 },
                 onCancel: { editingProjectID = nil }
             )
+        }
+        .sheet(isPresented: $showAddWorktreeSheet) {
+            AddWorktreeSheet(
+                branchName: $addWorktreeBranch,
+                projectPath: model.selectedProject?.path ?? "",
+                onCreate: {
+                    let branch = addWorktreeBranch
+                    showAddWorktreeSheet = false
+                    Task { await model.addWorktree(branch: branch) }
+                },
+                onCancel: { showAddWorktreeSheet = false }
+            )
+        }
+        .confirmationDialog(
+            "Remove worktree?",
+            isPresented: $showRemoveWorktreeConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                if let path = pendingRemoveWorktreePath {
+                    Task { await model.removeWorktree(path: path) }
+                }
+                pendingRemoveWorktreePath = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingRemoveWorktreePath = nil
+            }
+        } message: {
+            if let path = pendingRemoveWorktreePath,
+               let ws = model.workspaces.first(where: { $0.path == path }) {
+                let count = ws.sessions.count
+                Text("This will close \(count) terminal\(count == 1 ? "" : "s") and remove the worktree directory.")
+            }
         }
     }
 }

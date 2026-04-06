@@ -93,7 +93,47 @@ final class GitWorktreeService: @unchecked Sendable {
         return result
     }
 
+    // MARK: - Mutate
+
+    func invalidateCache(for projectPath: String) {
+        cache.removeValue(forKey: projectPath)
+    }
+
+    /// Creates a new worktree at `<projectPath>/.worktrees/<name>/` on a new branch.
+    /// Returns the worktree filesystem path on success.
+    static func addWorktree(projectPath: String, name: String, branch: String) async throws -> String {
+        let worktreePath = (projectPath as NSString).appendingPathComponent(".worktrees/\(name)")
+        try await runGit(["-C", projectPath, "worktree", "add", "-b", branch, worktreePath])
+        return worktreePath
+    }
+
+    static func removeWorktree(projectPath: String, worktreePath: String) async throws {
+        try await runGit(["-C", projectPath, "worktree", "remove", worktreePath])
+    }
+
     // MARK: - Git process
+
+    private static func runGit(_ arguments: [String]) async throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = arguments
+
+        let stderrPipe = Pipe()
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = stderrPipe
+
+        try process.run()
+        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        let exitStatus: Int32 = await withCheckedContinuation { cont in
+            process.terminationHandler = { proc in
+                cont.resume(returning: proc.terminationStatus)
+            }
+        }
+        guard exitStatus == 0 else {
+            let msg = String(data: stderrData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "git failed"
+            throw NSError(domain: "GitWorktree", code: Int(exitStatus), userInfo: [NSLocalizedDescriptionKey: msg])
+        }
+    }
 
     private static func fetchWorktrees(at path: String) async -> (String, [GitWorktree]?) {
         let process = Process()

@@ -66,7 +66,7 @@
 - [x] **Workspace 계층** — GitWorktreeService로 worktree 자동 발견, 3레벨 사이드바 (Project > Workspace > Terminal)
 - [x] **세션 그루핑** — session.initial_cwd 기반 workspace 매칭, 단일 workspace 시 플래튼
 - [x] **workspace 경로 터미널** — newSession()이 $HOME 대신 workspace 경로에서 열림
-- [ ] **worktree 관리 UI** — Add/Remove worktree 명령어 + 시트
+- [x] **worktree 관리 UI** — Add Worktree 시트 (.worktrees/<name>/) + Remove Worktree context menu
 - [ ] **내장 Diff 뷰어** — 프로젝트 내 코드 변경사항 검토 (git diff 시각화)
 
 ## M13: 외부 통합

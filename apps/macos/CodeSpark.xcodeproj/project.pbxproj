@@ -16,6 +16,7 @@
 		127138BC65ACF5F05A0DD540 /* TerminalSurfaceHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D401BB4E2423695AD5030BA7 /* TerminalSurfaceHostView.swift */; };
 		15EA366B4D7CEAFA539B07B5 /* project_core.swift in Sources */ = {isa = PBXBuildFile; fileRef = 153696CBF0E915103F66ECB4 /* project_core.swift */; };
 		17F6D4887541BEBCDD9EBD85 /* TerminalFontSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */; };
+		296B053DAC2476A9C82A1570 /* AddWorktreeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 787ED7070EA378E8B9A0199D /* AddWorktreeSheet.swift */; };
 		2A53F0D0BC3764E0C66B0969 /* TerminalHostProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FDED25D7FAF92C05A934D97 /* TerminalHostProtocol.swift */; };
 		2AD588B127E8EA9EA6EBD176 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CCF0F453E12289D6DA055C7A /* Assets.xcassets */; };
 		2FB53C5935BBD54F24B58E5E /* ClosedSessionInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D03D338D6277783EE4CE2B60 /* ClosedSessionInspectorView.swift */; };
@@ -114,6 +115,7 @@
 		6D4B27F8AE7CBF0B33461523 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		6DE9AB7891F06F27BFD3EC90 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
 		6E640D049F79763B0863CD21 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		787ED7070EA378E8B9A0199D /* AddWorktreeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWorktreeSheet.swift; sourceTree = "<group>"; };
 		7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHooksManager.swift; sourceTree = "<group>"; };
 		7D0E3CC9722D71DAF836505B /* CodeSparkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodeSparkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7DA64F8FB306B85441226CB5 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
@@ -225,6 +227,7 @@
 		5F6A9769AA74128980885847 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				787ED7070EA378E8B9A0199D /* AddWorktreeSheet.swift */,
 				D03D338D6277783EE4CE2B60 /* ClosedSessionInspectorView.swift */,
 				BE51452DABDDDB623C9F8A37 /* MainContentView.swift */,
 				F3450FDDB010612C39DC6A6B /* OnboardingView.swift */,
@@ -528,6 +531,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				296B053DAC2476A9C82A1570 /* AddWorktreeSheet.swift in Sources */,
 				F42B900FB3E9710ABADC4D48 /* AppModel+Hook.swift in Sources */,
 				C32074958E57BD4DEAFFCCC1 /* AppModel+Monitor.swift in Sources */,
 				566296EC328127177468735C /* AppModel.swift in Sources */,

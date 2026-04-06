@@ -338,6 +338,42 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - Worktree lifecycle
+
+    func addWorktree(branch: String) async {
+        guard let project = selectedProject, !project.path.isEmpty else { return }
+        let sanitized = branch.replacingOccurrences(of: "/", with: "-")
+        do {
+            let worktreePath = try await GitWorktreeService.addWorktree(
+                projectPath: project.path, name: sanitized, branch: branch
+            )
+            gitWorktreeService.invalidateCache(for: project.path)
+            await gitWorktreeService.refreshWorktrees(for: [project.path])
+            recomputeWorkspaces()
+            await newSession(inWorkspacePath: worktreePath)
+        } catch {
+            loadErrorMessage = error.localizedDescription
+        }
+    }
+
+    func removeWorktree(path: String) async {
+        guard let project = selectedProject, !project.path.isEmpty else { return }
+        for session in liveSessions {
+            let cwd = session.lastCwd ?? ""
+            if cwd == path || cwd.hasPrefix(path + "/") {
+                closeSession(id: session.id)
+            }
+        }
+        do {
+            try await GitWorktreeService.removeWorktree(projectPath: project.path, worktreePath: path)
+            gitWorktreeService.invalidateCache(for: project.path)
+            await gitWorktreeService.refreshWorktrees(for: [project.path])
+            recomputeWorkspaces()
+        } catch {
+            loadErrorMessage = error.localizedDescription
+        }
+    }
+
     func closeSession(id: String) {
         guard let host = hosts[id] else { return }
         closingSessionIDs.insert(id)
