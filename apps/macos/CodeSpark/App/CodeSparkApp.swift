@@ -124,6 +124,18 @@ struct CodeSparkApp: App {
     @MainActor
     private func initializeAndLoad() async {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+
+        // Start hook socket server for Claude Code integration
+        let hookServer = HookSocketServer(delegate: model)
+        do {
+            try hookServer.start()
+            model.hookServer = hookServer
+            // Inject socket path so child processes (Claude Code) can reach us
+            setenv("CODESPARK_SOCK", hookServer.socketPath, 1)
+        } catch {
+            NSLog("[CodeSpark] Hook server failed to start: \(error)")
+        }
+
         #if GHOSTTY_FIRST
         GhosttyRuntime.shared.initialize()
         GhosttyRuntime.shared.onTerminalOutput = { [weak model] in
@@ -190,6 +202,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 submenu.removeItem(item)
             }
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        model?.hookServer?.stop()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

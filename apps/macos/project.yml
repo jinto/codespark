@@ -60,6 +60,16 @@ targets:
           - -D
           - GHOSTTY_FIRST
         SWIFT_OBJC_BRIDGING_HEADER: CodeSpark/Bridge/CodeSpark-Bridging-Header.h
+  codespark-hook:
+    type: tool
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - CLI
+    settings:
+      base:
+        PRODUCT_NAME: codespark-hook
+        GENERATE_INFOPLIST_FILE: YES
   CodeSparkTests:
     type: bundle.unit-test
     platform: macOS

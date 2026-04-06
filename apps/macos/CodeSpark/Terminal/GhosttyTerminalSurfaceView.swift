@@ -56,7 +56,10 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
     }
 
     override var acceptsFirstResponder: Bool { true }
-    override func becomeFirstResponder() -> Bool { true }
+    override func becomeFirstResponder() -> Bool {
+        if let ic = inputContext { ic.deactivate(); ic.activate() }
+        return true
+    }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -73,6 +76,7 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         super.setFrameSize(newSize)
         guard surface != nil else { return }
         syncSurfaceSize(newSize)
+        inputContext?.invalidateCharacterCoordinates()
     }
 
     private func syncSurfaceSize(_ size: NSSize) {
@@ -85,6 +89,7 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown, surface != nil else { return false }
+        if hasMarkedText() { return false }
         if event.modifierFlags.contains(.control) {
             keyDown(with: event)
             return true
@@ -140,6 +145,7 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
 
     override func flagsChanged(with event: NSEvent) {
         guard let surface else { return }
+        if hasMarkedText() { return }
         let key = makeKeyInput(event, action: GHOSTTY_ACTION_PRESS)
         ghostty_surface_key(surface, key)
     }
@@ -201,7 +207,7 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         return NSRange(location: 0, length: markedText.length)
     }
 
-    func selectedRange() -> NSRange { NSRange() }
+    func selectedRange() -> NSRange { NSRange(location: 0, length: 0) }
 
     func validAttributesForMarkedText() -> [NSAttributedString.Key] { [] }
 

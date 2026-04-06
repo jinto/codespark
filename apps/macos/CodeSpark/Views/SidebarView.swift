@@ -13,22 +13,34 @@ struct SidebarView: View {
     @State private var hotkeyMonitor: Any?
 
     private var sortedWorkspaces: [WorkspaceSummaryViewData] {
-        model.workspaces.sorted { a, b in
+        let selected = model.selectedWorkspaceID
+        let needsInput = model.workspaces.filter {
+            model.workspaceStatus(for: $0) == .needsInput && $0.id != selected
+        }
+        let rest = model.workspaces.filter {
+            model.workspaceStatus(for: $0) != .needsInput || $0.id == selected
+        }
+        let sortedRest = rest.sorted { a, b in
             let sa = model.workspaceStatus(for: a)
             let sb = model.workspaceStatus(for: b)
-            if sa == .needsInput && sb != .needsInput { return true }
-            if sa != .needsInput && sb == .needsInput { return false }
             if sa == .running && sb == .idle { return true }
             if sa == .idle && sb == .running { return false }
             return false
+        }
+        if sortedRest.first?.id == selected {
+            var result = sortedRest
+            result.insert(contentsOf: needsInput, at: min(1, result.count))
+            return result
+        } else {
+            return needsInput + sortedRest
         }
     }
 
     private var needsInputCount: Int {
         model.workspaces.filter { ws in
             guard ws.id != model.selectedWorkspaceID else { return false }
-            let status = model.workspaceStatus(for: ws)
-            return status == .needsInput || status == .idle && ws.liveSessions > 0
+            return model.workspaceStatus(for: ws) == .needsInput
+                && !model.acknowledgedWorkspaceIDs.contains(ws.id)
         }.count
     }
 
@@ -97,7 +109,7 @@ struct SidebarView: View {
             Divider().background(AppTheme.divider)
 
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 2) {
+                LazyVStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(sortedWorkspaces.enumerated()), id: \.element.id) { index, workspace in
                         VStack(alignment: .leading, spacing: 0) {
                             WorkspaceSidebarRow(
@@ -111,6 +123,7 @@ struct SidebarView: View {
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 toggleExpanded(workspace.id)
+                                model.acknowledgeWorkspace(workspace.id)
                                 Task { await model.selectWorkspace(id: workspace.id) }
                             }
                             .contextMenu {
@@ -233,12 +246,12 @@ struct WorkspaceSidebarRow: View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                 .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(isSelected ? .white.opacity(0.7) : .secondary)
                 .frame(width: 10)
-                .padding(.top, 4)
+                .padding(.top, 5)
 
             VStack(alignment: .leading, spacing: 3) {
-                HStack {
+                HStack(spacing: 6) {
                     Text(workspace.name)
                         .font(.system(.body, weight: .semibold))
                         .foregroundStyle(isSelected ? .white : .primary)
@@ -246,26 +259,36 @@ struct WorkspaceSidebarRow: View {
 
                     Spacer()
 
-                    Text(hotkeyIndex.map { "\u{2318}\($0)" } ?? "")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(hotkeyIndex != nil ? Color.white.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 4))
-                        .opacity(hotkeyIndex != nil ? 1 : 0)
+                    if let hotkeyIndex {
+                        Text("\u{2318}\(hotkeyIndex)")
+                            .font(.system(size: 10, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 3))
+                    }
                 }
 
-                Label(status.label, systemImage: status.icon)
-                    .font(.caption2)
-                    .foregroundStyle(status.color)
+                if status == .needsInput {
+                    Text("Claude is waiting for your input")
+                        .font(.system(size: 10))
+                        .foregroundStyle(status.color.opacity(0.8))
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: status.icon)
+                        .font(.system(size: 7))
+                        .foregroundStyle(status.color)
+                    Text(status.label)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(status.color)
+                }
 
                 if let infoLine {
                     Text(infoLine)
-                        .font(.caption2)
+                        .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(AppTheme.infoText)
                         .lineLimit(1)
-                } else {
-                    Text(" ").font(.caption2).hidden()
                 }
             }
         }
@@ -273,7 +296,11 @@ struct WorkspaceSidebarRow: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? AppTheme.accent.opacity(0.25) : Color.clear)
+                .fill(isSelected ? AppTheme.accentSubtle : AppTheme.sidebarItemBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(isSelected ? AppTheme.accent.opacity(0.5) : .clear, lineWidth: 1)
         )
     }
 }

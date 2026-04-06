@@ -24,6 +24,10 @@ final class AppModel: ObservableObject {
     @Published var hiddenWorkspaceIDs: Set<String> = []
     @Published var hiddenWorkspaceNames: [String: String] = [:]
     @Published var gitBranches: [String: String] = [:]
+    @Published var hookNeedsInputCwds: Set<String> = []
+    @Published var acknowledgedWorkspaceIDs: Set<String> = []
+
+    var hookServer: HookSocketServer?
 
     private let core: WorkspaceCoreClientProtocol
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
@@ -543,12 +547,77 @@ final class AppModel: ObservableObject {
 
     func workspaceStatus(for workspace: WorkspaceSummaryViewData) -> WorkspaceStatus {
         if workspace.hasInterruptedSessions { return .needsInput }
+
+        // Hook-based: any live session whose cwd is waiting for input
+        let hookNeedsInput = workspace.liveSessionDetails.contains { session in
+            session.lastCwd.map { hookNeedsInputCwds.contains($0) } ?? false
+        }
+        if hookNeedsInput { return .needsInput }
+
         if workspace.liveSessions > 0 {
             let sessionIDs = Set(workspace.liveSessionDetails.map(\.id))
             let allIdle = !sessionIDs.isEmpty && sessionIDs.isSubset(of: idleSessionIDs)
             return allIdle ? .idle : .running
         }
         return .idle
+    }
+
+    // MARK: - Hook event handling
+
+    func handleHookEvent(_ event: ClaudeHookEvent) {
+        guard let cwd = event.cwd else { return }
+        switch event.hookEventName {
+        case "Stop":
+            hookNeedsInputCwds.insert(cwd)
+            if let ws = workspaceForCwd(cwd), ws.id != selectedWorkspaceID {
+                sendHookNotification(for: ws)
+            }
+        case "UserPromptSubmit":
+            hookNeedsInputCwds.remove(cwd)
+            if let ws = workspaceForCwd(cwd) {
+                acknowledgedWorkspaceIDs.remove(ws.id)
+            }
+        case "SessionStart":
+            hookNeedsInputCwds.remove(cwd)
+        case "SessionEnd":
+            hookNeedsInputCwds.remove(cwd)
+        default:
+            break
+        }
+    }
+
+    func acknowledgeWorkspace(_ id: String) {
+        acknowledgedWorkspaceIDs.insert(id)
+        UNUserNotificationCenter.current()
+            .removeDeliveredNotifications(withIdentifiers: ["hook-needsinput-\(id)"])
+    }
+
+    private func workspaceForCwd(_ cwd: String) -> WorkspaceSummaryViewData? {
+        // Exact match first
+        if let ws = workspaces.first(where: { ws in
+            ws.liveSessionDetails.contains { $0.lastCwd == cwd }
+        }) { return ws }
+        // Prefix fallback
+        return workspaces.first(where: { ws in
+            ws.liveSessionDetails.contains { session in
+                guard let lastCwd = session.lastCwd else { return false }
+                return cwd.hasPrefix(lastCwd) || lastCwd.hasPrefix(cwd)
+            }
+        })
+    }
+
+    private func sendHookNotification(for workspace: WorkspaceSummaryViewData) {
+        guard !acknowledgedWorkspaceIDs.contains(workspace.id) else { return }
+        let content = UNMutableNotificationContent()
+        content.title = workspace.name
+        content.body = "Claude is waiting for your input"
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: "hook-needsinput-\(workspace.id)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request)
     }
 
     private func clearDetailState() {
@@ -589,5 +658,11 @@ extension AppModel: TerminalHostDelegate {
         )
         closedSessions.insert(closed, at: 0)
         Task { try? await core.recordFinalSnapshotAndClose(sessionID: sessionID, snapshot: snapshot, closeReason: closeReason) }
+    }
+}
+
+extension AppModel: HookSocketServerDelegate {
+    func hookServer(_ server: HookSocketServer, didReceive event: ClaudeHookEvent) {
+        handleHookEvent(event)
     }
 }

@@ -39,13 +39,13 @@ apps/macos/CodeSpark/
   Views/        — SwiftUI views (Sidebar, MainContent, Settings, Onboarding)
   Terminal/     — Ghostty integration (Runtime, SurfaceView, Host, Protocol)
   Bridge/       — workspace-core C FFI bridge
-  Services/     — GitBranchService, TerminalFontSettings
+  Services/     — GitBranchService, TerminalFontSettings, HookSocketServer
   Theme/        — AppTheme colors
+apps/macos/CLI/ — codespark-hook CLI (Claude Code hook → Unix socket bridge)
 ```
 
 ## Known Issues
 
-- `AppModel.swift` is 568 lines with 4+ responsibilities — needs splitting
-- Session creation is duplicated in 4 places — needs `startAndAttachSession()` extraction
+- `AppModel.swift` is 660+ lines with 5+ responsibilities — needs splitting
 - Terminal hosts (NoOpTerminalHost) are disconnected from real Ghostty surfaces
 - Sidebar state can go stale after session mutations (reads `workspaces.liveSessionDetails` instead of `liveSessions`)
