@@ -36,7 +36,7 @@ struct CodeSparkApp: App {
                 }
             }
             .preferredColorScheme(.dark)
-            .frame(minWidth: 1200, minHeight: 760)
+            .frame(minWidth: 600, minHeight: 400)
             .onChange(of: model.selectedWorkspaceID) { _, newValue in
                 savedWorkspaceID = newValue ?? ""
             }
@@ -44,7 +44,7 @@ struct CodeSparkApp: App {
                 savedHiddenIDs = newValue.joined(separator: ",")
             }
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Workspace") {
@@ -166,7 +166,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureWindowTitleBar() {
         guard let window = NSApp.windows.first else { return }
-        object_setClass(window, CodeSparkWindow.self)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)

@@ -128,7 +128,7 @@ struct MainContentView: View {
     private var terminalContent: some View {
         VStack(spacing: 0) {
             ZStack {
-                ForEach(model.liveSessions) { session in
+                ForEach(model.allSessions) { session in
                     #if GHOSTTY_FIRST
                     if let app = GhosttyRuntime.shared.app {
                         TerminalSurfaceHostView(session: session, app: app, isActive: session.id == model.activeSessionID)

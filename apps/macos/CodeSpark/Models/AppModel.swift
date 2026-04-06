@@ -12,6 +12,9 @@ final class AppModel: ObservableObject {
     @Published var activeSessionID: String?
     @Published var liveSessions: [SessionViewData] = []
     @Published var closedSessions: [ClosedSessionViewData] = []
+
+    /// All sessions across all workspaces — keeps Ghostty surfaces alive during workspace switches
+    @Published private(set) var allSessions: [SessionViewData] = []
     @Published var loadErrorMessage: String?
     @Published var noteSaveErrorMessage: String?
     @Published var idleSessionIDs: Set<String> = []
@@ -56,7 +59,10 @@ final class AppModel: ObservableObject {
         guard let workspace = selectedWorkspace else { return }
         liveSessions = workspace.liveSessions
         closedSessions = workspace.closedSessions
-        for session in liveSessions {
+        for session in liveSessions where hosts[session.id] == nil {
+            if !allSessions.contains(where: { $0.id == session.id }) {
+                allSessions.append(session)
+            }
             var host = terminalFactory(session)
             host.delegate = self
             host.attach(sessionID: session.id, command: nil)
@@ -133,6 +139,7 @@ final class AppModel: ObservableObject {
                 let detail = try await core.workspaceDetail(id: id)
                 guard !Task.isCancelled else { return }
                 apply(detail: detail)
+                await attachLiveSessions()
                 loadErrorMessage = nil
             } catch {
                 guard !Task.isCancelled else { return }
@@ -312,7 +319,17 @@ final class AppModel: ObservableObject {
         try? await core.renameWorkspace(id: id, newName: newName)
     }
 
+    /// Returns the adjacent workspace ID (next preferred, then previous).
+    private func adjacentWorkspaceID(excluding id: String) -> String? {
+        guard let index = workspaces.firstIndex(where: { $0.id == id }) else { return workspaces.first?.id }
+        if index + 1 < workspaces.count { return workspaces[index + 1].id }
+        if index > 0 { return workspaces[index - 1].id }
+        return nil
+    }
+
     func closeWorkspace(id: String) async {
+        let nextID = adjacentWorkspaceID(excluding: id)
+
         if selectedWorkspaceID == id {
             for session in liveSessions {
                 closeSession(id: session.id)
@@ -326,11 +343,7 @@ final class AppModel: ObservableObject {
         workspaces.removeAll(where: { $0.id == id })
 
         if selectedWorkspaceID == id {
-            if let next = workspaces.first {
-                await selectWorkspace(id: next.id)
-            } else {
-                await selectWorkspace(id: nil)
-            }
+            await selectWorkspace(id: nextID)
         }
     }
 
@@ -342,6 +355,8 @@ final class AppModel: ObservableObject {
     }
 
     func deleteWorkspace(id: String) async {
+        let nextID = adjacentWorkspaceID(excluding: id)
+
         if selectedWorkspaceID == id {
             for session in liveSessions {
                 closeSession(id: session.id)
@@ -358,11 +373,7 @@ final class AppModel: ObservableObject {
         }
 
         if selectedWorkspaceID == id {
-            if let next = workspaces.first {
-                await selectWorkspace(id: next.id)
-            } else {
-                await selectWorkspace(id: nil)
-            }
+            await selectWorkspace(id: nextID)
         }
 
         if let deleteError {
@@ -398,6 +409,9 @@ final class AppModel: ObservableObject {
             restoreRecipe: RestoreRecipeViewData(launchCommand: command ?? "\(shell) -l")
         )
         liveSessions.append(session)
+        if !allSessions.contains(where: { $0.id == sessionID }) {
+            allSessions.append(session)
+        }
         var host = terminalFactory(session)
         host.delegate = self
         host.attach(sessionID: sessionID, command: command)
@@ -556,6 +570,7 @@ extension AppModel: TerminalHostDelegate {
     func terminalHostDidClose(sessionID: String, snapshot: TerminalSnapshotViewData, closeReason: CloseReasonViewData) {
         guard let index = liveSessions.firstIndex(where: { $0.id == sessionID }) else { return }
         let session = liveSessions.remove(at: index)
+        allSessions.removeAll { $0.id == sessionID }
         hosts.removeValue(forKey: sessionID)
         closingSessionIDs.remove(sessionID)
 
