@@ -189,6 +189,8 @@ pub const ClosedSessionSummary = struct {
 pub const ProjectSummary = struct {
     id: []u8,
     name: []u8,
+    path: []u8,
+    transport: SessionTransport,
     live_sessions: i64,
     live_session_details: []SessionSummary,
     recently_closed_sessions: i64,
@@ -198,6 +200,7 @@ pub const ProjectSummary = struct {
     pub fn deinit(self: *ProjectSummary, allocator: std.mem.Allocator) void {
         allocator.free(self.id);
         allocator.free(self.name);
+        allocator.free(self.path);
         for (self.live_session_details) |*session| session.deinit(allocator);
         allocator.free(self.live_session_details);
         self.* = undefined;
@@ -207,18 +210,16 @@ pub const ProjectSummary = struct {
 pub const ProjectDetail = struct {
     id: []u8,
     name: []u8,
-    note_body: []u8,
+    path: []u8,
+    transport: SessionTransport,
     live_sessions: []SessionSummary,
-    closed_sessions: []ClosedSessionSummary,
 
     pub fn deinit(self: *ProjectDetail, allocator: std.mem.Allocator) void {
         allocator.free(self.id);
         allocator.free(self.name);
-        allocator.free(self.note_body);
+        allocator.free(self.path);
         for (self.live_sessions) |*session| session.deinit(allocator);
         allocator.free(self.live_sessions);
-        for (self.closed_sessions) |*session| session.deinit(allocator);
-        allocator.free(self.closed_sessions);
         self.* = undefined;
     }
 };

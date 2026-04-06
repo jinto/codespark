@@ -3,7 +3,7 @@ import XCTest
 
 final class ProjectFlowTests: XCTestCase {
     @MainActor
-    func test_closing_a_live_session_moves_it_to_recently_closed() async {
+    func test_closing_a_live_session_removes_it() async {
         let core = MockProjectCoreClient.projectWithOneLiveSession()
         let host = MockTerminalHost()
         let model = AppModel(core: core, terminalFactory: { _ in host })
@@ -18,8 +18,5 @@ final class ProjectFlowTests: XCTestCase {
         )
 
         XCTAssertEqual(model.liveSessions.count, 0)
-        XCTAssertEqual(model.closedSessions.count, 1)
-        XCTAssertEqual(model.closedSessions[0].title, "prod logs")
-        XCTAssertEqual(model.closedSessions[0].snapshotPreview.lines[1], "error line")
     }
 }

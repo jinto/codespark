@@ -6,8 +6,6 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
     private var detailsByID: [String: ProjectDetailViewData]
     private let detailErrorsByID: [String: Error]
     private let detailLatencyByID: [String: UInt64]
-    private let noteUpdateError: Error?
-    private let noteUpdateLatency: UInt64?
     private(set) var closedSessionIDs: [String] = []
     private(set) var renamedProjects: [(id: String, newName: String)] = []
     private(set) var deletedProjectIDs: [String] = []
@@ -17,19 +15,15 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
         summaries: [ProjectSummaryViewData],
         details: [ProjectDetailViewData] = [],
         detailErrorsByID: [String: Error] = [:],
-        detailLatencyByID: [String: UInt64] = [:],
-        noteUpdateError: Error? = nil,
-        noteUpdateLatency: UInt64? = nil
+        detailLatencyByID: [String: UInt64] = [:]
     ) {
         self.summaries = summaries
         self.detailsByID = Self.makeDetailsMap(details)
         self.detailErrorsByID = detailErrorsByID
         self.detailLatencyByID = detailLatencyByID
-        self.noteUpdateError = noteUpdateError
-        self.noteUpdateLatency = noteUpdateLatency
     }
 
-    func createProject(name: String) async throws -> String {
+    func createProject(name: String, path: String, transport: String) async throws -> String {
         "mock-project-id"
     }
 
@@ -55,22 +49,6 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
             throw CocoaError(.fileNoSuchFile)
         }
         return detail
-    }
-
-    func updateProjectNote(id: String, noteBody: String) async throws {
-        if let noteUpdateLatency {
-            try? await Task.sleep(nanoseconds: noteUpdateLatency)
-        }
-
-        if let noteUpdateError {
-            throw noteUpdateError
-        }
-
-        guard var detail = detailsByID[id] else {
-            throw CocoaError(.fileNoSuchFile)
-        }
-        detail.noteBody = noteBody
-        detailsByID[id] = detail
     }
 
     func recordFinalSnapshotAndClose(
@@ -107,6 +85,8 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
                 ProjectSummaryViewData(
                     id: "ws-release",
                     name: "release",
+                    path: "/tmp/release",
+                    transport: "local",
                     liveSessions: 1,
                     recentlyClosedSessions: 0,
                     hasInterruptedSessions: false,
@@ -116,19 +96,16 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
             details: [ProjectDetailViewData(
                 id: "ws-release",
                 name: "release",
-                noteBody: "check prod logs",
+                path: "/tmp/release",
+                transport: "local",
                 liveSessions: [
                     SessionViewData(
                         id: "session-prod",
                         title: "prod logs",
                         targetLabel: "prod",
-                        lastCwd: "/srv/app",
-                        restoreRecipe: RestoreRecipeViewData(
-                            launchCommand: "ssh prod -- 'cd /srv/app && exec zsh -l'"
-                        )
+                        lastCwd: "/srv/app"
                     )
-                ],
-                closedSessions: []
+                ]
             )]
         )
     }
@@ -139,6 +116,8 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
                 ProjectSummaryViewData(
                     id: "ws-spark3",
                     name: "spark3",
+                    path: "/Users/jinto/projects/spark3",
+                    transport: "local",
                     liveSessions: 0,
                     recentlyClosedSessions: 1,
                     hasInterruptedSessions: true,
@@ -148,23 +127,9 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
             details: [ProjectDetailViewData(
                 id: "ws-spark3",
                 name: "spark3",
-                noteBody: "resume after crash",
-                liveSessions: [],
-                closedSessions: [
-                    ClosedSessionViewData(
-                        id: "session-interrupted",
-                        title: "shell",
-                        targetLabel: "local",
-                        lastCwd: "/Users/jinto/projects/spark3",
-                        closeReason: .appCrashed,
-                        snapshotPreview: .fixture(
-                            lines: ["cargo test -p workspace-core", "test result: interrupted"]
-                        ),
-                        restoreRecipe: RestoreRecipeViewData(
-                            launchCommand: "zsh -lc 'cd /Users/jinto/projects/spark3 && exec zsh -l'"
-                        )
-                    )
-                ]
+                path: "/Users/jinto/projects/spark3",
+                transport: "local",
+                liveSessions: []
             )]
         )
     }

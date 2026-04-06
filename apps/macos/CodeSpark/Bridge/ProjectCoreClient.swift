@@ -1,10 +1,9 @@
 import Foundation
 
 protocol ProjectCoreClientProtocol {
-    func createProject(name: String) async throws -> String
+    func createProject(name: String, path: String, transport: String) async throws -> String
     func listProjectSummaries() async throws -> [ProjectSummaryViewData]
     func projectDetail(id: String) async throws -> ProjectDetailViewData
-    func updateProjectNote(id: String, noteBody: String) async throws
     func renameProject(id: String, newName: String) async throws
     func deleteProject(id: String) async throws
     func startSession(projectId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String
@@ -57,10 +56,15 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
         project_service_free(service)
     }
 
-    func createProject(name: String) async throws -> String {
+    func createProject(name: String, path: String, transport: String) async throws -> String {
         var outId: UnsafeMutablePointer<CChar>?
+        let cTransport: project_session_transport_t = transport == "ssh"
+            ? PROJECT_SESSION_TRANSPORT_SSH
+            : PROJECT_SESSION_TRANSPORT_LOCAL
         let status = name.withCString { namePtr in
-            project_service_create_project(service, namePtr, &outId)
+            path.withCString { pathPtr in
+                project_service_create_project(service, namePtr, pathPtr, cTransport, &outId)
+            }
         }
         guard status == PROJECT_STATUS_OK, let outId else { throw projectError(status) }
         defer { project_free_string(outId) }
@@ -120,9 +124,12 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
                     lastCwd: d.last_cwd != nil ? String(cString: d.last_cwd) : nil
                 )
             }
+            let transportStr: String = s.transport == PROJECT_SESSION_TRANSPORT_SSH ? "ssh" : "local"
             return ProjectSummaryViewData(
                 id: String(cString: s.id),
                 name: String(cString: s.name),
+                path: String(cString: s.path),
+                transport: transportStr,
                 liveSessions: Int(s.live_sessions),
                 recentlyClosedSessions: Int(s.recently_closed_sessions),
                 hasInterruptedSessions: s.has_interrupted_sessions,
@@ -143,49 +150,18 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
                 id: String(cString: s.id),
                 title: String(cString: s.title),
                 targetLabel: String(cString: s.target_label),
-                lastCwd: s.last_cwd != nil ? String(cString: s.last_cwd) : nil,
-                restoreRecipe: RestoreRecipeViewData(launchCommand: "")
+                lastCwd: s.last_cwd != nil ? String(cString: s.last_cwd) : nil
             )
         }
 
-        let closedSessions = (0..<Int(detail.closed_session_count)).map { i -> ClosedSessionViewData in
-            let s = detail.closed_sessions[i]
-            let grid = s.snapshot_preview
-            let lines = (0..<Int(grid.line_count)).map { j -> String in
-                guard let line = grid.lines[j] else { return "" }
-                return String(cString: line)
-            }
-            return ClosedSessionViewData(
-                id: String(cString: s.id),
-                title: String(cString: s.title),
-                targetLabel: String(cString: s.target_label),
-                lastCwd: s.last_cwd != nil ? String(cString: s.last_cwd) : nil,
-                closeReason: CloseReasonViewData.from(cReason: s.close_reason),
-                snapshotPreview: TerminalSnapshotViewData(
-                    cols: Int(grid.cols),
-                    rows: Int(grid.rows),
-                    lines: lines
-                ),
-                restoreRecipe: RestoreRecipeViewData(launchCommand: String(cString: s.restore_recipe.launch_command))
-            )
-        }
-
+        let transportStr: String = detail.transport == PROJECT_SESSION_TRANSPORT_SSH ? "ssh" : "local"
         return ProjectDetailViewData(
             id: String(cString: detail.id),
             name: String(cString: detail.name),
-            noteBody: String(cString: detail.note_body),
-            liveSessions: liveSessions,
-            closedSessions: closedSessions
+            path: String(cString: detail.path),
+            transport: transportStr,
+            liveSessions: liveSessions
         )
-    }
-
-    func updateProjectNote(id: String, noteBody: String) async throws {
-        let status = id.withCString { idPtr in
-            noteBody.withCString { bodyPtr in
-                project_service_update_project_note(service, idPtr, bodyPtr)
-            }
-        }
-        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
     }
 
     func updateSessionTitle(sessionId: String, newTitle: String) async throws {

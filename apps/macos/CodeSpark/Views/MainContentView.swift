@@ -2,7 +2,7 @@ import SwiftUI
 
 struct MainContentView: View {
     @ObservedObject var model: AppModel
-    @State private var showNote = false
+    // Note panel removed in project simplification
     @State private var showCloseSessionAlert = false
     @State private var showCloseProjectAlert = false
 
@@ -36,18 +36,6 @@ struct MainContentView: View {
 
                         Spacer()
 
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                showNote.toggle()
-                            }
-                        } label: {
-                            Image(systemName: showNote ? "sidebar.trailing" : "note.text")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .help("Toggle project note")
-                        .padding(.trailing, 12)
                     }
                     .frame(height: 34)
                 }
@@ -58,7 +46,7 @@ struct MainContentView: View {
 
                 HStack(spacing: 0) {
                     VStack(spacing: 0) {
-                        if model.liveSessions.isEmpty && model.closedSessions.isEmpty {
+                        if model.liveSessions.isEmpty {
                             emptyState
                         } else {
                             terminalContent
@@ -66,12 +54,6 @@ struct MainContentView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    if showNote {
-                        Divider().background(AppTheme.divider)
-                        noteInspector
-                            .frame(width: 280)
-                            .transition(.move(edge: .trailing))
-                    }
                 }
             }
             .background(AppTheme.surfaceBackground)
@@ -141,36 +123,6 @@ struct MainContentView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if !model.pendingRestoreSessions.isEmpty {
-                Divider().background(AppTheme.divider)
-                HStack(spacing: 12) {
-                    Image(systemName: "arrow.counterclockwise.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(AppTheme.accent)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(model.pendingRestoreSessions.count) previous session\(model.pendingRestoreSessions.count == 1 ? "" : "s")")
-                            .font(.system(.body, weight: .medium))
-                        Text("Restore them?")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Restore") {
-                        Task { await model.restoreAllClosedSessions() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(AppTheme.accent)
-                    .controlSize(.small)
-                    Button("Dismiss") {
-                        model.dismissRestorePrompt()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color.black.opacity(0.2))
-            }
         }
     }
 
@@ -189,38 +141,4 @@ struct MainContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private var noteInspector: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "note.text")
-                    .foregroundStyle(.secondary)
-                Text("Note")
-                    .font(.system(.subheadline, weight: .semibold))
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
-
-            TextEditor(text: $model.noteDraft)
-                .font(.system(.body, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .padding(.horizontal, 8)
-
-            HStack {
-                if let err = model.noteSaveErrorMessage {
-                    Text(err).font(.caption2).foregroundStyle(.red)
-                }
-                Spacer()
-                Button("Save") {
-                    Task { await model.saveNote() }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(AppTheme.accent)
-                .controlSize(.small)
-            }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 10)
-        }
-        .background(AppTheme.toolbarBackground)
-    }
 }

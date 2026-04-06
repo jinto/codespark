@@ -52,11 +52,14 @@
 - [x] **AppStorage 키 상수화** — StorageKeys enum으로 8개 키 상수화
 - [ ] **비즈니스 로직 Zig 이동** — 세션 상태 머신, hook 이벤트 타입 정의를 Zig로
 
-## M11: 터미널 분할 + 검색
+## M11: Project = 폴더 경로 단순화
 
-- [ ] **터미널 분할 (수평)** — Cmd+D로 현재 터미널을 좌우 분할
-- [ ] **터미널 분할 (수직)** — Cmd+Shift+D로 상하 분할
-- [ ] **터미널 내 검색** — Cmd+F로 현재 터미널 출력에서 텍스트 검색
+- [x] **Zig/C: DB 마이그레이션 v2** — path, transport 컬럼 추가, 노트/복원 관련 코드 삭제
+- [x] **Swift Bridge** — ProjectViewData/ProjectCoreClient 변경, 삭제된 타입/메서드 정리
+- [x] **AppModel 정리** — closedSessions, noteDraft, recoveryActions 등 삭제, createProject(path:transport:)
+- [x] **Views 정리** — 복원 프롬프트/노트 UI 삭제, reopenLastClosedSession 메뉴 삭제
+- [x] **테스트 업데이트** — RecoveryActionsTests 삭제, 기존 테스트 조정
+- [x] **문서 업데이트** — CLAUDE.md, PRD.md
 
 ## M12: Git Worktree 격리
 

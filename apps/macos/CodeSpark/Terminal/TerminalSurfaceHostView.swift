@@ -36,7 +36,7 @@ struct TerminalSurfaceHostView: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(.black.opacity(0.9))
                 .overlay(alignment: .topLeading) {
-                    Text(session.restoreRecipe.launchCommand)
+                    Text(session.lastCwd ?? session.targetLabel)
                         .font(.system(.caption, design: .monospaced))
                         .foregroundStyle(.green)
                         .padding(12)

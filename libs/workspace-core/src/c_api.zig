@@ -47,17 +47,6 @@ pub const project_snapshot_kind_t = enum(c_int) {
     PROJECT_SNAPSHOT_KIND_FINAL = 1,
 };
 
-pub const project_terminal_grid_t = extern struct {
-    cols: u16,
-    rows: u16,
-    lines: ?[*]?[*:0]u8,
-    line_count: i32,
-};
-
-pub const project_restore_recipe_t = extern struct {
-    launch_command: ?[*:0]u8,
-};
-
 pub const project_session_summary_t = extern struct {
     id: ?[*:0]u8,
     title: ?[*:0]u8,
@@ -67,20 +56,11 @@ pub const project_session_summary_t = extern struct {
     close_reason: project_close_reason_t,
 };
 
-pub const project_closed_session_summary_t = extern struct {
-    id: ?[*:0]u8,
-    title: ?[*:0]u8,
-    transport: project_session_transport_t,
-    target_label: ?[*:0]u8,
-    last_cwd: ?[*:0]u8,
-    close_reason: project_close_reason_t,
-    snapshot_preview: project_terminal_grid_t,
-    restore_recipe: project_restore_recipe_t,
-};
-
 pub const project_summary_t = extern struct {
     id: ?[*:0]u8,
     name: ?[*:0]u8,
+    path: ?[*:0]u8,
+    transport: project_session_transport_t,
     live_sessions: i64,
     recently_closed_sessions: i64,
     has_interrupted_sessions: bool,
@@ -92,11 +72,10 @@ pub const project_summary_t = extern struct {
 pub const project_detail_t = extern struct {
     id: ?[*:0]u8,
     name: ?[*:0]u8,
-    note_body: ?[*:0]u8,
+    path: ?[*:0]u8,
+    transport: project_session_transport_t,
     live_sessions: ?[*]project_session_summary_t,
     live_session_count: i32,
-    closed_sessions: ?[*]project_closed_session_summary_t,
-    closed_session_count: i32,
 };
 
 pub const project_new_session_t = extern struct {
@@ -187,38 +166,6 @@ fn fromSnapshotKind(value: project_snapshot_kind_t) ?models.SnapshotKind {
     };
 }
 
-fn fillTerminalGrid(out: *project_terminal_grid_t, grid: models.TerminalGrid) !void {
-    out.* = std.mem.zeroes(project_terminal_grid_t);
-    out.cols = grid.cols;
-    out.rows = grid.rows;
-    out.line_count = @intCast(grid.lines.len);
-    if (grid.lines.len == 0) return;
-
-    const lines = try c_allocator.alloc(?[*:0]u8, grid.lines.len);
-    errdefer c_allocator.free(lines);
-    for (lines) |*slot| slot.* = null;
-    errdefer for (lines) |maybe_line| {
-        if (maybe_line) |line| project_free_string(line);
-    };
-
-    for (grid.lines, 0..) |line, index| {
-        lines[index] = try dupCString(line);
-    }
-
-    out.lines = lines.ptr;
-}
-
-fn freeTerminalGrid(grid: *project_terminal_grid_t) void {
-    if (grid.lines) |lines| {
-        const slice = lines[0..@intCast(grid.line_count)];
-        for (slice) |maybe_line| {
-            if (maybe_line) |line| project_free_string(line);
-        }
-        c_allocator.free(slice);
-    }
-    grid.* = std.mem.zeroes(project_terminal_grid_t);
-}
-
 fn fillSessionSummary(out: *project_session_summary_t, value: models.SessionSummary) !void {
     out.* = std.mem.zeroes(project_session_summary_t);
     out.id = try dupCString(value.id);
@@ -238,34 +185,13 @@ fn freeSessionSummary(value: *project_session_summary_t) void {
     value.* = std.mem.zeroes(project_session_summary_t);
 }
 
-fn fillClosedSessionSummary(out: *project_closed_session_summary_t, value: models.ClosedSessionSummary) !void {
-    out.* = std.mem.zeroes(project_closed_session_summary_t);
-    out.id = try dupCString(value.id);
-    errdefer freeClosedSessionSummary(out);
-    out.title = try dupCString(value.title);
-    out.transport = toTransport(value.transport);
-    out.target_label = try dupCString(value.target_label);
-    out.last_cwd = try dupOptionalCString(value.last_cwd);
-    out.close_reason = toCloseReason(value.close_reason);
-    try fillTerminalGrid(&out.snapshot_preview, value.snapshot_preview);
-    out.restore_recipe.launch_command = try dupCString(value.restore_recipe.launch_command);
-}
-
-fn freeClosedSessionSummary(value: *project_closed_session_summary_t) void {
-    project_free_string(value.id);
-    project_free_string(value.title);
-    project_free_string(value.target_label);
-    project_free_string(value.last_cwd);
-    freeTerminalGrid(&value.snapshot_preview);
-    project_free_string(value.restore_recipe.launch_command);
-    value.* = std.mem.zeroes(project_closed_session_summary_t);
-}
-
 fn fillProjectSummary(out: *project_summary_t, value: models.ProjectSummary) !void {
     out.* = std.mem.zeroes(project_summary_t);
     out.id = try dupCString(value.id);
     errdefer freeProjectSummary(out);
     out.name = try dupCString(value.name);
+    out.path = try dupCString(value.path);
+    out.transport = toTransport(value.transport);
     out.live_sessions = value.live_sessions;
     out.recently_closed_sessions = value.recently_closed_sessions;
     out.has_interrupted_sessions = value.has_interrupted_sessions;
@@ -288,6 +214,7 @@ fn fillProjectSummary(out: *project_summary_t, value: models.ProjectSummary) !vo
 fn freeProjectSummary(summary: *project_summary_t) void {
     project_free_string(summary.id);
     project_free_string(summary.name);
+    project_free_string(summary.path);
     if (summary.live_session_details) |details| {
         const slice = details[0..@intCast(summary.live_session_detail_count)];
         for (slice) |*session| freeSessionSummary(session);
@@ -301,7 +228,8 @@ fn fillProjectDetail(out: *project_detail_t, value: models.ProjectDetail) !void 
     out.id = try dupCString(value.id);
     errdefer project_free_detail(out);
     out.name = try dupCString(value.name);
-    out.note_body = try dupCString(value.note_body);
+    out.path = try dupCString(value.path);
+    out.transport = toTransport(value.transport);
 
     if (value.live_sessions.len > 0) {
         const live_sessions = try c_allocator.alloc(project_session_summary_t, value.live_sessions.len);
@@ -314,19 +242,6 @@ fn fillProjectDetail(out: *project_detail_t, value: models.ProjectDetail) !void 
         }
         out.live_sessions = live_sessions.ptr;
         out.live_session_count = @intCast(live_sessions.len);
-    }
-
-    if (value.closed_sessions.len > 0) {
-        const closed_sessions = try c_allocator.alloc(project_closed_session_summary_t, value.closed_sessions.len);
-        errdefer c_allocator.free(closed_sessions);
-        for (closed_sessions) |*session| session.* = std.mem.zeroes(project_closed_session_summary_t);
-        errdefer for (closed_sessions) |*session| freeClosedSessionSummary(session);
-
-        for (value.closed_sessions, 0..) |session, index| {
-            try fillClosedSessionSummary(&closed_sessions[index], session);
-        }
-        out.closed_sessions = closed_sessions.ptr;
-        out.closed_session_count = @intCast(closed_sessions.len);
     }
 }
 
@@ -445,7 +360,7 @@ pub export fn project_service_close_session(
     ptr.mutex.lock();
     defer ptr.mutex.unlock();
 
-    ptr.store.closeSession(session, close_reason, spanOrNull(last_cwd), null) catch return .PROJECT_STATUS_CLOSE_SESSION_FAILED;
+    ptr.store.closeSession(session, close_reason, spanOrNull(last_cwd)) catch return .PROJECT_STATUS_CLOSE_SESSION_FAILED;
     return .PROJECT_STATUS_OK;
 }
 
@@ -516,36 +431,24 @@ pub export fn project_service_list_project_summaries(
 pub export fn project_service_create_project(
     service: ?*project_service,
     name: ?[*:0]const u8,
+    path: ?[*:0]const u8,
+    transport: project_session_transport_t,
     out_project_id: ?*?[*:0]u8,
 ) project_status_t {
     if (out_project_id) |ptr| ptr.* = null;
     const ptr = service orelse return .PROJECT_STATUS_CREATE_PROJECT_FAILED;
     const project_name = spanRequired(name) orelse return .PROJECT_STATUS_CREATE_PROJECT_FAILED;
+    const project_path = spanRequired(path) orelse return .PROJECT_STATUS_CREATE_PROJECT_FAILED;
+    const project_transport = fromTransport(transport) orelse return .PROJECT_STATUS_CREATE_PROJECT_FAILED;
 
     ptr.mutex.lock();
     defer ptr.mutex.unlock();
 
-    const project_id = ptr.store.createProject(c_allocator, project_name) catch return .PROJECT_STATUS_CREATE_PROJECT_FAILED;
+    const project_id = ptr.store.createProject(c_allocator, project_name, project_path, project_transport) catch return .PROJECT_STATUS_CREATE_PROJECT_FAILED;
     defer c_allocator.free(project_id);
 
     const output = dupCString(project_id) catch return .PROJECT_STATUS_CREATE_PROJECT_FAILED;
     if (out_project_id) |out| out.* = output;
-    return .PROJECT_STATUS_OK;
-}
-
-pub export fn project_service_update_project_note(
-    service: ?*project_service,
-    project_id: ?[*:0]const u8,
-    note_body: ?[*:0]const u8,
-) project_status_t {
-    const ptr = service orelse return .PROJECT_STATUS_UPDATE_PROJECT_NOTE_FAILED;
-    const project = spanRequired(project_id) orelse return .PROJECT_STATUS_UPDATE_PROJECT_NOTE_FAILED;
-    const note = spanRequired(note_body) orelse return .PROJECT_STATUS_UPDATE_PROJECT_NOTE_FAILED;
-
-    ptr.mutex.lock();
-    defer ptr.mutex.unlock();
-
-    ptr.store.updateProjectNote(project, note) catch return .PROJECT_STATUS_UPDATE_PROJECT_NOTE_FAILED;
     return .PROJECT_STATUS_OK;
 }
 
@@ -620,17 +523,11 @@ pub export fn project_free_detail(detail: ?*project_detail_t) void {
     if (detail) |ptr| {
         project_free_string(ptr.id);
         project_free_string(ptr.name);
-        project_free_string(ptr.note_body);
+        project_free_string(ptr.path);
 
         if (ptr.live_sessions) |live_sessions| {
             const slice = live_sessions[0..@intCast(ptr.live_session_count)];
             for (slice) |*session| freeSessionSummary(session);
-            c_allocator.free(slice);
-        }
-
-        if (ptr.closed_sessions) |closed_sessions| {
-            const slice = closed_sessions[0..@intCast(ptr.closed_session_count)];
-            for (slice) |*session| freeClosedSessionSummary(session);
             c_allocator.free(slice);
         }
 

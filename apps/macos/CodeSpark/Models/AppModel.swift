@@ -8,19 +8,15 @@ final class AppModel: ObservableObject {
     @Published var projects: [ProjectSummaryViewData] = []
     @Published var selectedProjectID: String?
     @Published var selectedProject: ProjectDetailViewData?
-    @Published var noteDraft = ""
     @Published var activeSessionID: String?
     @Published var liveSessions: [SessionViewData] = []
-    @Published var closedSessions: [ClosedSessionViewData] = []
 
     /// All sessions across all projects — keeps Ghostty surfaces alive during project switches
     @Published private(set) var allSessions: [SessionViewData] = []
     @Published var loadErrorMessage: String?
-    @Published var noteSaveErrorMessage: String?
     @Published var idleSessionIDs: Set<String> = []
     @Published var pendingCloseSessionID: String?
     @Published var pendingCloseProjectID: String?
-    @Published var pendingRestoreSessions: [ClosedSessionViewData] = []
     @Published var hiddenProjectIDs: Set<String> = []
     @Published var hiddenProjectNames: [String: String] = [:]
     @Published var gitBranches: [String: String] = [:]
@@ -35,7 +31,6 @@ final class AppModel: ObservableObject {
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
     var hosts: [String: any TerminalHostProtocol] = [:]
     private var detailTask: Task<Void, Never>?
-    private var saveTask: Task<Void, Never>?
     var idleTimer: AnyCancellable?
     var checkpointTimer: AnyCancellable?
     private var hasReconciledOnLaunch = false
@@ -53,7 +48,6 @@ final class AppModel: ObservableObject {
     func attachLiveSessions() async {
         guard let project = selectedProject else { return }
         liveSessions = project.liveSessions
-        closedSessions = project.closedSessions
         for session in liveSessions where hosts[session.id] == nil {
             if !allSessions.contains(where: { $0.id == session.id }) {
                 allSessions.append(session)
@@ -77,8 +71,8 @@ final class AppModel: ObservableObject {
             self.projects = projects
 
             if projects.isEmpty {
-                let projId = try await core.createProject(name: "Default")
                 let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
+                let projId = try await core.createProject(name: "Default", path: homeDir, transport: "local")
                 let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
                 _ = try await core.startSession(
                     projectId: projId,
@@ -146,114 +140,26 @@ final class AppModel: ObservableObject {
         await task.value
     }
 
-    func saveNote() async {
-        guard var project = selectedProject else {
-            return
-        }
-
-        let task = Task {
-            do {
-                try await core.updateProjectNote(id: project.id, noteBody: noteDraft)
-                guard !Task.isCancelled else { return }
-                project.noteBody = noteDraft
-                selectedProject = project
-                noteSaveErrorMessage = nil
-            } catch {
-                guard !Task.isCancelled else { return }
-                noteSaveErrorMessage = error.localizedDescription
-            }
-        }
-        saveTask = task
-        await task.value
-    }
-
     private func cancelInflightWork() {
         detailTask?.cancel()
-        saveTask?.cancel()
     }
 
     private func apply(detail: ProjectDetailViewData) {
         selectedProject = detail
-        noteDraft = detail.noteBody
         liveSessions = detail.liveSessions
-        pendingRestoreSessions = detail.closedSessions
-        closedSessions = detail.closedSessions
         activeSessionID = liveSessions.first?.id
-        noteSaveErrorMessage = nil
-    }
-
-    func recoveryActions(for session: ClosedSessionViewData) -> [RecoveryActionViewData] {
-        var actions: [RecoveryActionViewData] = []
-
-        actions.append(RecoveryActionViewData(title: session.targetLabel != "local" ? "Reconnect SSH and cd here" : "Open local shell here") { [weak self] in
-            guard let self else { return }
-            Task {
-                do { try await self.recoverSession(from: session) }
-                catch { self.loadErrorMessage = error.localizedDescription }
-            }
-        })
-
-        actions.append(RecoveryActionViewData(title: "Copy session recipe") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(session.restoreRecipe.launchCommand, forType: .string)
-        })
-
-        return actions
-    }
-
-    func recoverSession(from closed: ClosedSessionViewData) async throws {
-        guard let projectID = selectedProjectID else { return }
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        let isSSH = closed.targetLabel != "local"
-        let title = isSSH ? closed.title : (closed.lastCwd.map { ($0 as NSString).lastPathComponent } ?? "Terminal")
-        let sessionID = try await startAndAttachSession(
-            projectID: projectID,
-            transport: isSSH ? "ssh" : "local",
-            targetLabel: isSSH ? closed.targetLabel : "local",
-            title: title,
-            shell: shell,
-            cwd: closed.lastCwd,
-            command: isSSH ? closed.restoreRecipe.launchCommand : nil
-        )
-        guard selectedProjectID == projectID else { return }
-        activeSessionID = sessionID
-    }
-
-    func reopenLastClosedSession() async {
-        guard let closed = closedSessions.first else { return }
-        do {
-            try await recoverSession(from: closed)
-            closedSessions.removeFirst()
-        } catch {
-            loadErrorMessage = error.localizedDescription
-        }
-    }
-
-    func restoreAllClosedSessions() async {
-        let sessions = pendingRestoreSessions
-        for session in sessions {
-            do {
-                try await recoverSession(from: session)
-                pendingRestoreSessions.removeAll { $0.id == session.id }
-                closedSessions.removeAll { $0.id == session.id }
-            } catch {
-                loadErrorMessage = error.localizedDescription
-            }
-        }
-    }
-
-    func dismissRestorePrompt() {
-        pendingRestoreSessions = []
     }
 
     // MARK: - Project lifecycle
 
-    func createProject(name: String) async {
+    func createProject(name: String, path: String = "", transport: String = "local") async {
         do {
-            let newID = try await core.createProject(name: name)
+            let newID = try await core.createProject(name: name, path: path, transport: transport)
             let newProject = ProjectSummaryViewData(
                 id: newID,
                 name: name,
+                path: path,
+                transport: transport,
                 liveSessions: 0,
                 recentlyClosedSessions: 0,
                 hasInterruptedSessions: false,
@@ -276,7 +182,7 @@ final class AppModel: ObservableObject {
         }
         if selectedProject?.id == id {
             selectedProject = selectedProject.map {
-                ProjectDetailViewData(id: $0.id, name: newName, noteBody: $0.noteBody, liveSessions: $0.liveSessions, closedSessions: $0.closedSessions)
+                ProjectDetailViewData(id: $0.id, name: newName, path: $0.path, transport: $0.transport, liveSessions: $0.liveSessions)
             }
         }
         do {
@@ -369,8 +275,7 @@ final class AppModel: ObservableObject {
             id: sessionID,
             title: title,
             targetLabel: targetLabel,
-            lastCwd: cwd,
-            restoreRecipe: RestoreRecipeViewData(launchCommand: command ?? "\(shell) -l")
+            lastCwd: cwd
         )
         liveSessions.append(session)
         if !allSessions.contains(where: { $0.id == sessionID }) {
@@ -463,24 +368,16 @@ final class AppModel: ObservableObject {
 
     private func clearDetailState() {
         selectedProject = nil
-        noteDraft = ""
         activeSessionID = nil
         liveSessions = []
-        closedSessions = []
-        noteSaveErrorMessage = nil
     }
 
-}
-
-struct RecoveryActionViewData {
-    let title: String
-    let perform: () -> Void
 }
 
 extension AppModel: TerminalHostDelegate {
     func terminalHostDidClose(sessionID: String, snapshot: TerminalSnapshotViewData, closeReason: CloseReasonViewData) {
         guard let index = liveSessions.firstIndex(where: { $0.id == sessionID }) else { return }
-        let session = liveSessions.remove(at: index)
+        liveSessions.remove(at: index)
         allSessions.removeAll { $0.id == sessionID }
         hosts.removeValue(forKey: sessionID)
         closingSessionIDs.remove(sessionID)
@@ -489,16 +386,6 @@ extension AppModel: TerminalHostDelegate {
             activeSessionID = liveSessions.isEmpty ? nil : liveSessions[max(0, index - 1)].id
         }
 
-        let closed = ClosedSessionViewData(
-            id: session.id,
-            title: session.title,
-            targetLabel: session.targetLabel,
-            lastCwd: session.lastCwd,
-            closeReason: closeReason,
-            snapshotPreview: snapshot,
-            restoreRecipe: session.restoreRecipe
-        )
-        closedSessions.insert(closed, at: 0)
         Task { [weak self] in
             do {
                 try await self?.core.recordFinalSnapshotAndClose(sessionID: sessionID, snapshot: snapshot, closeReason: closeReason)

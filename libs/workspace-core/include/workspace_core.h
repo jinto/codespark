@@ -44,17 +44,6 @@ typedef enum project_snapshot_kind_t {
     PROJECT_SNAPSHOT_KIND_FINAL = 1,
 } project_snapshot_kind_t;
 
-typedef struct project_terminal_grid_t {
-    uint16_t cols;
-    uint16_t rows;
-    char **lines;
-    int32_t line_count;
-} project_terminal_grid_t;
-
-typedef struct project_restore_recipe_t {
-    char *launch_command;
-} project_restore_recipe_t;
-
 typedef struct project_session_summary_t {
     char *id;
     char *title;
@@ -64,20 +53,11 @@ typedef struct project_session_summary_t {
     project_close_reason_t close_reason;
 } project_session_summary_t;
 
-typedef struct project_closed_session_summary_t {
-    char *id;
-    char *title;
-    project_session_transport_t transport;
-    char *target_label;
-    char *last_cwd;
-    project_close_reason_t close_reason;
-    project_terminal_grid_t snapshot_preview;
-    project_restore_recipe_t restore_recipe;
-} project_closed_session_summary_t;
-
 typedef struct project_summary_t {
     char *id;
     char *name;
+    char *path;
+    project_session_transport_t transport;
     int64_t live_sessions;
     int64_t recently_closed_sessions;
     bool has_interrupted_sessions;
@@ -89,11 +69,10 @@ typedef struct project_summary_t {
 typedef struct project_detail_t {
     char *id;
     char *name;
-    char *note_body;
+    char *path;
+    project_session_transport_t transport;
     project_session_summary_t *live_sessions;
     int32_t live_session_count;
-    project_closed_session_summary_t *closed_sessions;
-    int32_t closed_session_count;
 } project_detail_t;
 
 typedef struct project_new_session_t {
@@ -150,12 +129,9 @@ project_status_t project_service_list_project_summaries(
 project_status_t project_service_create_project(
     project_service_t *service,
     const char *name,
+    const char *path,
+    project_session_transport_t transport,
     char **out_project_id
-);
-project_status_t project_service_update_project_note(
-    project_service_t *service,
-    const char *project_id,
-    const char *note_body
 );
 project_status_t project_service_rename_project(
     project_service_t *service,

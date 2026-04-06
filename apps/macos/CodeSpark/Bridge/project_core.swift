@@ -3,7 +3,7 @@ import Foundation
 enum ProjectServiceError: Error, Equatable {
     case openStoreFailed
     case createProjectFailed
-    case updateProjectNoteFailed
+    // updateProjectNoteFailed removed (notes no longer supported)
     case projectDetailFailed
     case poisonedState
     case listProjectsFailed
@@ -21,7 +21,7 @@ enum ProjectServiceError: Error, Equatable {
         case PROJECT_STATUS_CREATE_PROJECT_FAILED:
             self = .createProjectFailed
         case PROJECT_STATUS_UPDATE_PROJECT_NOTE_FAILED:
-            self = .updateProjectNoteFailed
+            self = .projectDetailFailed // legacy status code, map to generic error
         case PROJECT_STATUS_PROJECT_DETAIL_FAILED:
             self = .projectDetailFailed
         case PROJECT_STATUS_POISONED_STATE:
@@ -109,16 +109,6 @@ enum CloseReason: Equatable, Sendable {
     }
 }
 
-struct TerminalGrid: Equatable, Hashable, Sendable {
-    var cols: UInt16
-    var rows: UInt16
-    var lines: [String]
-}
-
-struct RestoreRecipe: Equatable, Hashable, Sendable {
-    var launchCommand: String
-}
-
 struct ProjectSessionSummary: Equatable, Hashable, Sendable {
     var id: String
     var title: String
@@ -128,20 +118,11 @@ struct ProjectSessionSummary: Equatable, Hashable, Sendable {
     var closeReason: CloseReason
 }
 
-struct ProjectClosedSessionSummary: Equatable, Hashable, Sendable {
-    var id: String
-    var title: String
-    var transport: SessionTransport
-    var targetLabel: String
-    var lastCwd: String?
-    var closeReason: CloseReason
-    var snapshotPreview: TerminalGrid
-    var restoreRecipe: RestoreRecipe
-}
-
 struct ProjectSummary: Equatable, Hashable, Sendable {
     var id: String
     var name: String
+    var path: String
+    var transport: SessionTransport
     var liveSessions: Int64
     var recentlyClosedSessions: Int64
     var hasInterruptedSessions: Bool
@@ -151,19 +132,18 @@ struct ProjectSummary: Equatable, Hashable, Sendable {
 struct ProjectDetail: Equatable, Hashable, Sendable {
     var id: String
     var name: String
-    var noteBody: String
+    var path: String
+    var transport: SessionTransport
     var liveSessions: [ProjectSessionSummary]
-    var closedSessions: [ProjectClosedSessionSummary]
 }
 
 protocol ProjectServiceProtocol: AnyObject, Sendable {
     func closeSession(sessionId: String, reason: CloseReason, lastCwd: String?) throws
-    func createProject(name: String) throws -> String
+    func createProject(name: String, path: String, transport: SessionTransport) throws -> String
     func listProjectSummaries() throws -> [ProjectSummary]
     func reconcileInterruptedSessions() throws
     func recordSnapshot(sessionId: String, kind: String, cwd: String?, cols: UInt16, rows: UInt16, lines: [String]) throws
     func startSession(projectId: String, transport: SessionTransport, targetLabel: String, title: String, shell: String, initialCwd: String?) throws -> String
-    func updateProjectNote(projectId: String, noteBody: String) throws
     func renameProject(projectId: String, newName: String) throws
     func deleteProject(projectId: String) throws
     func projectDetail(projectId: String) throws -> ProjectDetail
@@ -191,9 +171,13 @@ final class ProjectService: ProjectServiceProtocol, @unchecked Sendable {
         )
     }
 
-    func createProject(name: String) throws -> String {
+    func createProject(name: String, path: String, transport: SessionTransport) throws -> String {
         var result: UnsafeMutablePointer<CChar>? = nil
-        let status = project_service_create_project(handle, name, &result)
+        let status = name.withCString { namePtr in
+            path.withCString { pathPtr in
+                project_service_create_project(handle, namePtr, pathPtr, transport.cValue, &result)
+            }
+        }
         guard status == PROJECT_STATUS_OK, let result else {
             throw ProjectServiceError(status: status)
         }
@@ -282,13 +266,6 @@ final class ProjectService: ProjectServiceProtocol, @unchecked Sendable {
         }
     }
 
-    func updateProjectNote(projectId: String, noteBody: String) throws {
-        try throwIfNeeded(
-            project_service_update_project_note(handle, projectId, noteBody),
-            defaultError: .updateProjectNoteFailed
-        )
-    }
-
     func renameProject(projectId: String, newName: String) throws {
         try throwIfNeeded(
             project_service_rename_project(handle, projectId, newName),
@@ -328,6 +305,8 @@ final class ProjectService: ProjectServiceProtocol, @unchecked Sendable {
         ProjectSummary(
             id: requiredString(raw.id),
             name: requiredString(raw.name),
+            path: requiredString(raw.path),
+            transport: SessionTransport(cValue: raw.transport),
             liveSessions: raw.live_sessions,
             recentlyClosedSessions: raw.recently_closed_sessions,
             hasInterruptedSessions: raw.has_interrupted_sessions,
@@ -346,19 +325,6 @@ final class ProjectService: ProjectServiceProtocol, @unchecked Sendable {
         )
     }
 
-    private static func makeClosedSessionSummary(_ raw: project_closed_session_summary_t) -> ProjectClosedSessionSummary {
-        ProjectClosedSessionSummary(
-            id: requiredString(raw.id),
-            title: requiredString(raw.title),
-            transport: SessionTransport(cValue: raw.transport),
-            targetLabel: requiredString(raw.target_label),
-            lastCwd: optionalString(raw.last_cwd),
-            closeReason: CloseReason(cValue: raw.close_reason),
-            snapshotPreview: makeTerminalGrid(raw.snapshot_preview),
-            restoreRecipe: RestoreRecipe(launchCommand: requiredString(raw.restore_recipe.launch_command))
-        )
-    }
-
     private static func makeProjectDetail(_ raw: project_detail_t) -> ProjectDetail {
         let liveSessions: [ProjectSessionSummary]
         if let sessions = raw.live_sessions, raw.live_session_count > 0 {
@@ -367,39 +333,12 @@ final class ProjectService: ProjectServiceProtocol, @unchecked Sendable {
             liveSessions = []
         }
 
-        let closedSessions: [ProjectClosedSessionSummary]
-        if let sessions = raw.closed_sessions, raw.closed_session_count > 0 {
-            closedSessions = UnsafeBufferPointer(start: sessions, count: Int(raw.closed_session_count)).map(makeClosedSessionSummary)
-        } else {
-            closedSessions = []
-        }
-
         return ProjectDetail(
             id: requiredString(raw.id),
             name: requiredString(raw.name),
-            noteBody: requiredString(raw.note_body),
-            liveSessions: liveSessions,
-            closedSessions: closedSessions
-        )
-    }
-
-    private static func makeTerminalGrid(_ raw: project_terminal_grid_t) -> TerminalGrid {
-        let lines: [String]
-        if let rawLines = raw.lines, raw.line_count > 0 {
-            lines = UnsafeBufferPointer(
-                start: UnsafePointer(rawLines),
-                count: Int(raw.line_count)
-            ).map { rawLine in
-                rawLine.map { String(cString: $0) } ?? ""
-            }
-        } else {
-            lines = []
-        }
-
-        return TerminalGrid(
-            cols: raw.cols,
-            rows: raw.rows,
-            lines: lines
+            path: requiredString(raw.path),
+            transport: SessionTransport(cValue: raw.transport),
+            liveSessions: liveSessions
         )
     }
 

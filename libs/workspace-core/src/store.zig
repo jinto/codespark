@@ -1,6 +1,5 @@
 const std = @import("std");
 const models = @import("models.zig");
-const restore = @import("restore.zig");
 
 const sqlite = @cImport({
     @cInclude("sqlite3.h");
@@ -34,16 +33,24 @@ pub const Store = struct {
         _ = sqlite.sqlite3_close(self.db);
     }
 
-    pub fn createProject(self: *Store, allocator: std.mem.Allocator, name: []const u8) StoreError![]u8 {
+    pub fn createProject(
+        self: *Store,
+        allocator: std.mem.Allocator,
+        name: []const u8,
+        path: []const u8,
+        transport: models.SessionTransport,
+    ) StoreError![]u8 {
         const updated_at = now();
         var stmt = try Statement.init(
             self.db,
-            "insert into projects (id, name, note_body, updated_at, last_opened_at)\n" ++
-                " values (lower(hex(randomblob(16))), ?1, '', ?2, ?2)",
+            "insert into projects (id, name, path, transport, note_body, updated_at, last_opened_at)\n" ++
+                " values (lower(hex(randomblob(16))), ?1, ?2, ?3, '', ?4, ?4)",
         );
         defer stmt.deinit();
         try stmt.bindText(1, name);
-        try stmt.bindInt64(2, updated_at);
+        try stmt.bindText(2, path);
+        try stmt.bindText(3, transport.asSql());
+        try stmt.bindInt64(4, updated_at);
         try stmt.expectDone();
 
         var select_stmt = try Statement.init(
@@ -67,13 +74,15 @@ pub const Store = struct {
             "select\n" ++
                 "    w.id,\n" ++
                 "    w.name,\n" ++
+                "    w.path,\n" ++
+                "    w.transport,\n" ++
                 "    w.updated_at,\n" ++
                 "    coalesce(sum(case when s.state = 'live' then 1 else 0 end), 0),\n" ++
                 "    coalesce(sum(case when s.state in ('closed','exited','lost','crashed') then 1 else 0 end), 0),\n" ++
                 "    coalesce(max(case when s.state = 'interrupted' then 1 else 0 end), 0)\n" ++
                 " from projects w\n" ++
                 " left join sessions s on s.project_id = w.id\n" ++
-                " group by w.id, w.name, w.updated_at\n" ++
+                " group by w.id, w.name, w.path, w.transport, w.updated_at\n" ++
                 " order by w.updated_at desc, w.rowid desc",
         );
         defer stmt.deinit();
@@ -86,6 +95,9 @@ pub const Store = struct {
             errdefer allocator.free(project_id);
             const name = try stmt.columnOwnedText(allocator, 1);
             errdefer allocator.free(name);
+            const path = try stmt.columnOwnedText(allocator, 2);
+            errdefer allocator.free(path);
+            const transport = try models.SessionTransport.fromSql(try stmt.columnTextSlice(3));
             const live_session_details = try self.sessionsForProject(allocator, project_id, .live);
             errdefer {
                 for (live_session_details) |*session| session.deinit(allocator);
@@ -95,33 +107,17 @@ pub const Store = struct {
             try items.append(allocator, .{
                 .id = project_id,
                 .name = name,
-                .updated_at = stmt.columnInt64(2),
-                .live_sessions = stmt.columnInt64(3),
+                .path = path,
+                .transport = transport,
+                .updated_at = stmt.columnInt64(4),
+                .live_sessions = stmt.columnInt64(5),
                 .live_session_details = live_session_details,
-                .recently_closed_sessions = stmt.columnInt64(4),
-                .has_interrupted_sessions = stmt.columnInt64(5) != 0,
+                .recently_closed_sessions = stmt.columnInt64(6),
+                .has_interrupted_sessions = stmt.columnInt64(7) != 0,
             });
         }
 
         return items.toOwnedSlice(allocator);
-    }
-
-    pub fn updateProjectNote(self: *Store, project_id: []const u8, note_body: []const u8) StoreError!void {
-        const updated_at = now();
-        var stmt = try Statement.init(
-            self.db,
-            "update projects\n" ++
-                " set note_body = ?2, updated_at = ?3\n" ++
-                " where id = ?1",
-        );
-        defer stmt.deinit();
-        try stmt.bindText(1, project_id);
-        try stmt.bindText(2, note_body);
-        try stmt.bindInt64(3, updated_at);
-        try stmt.expectDone();
-        self.recordTimelineEvent(project_id, null, .note_updated) catch |err| {
-            std.log.warn("timeline event failed: {}", .{err});
-        };
     }
 
     pub fn renameProject(self: *Store, project_id: []const u8, new_name: []const u8) StoreError!void {
@@ -263,7 +259,6 @@ pub const Store = struct {
         session_id: []const u8,
         reason: models.CloseReason,
         last_cwd: ?[]const u8,
-        exit_status: ?i64,
     ) StoreError!void {
         const updated_at = now();
         var stmt = try Statement.init(
@@ -272,18 +267,16 @@ pub const Store = struct {
                 " set state = ?2,\n" ++
                 "     close_reason = ?3,\n" ++
                 "     last_cwd = coalesce(?4, last_cwd),\n" ++
-                "     exit_status = ?5,\n" ++
-                "     updated_at = ?6\n" ++
-                " where id = ?1 and state = ?7",
+                "     updated_at = ?5\n" ++
+                " where id = ?1 and state = ?6",
         );
         defer stmt.deinit();
         try stmt.bindText(1, session_id);
         try stmt.bindText(2, models.SessionState.closed.asSql());
         try stmt.bindText(3, reason.asSql());
         try stmt.bindOptionalText(4, last_cwd);
-        try stmt.bindOptionalInt64(5, exit_status);
-        try stmt.bindInt64(6, updated_at);
-        try stmt.bindText(7, models.SessionState.live.asSql());
+        try stmt.bindInt64(5, updated_at);
+        try stmt.bindText(6, models.SessionState.live.asSql());
         try stmt.expectDone();
 
         if (sqlite.sqlite3_changes(self.db) == 0) {
@@ -362,7 +355,7 @@ pub const Store = struct {
     pub fn projectDetail(self: *Store, allocator: std.mem.Allocator, project_id: []const u8) StoreError!models.ProjectDetail {
         var stmt = try Statement.init(
             self.db,
-            "select id, name, note_body\n" ++
+            "select id, name, path, transport\n" ++
                 " from projects\n" ++
                 " where id = ?1",
         );
@@ -374,21 +367,17 @@ pub const Store = struct {
         errdefer allocator.free(id);
         const name = try stmt.columnOwnedText(allocator, 1);
         errdefer allocator.free(name);
-        const note_body = try stmt.columnOwnedText(allocator, 2);
-        errdefer allocator.free(note_body);
+        const path = try stmt.columnOwnedText(allocator, 2);
+        errdefer allocator.free(path);
+        const transport = try models.SessionTransport.fromSql(try stmt.columnTextSlice(3));
         const live_sessions = try self.sessionsForProject(allocator, project_id, .live);
-        errdefer {
-            for (live_sessions) |*session| session.deinit(allocator);
-            allocator.free(live_sessions);
-        }
-        const closed_sessions = try self.closedSessionsForProject(allocator, project_id);
 
         return .{
             .id = id,
             .name = name,
-            .note_body = note_body,
+            .path = path,
+            .transport = transport,
             .live_sessions = live_sessions,
-            .closed_sessions = closed_sessions,
         };
     }
 
@@ -404,7 +393,10 @@ pub const Store = struct {
             try self.migrateV1();
             try self.setSchemaVersion(1);
         }
-        // if (version < 2) { try self.migrateV2(); try self.setSchemaVersion(2); }
+        if (version < 2) {
+            try self.migrateV2();
+            try self.setSchemaVersion(2);
+        }
     }
 
     fn schemaVersion(self: *Store) StoreError!u32 {
@@ -478,6 +470,13 @@ pub const Store = struct {
         );
     }
 
+    fn migrateV2(self: *Store) StoreError!void {
+        try self.execScript(
+            "alter table projects add column path text not null default '';\n" ++
+                "alter table projects add column transport text not null default 'local';",
+        );
+    }
+
     fn sessionsForProject(
         self: *Store,
         allocator: std.mem.Allocator,
@@ -513,37 +512,6 @@ pub const Store = struct {
                 .last_cwd = try stmt.columnOptionalOwnedText(allocator, 4),
                 .close_reason = close_reason,
             });
-        }
-
-        return items.toOwnedSlice(allocator);
-    }
-
-    fn closedSessionsForProject(self: *Store, allocator: std.mem.Allocator, project_id: []const u8) StoreError![]models.ClosedSessionSummary {
-        var stmt = try Statement.init(
-            self.db,
-            "select\n" ++
-                "    s.id, s.title, s.transport, s.target_label, s.shell,\n" ++
-                "    s.initial_cwd, s.last_cwd, s.close_reason,\n" ++
-                "    snap.cwd as snap_cwd, snap.cols, snap.rows, snap.line_count, snap.payload\n" ++
-                " from sessions s\n" ++
-                " left join snapshots snap on snap.id = (\n" ++
-                "     select id from snapshots\n" ++
-                "     where session_id = s.id\n" ++
-                "     order by created_at desc, rowid desc\n" ++
-                "     limit 1\n" ++
-                " )\n" ++
-                " where s.project_id = ?1\n" ++
-                "   and s.state in ('closed', 'exited', 'lost', 'crashed', 'interrupted')\n" ++
-                " order by s.updated_at desc, s.rowid desc",
-        );
-        defer stmt.deinit();
-        try stmt.bindText(1, project_id);
-
-        var items: std.ArrayList(models.ClosedSessionSummary) = .empty;
-        defer items.deinit(allocator);
-
-        while (try stmt.step()) {
-            try items.append(allocator, try mapClosedSessionRow(allocator, &stmt));
         }
 
         return items.toOwnedSlice(allocator);
@@ -718,69 +686,6 @@ const Statement = struct {
         return allocator.dupe(u8, slice);
     }
 };
-
-fn mapClosedSessionRow(allocator: std.mem.Allocator, stmt: *Statement) StoreError!models.ClosedSessionSummary {
-    const transport = try models.SessionTransport.fromSql(try stmt.columnTextSlice(2));
-    const initial_cwd = try stmt.columnOptionalTextSlice(5);
-    const last_cwd = try stmt.columnOptionalTextSlice(6);
-    const snapshot_cwd = try stmt.columnOptionalTextSlice(8);
-
-    var snapshot_preview = if (sqlite.sqlite3_column_type(stmt.stmt, 9) == sqlite.SQLITE_NULL)
-        try models.TerminalGrid.empty(allocator)
-    else
-        models.TerminalGrid{
-            .cols = try safeU16(stmt.columnInt64(9)),
-            .rows = try safeU16(stmt.columnInt64(10)),
-            .lines = try decodeTerminalGridLines(
-                allocator,
-                stmt.columnInt64(11),
-                try stmt.columnBlobOwned(allocator, 12),
-            ),
-        };
-    errdefer snapshot_preview.deinit(allocator);
-
-    const restore_cwd = if (snapshot_cwd) |value|
-        try allocator.dupe(u8, value)
-    else if (last_cwd) |value|
-        try allocator.dupe(u8, value)
-    else if (initial_cwd) |value|
-        try allocator.dupe(u8, value)
-    else
-        null;
-    errdefer if (restore_cwd) |value| allocator.free(value);
-
-    const close_reason = if (try stmt.columnOptionalTextSlice(7)) |value|
-        try models.CloseReason.fromSql(value)
-    else
-        models.CloseReason.user_closed;
-
-    const shell = try stmt.columnTextSlice(4);
-    const target_label = try stmt.columnTextSlice(3);
-    var restore_recipe = try restore.buildRestoreRecipe(
-        allocator,
-        transport,
-        target_label,
-        shell,
-        if (restore_cwd) |value| value else null,
-    );
-    errdefer restore_recipe.deinit(allocator);
-
-    return .{
-        .id = try stmt.columnOwnedText(allocator, 0),
-        .title = try stmt.columnOwnedText(allocator, 1),
-        .transport = transport,
-        .target_label = try stmt.columnOwnedText(allocator, 3),
-        .last_cwd = restore_cwd,
-        .close_reason = close_reason,
-        .snapshot_preview = snapshot_preview,
-        .restore_recipe = restore_recipe,
-    };
-}
-
-fn safeU16(value: i64) StoreError!u16 {
-    if (value < 0 or value > std.math.maxInt(u16)) return error.InvalidData;
-    return @intCast(value);
-}
 
 fn now() i64 {
     return @intCast(std.time.nanoTimestamp());

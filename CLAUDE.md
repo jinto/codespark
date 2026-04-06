@@ -46,6 +46,4 @@ apps/macos/CLI/ — codespark-hook CLI (Claude Code hook → Unix socket bridge)
 
 ## Known Issues
 
-- `AppModel.swift` is 660+ lines with 5+ responsibilities — needs splitting
 - Terminal hosts (NoOpTerminalHost) are disconnected from real Ghostty surfaces
-- Sidebar state can go stale after session mutations (reads `projects.liveSessionDetails` instead of `liveSessions`)

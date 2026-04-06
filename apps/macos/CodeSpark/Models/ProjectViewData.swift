@@ -41,14 +41,12 @@ struct SessionSummary: Identifiable, Equatable {
 struct ProjectSummaryViewData: Identifiable, Equatable {
     let id: String
     var name: String
+    let path: String
+    let transport: String
     let liveSessions: Int
     let recentlyClosedSessions: Int
     let hasInterruptedSessions: Bool
     let liveSessionDetails: [SessionSummary]
-}
-
-struct RestoreRecipeViewData: Equatable {
-    let launchCommand: String
 }
 
 struct TerminalSnapshotViewData: Equatable {
@@ -105,33 +103,21 @@ struct SessionViewData: Identifiable, Equatable {
     var title: String
     let targetLabel: String
     let lastCwd: String?
-    let restoreRecipe: RestoreRecipeViewData
 
     static func fixture() -> SessionViewData {
         SessionViewData(
             id: "fixture-session",
             title: "fixture",
             targetLabel: "local",
-            lastCwd: "/tmp",
-            restoreRecipe: RestoreRecipeViewData(launchCommand: "zsh -l")
+            lastCwd: "/tmp"
         )
     }
-}
-
-struct ClosedSessionViewData: Identifiable, Equatable {
-    let id: String
-    let title: String
-    let targetLabel: String
-    let lastCwd: String?
-    let closeReason: CloseReasonViewData
-    let snapshotPreview: TerminalSnapshotViewData
-    let restoreRecipe: RestoreRecipeViewData
 }
 
 struct ProjectDetailViewData: Equatable {
     let id: String
     let name: String
-    var noteBody: String
+    let path: String
+    let transport: String
     let liveSessions: [SessionViewData]
-    let closedSessions: [ClosedSessionViewData]
 }

@@ -5,9 +5,9 @@ test "creates and lists projects in recent order" {
     var store = try core.Store.open(":memory:");
     defer store.deinit();
 
-    const project_one = try store.createProject(std.testing.allocator, "spark3");
+    const project_one = try store.createProject(std.testing.allocator, "spark3", "", .local);
     defer std.testing.allocator.free(project_one);
-    const project_two = try store.createProject(std.testing.allocator, "release");
+    const project_two = try store.createProject(std.testing.allocator, "release", "", .local);
     defer std.testing.allocator.free(project_two);
 
     const summaries = try store.listProjectSummaries(std.testing.allocator);
@@ -25,7 +25,7 @@ test "memory databases do not share state across connections" {
     var first = try core.Store.open(":memory:");
     defer first.deinit();
 
-    const project_id = try first.createProject(std.testing.allocator, "spark3");
+    const project_id = try first.createProject(std.testing.allocator, "spark3", "", .local);
     defer std.testing.allocator.free(project_id);
 
     var second = try core.Store.open(":memory:");
@@ -45,7 +45,7 @@ test "file backed databases persist across reopen" {
     {
         var store = try core.Store.open(path);
         defer store.deinit();
-        const project_id = try store.createProject(std.testing.allocator, "spark3");
+        const project_id = try store.createProject(std.testing.allocator, "spark3", "", .local);
         defer std.testing.allocator.free(project_id);
     }
 
@@ -58,13 +58,12 @@ test "file backed databases persist across reopen" {
     try std.testing.expectEqualStrings("spark3", summaries[0].name);
 }
 
-test "closing a session moves it to recently closed and persists the project note" {
+test "closing a session updates recently closed count" {
     var store = try core.Store.open(":memory:");
     defer store.deinit();
-    const project_id = try store.createProject(std.testing.allocator, "release");
+    const project_id = try store.createProject(std.testing.allocator, "release", "", .local);
     defer std.testing.allocator.free(project_id);
 
-    try store.updateProjectNote(project_id, "check prod logs");
     const session_id = try store.startSession(std.testing.allocator, .{
         .project_id = project_id,
         .transport = .ssh,
@@ -75,19 +74,19 @@ test "closing a session moves it to recently closed and persists the project not
     });
     defer std.testing.allocator.free(session_id);
 
-    try store.closeSession(session_id, .user_closed, "/srv/app", null);
+    try store.closeSession(session_id, .user_closed, "/srv/app");
 
     var detail = try store.projectDetail(std.testing.allocator, project_id);
     defer detail.deinit(std.testing.allocator);
 
-    try std.testing.expectEqualStrings("check prod logs", detail.note_body);
     try std.testing.expectEqual(@as(usize, 0), detail.live_sessions.len);
-    try std.testing.expectEqual(@as(usize, 1), detail.closed_sessions.len);
-    try std.testing.expectEqualStrings("prod logs", detail.closed_sessions[0].title);
-    try std.testing.expectEqual(core.CloseReason.user_closed, detail.closed_sessions[0].close_reason);
+
+    const summaries = try store.listProjectSummaries(std.testing.allocator);
+    defer freeProjectSummaries(summaries);
+    try std.testing.expectEqual(@as(i64, 1), summaries[0].recently_closed_sessions);
 }
 
-test "file backed reopen preserves project note and session counts" {
+test "file backed reopen preserves session counts" {
     const path = try uniqueDbPath("session-lifecycle");
     defer std.testing.allocator.free(path);
     defer std.fs.cwd().deleteFile(path) catch {};
@@ -96,9 +95,8 @@ test "file backed reopen preserves project note and session counts" {
     {
         var store = try core.Store.open(path);
         defer store.deinit();
-        project_id = try store.createProject(std.testing.allocator, "release");
+        project_id = try store.createProject(std.testing.allocator, "release", "/tmp/release", .local);
 
-        try store.updateProjectNote(project_id, "check prod logs");
         const session_id = try store.startSession(std.testing.allocator, .{
             .project_id = project_id,
             .transport = .ssh,
@@ -109,7 +107,7 @@ test "file backed reopen preserves project note and session counts" {
         });
         defer std.testing.allocator.free(session_id);
 
-        try store.closeSession(session_id, .user_closed, "/srv/app", null);
+        try store.closeSession(session_id, .user_closed, "/srv/app");
     }
     defer std.testing.allocator.free(project_id);
 
@@ -120,16 +118,16 @@ test "file backed reopen preserves project note and session counts" {
 
     try std.testing.expectEqual(@as(usize, 1), summaries.len);
     try std.testing.expectEqualStrings("release", summaries[0].name);
+    try std.testing.expectEqualStrings("/tmp/release", summaries[0].path);
+    try std.testing.expectEqual(core.SessionTransport.local, summaries[0].transport);
     try std.testing.expectEqual(@as(i64, 0), summaries[0].live_sessions);
     try std.testing.expectEqual(@as(i64, 1), summaries[0].recently_closed_sessions);
     try std.testing.expect(!summaries[0].has_interrupted_sessions);
 
     var detail = try reopened.projectDetail(std.testing.allocator, summaries[0].id);
     defer detail.deinit(std.testing.allocator);
-    try std.testing.expectEqualStrings("check prod logs", detail.note_body);
+    try std.testing.expectEqualStrings("/tmp/release", detail.path);
     try std.testing.expectEqual(@as(usize, 0), detail.live_sessions.len);
-    try std.testing.expectEqual(@as(usize, 1), detail.closed_sessions.len);
-    try std.testing.expectEqualStrings("prod logs", detail.closed_sessions[0].title);
 }
 
 test "timeline events are recorded for project and session operations" {
@@ -143,7 +141,7 @@ test "timeline events are recorded for project and session operations" {
         var store = try core.Store.open(path);
         defer store.deinit();
 
-        project_id = try store.createProject(std.testing.allocator, "release");
+        project_id = try store.createProject(std.testing.allocator, "release", "", .local);
         session_id = try store.startSession(std.testing.allocator, .{
             .project_id = project_id,
             .transport = .ssh,
@@ -153,7 +151,7 @@ test "timeline events are recorded for project and session operations" {
             .initial_cwd = "/srv/app",
         });
 
-        try store.closeSession(session_id, .user_closed, "/srv/app", null);
+        try store.closeSession(session_id, .user_closed, "/srv/app");
     }
     defer std.testing.allocator.free(project_id);
     defer std.testing.allocator.free(session_id);
@@ -177,10 +175,10 @@ test "timeline events are recorded for project and session operations" {
     try std.testing.expectEqualStrings(session_id, events[2].session_id.?);
 }
 
-test "closing an already closed session keeps existing recovery data" {
+test "closing an already closed session is idempotent" {
     var store = try core.Store.open(":memory:");
     defer store.deinit();
-    const project_id = try store.createProject(std.testing.allocator, "release");
+    const project_id = try store.createProject(std.testing.allocator, "release", "", .local);
     defer std.testing.allocator.free(project_id);
 
     const session_id = try store.startSession(std.testing.allocator, .{
@@ -193,15 +191,13 @@ test "closing an already closed session keeps existing recovery data" {
     });
     defer std.testing.allocator.free(session_id);
 
-    try store.closeSession(session_id, .user_closed, "/srv/app", 0);
-    try store.closeSession(session_id, .app_crashed, null, null);
+    try store.closeSession(session_id, .user_closed, "/srv/app");
+    // Second close should be no-op (session already closed)
+    try store.closeSession(session_id, .app_crashed, null);
 
-    var detail = try store.projectDetail(std.testing.allocator, project_id);
-    defer detail.deinit(std.testing.allocator);
-    try std.testing.expectEqual(@as(usize, 1), detail.closed_sessions.len);
-    try std.testing.expectEqual(core.CloseReason.user_closed, detail.closed_sessions[0].close_reason);
-    try std.testing.expect(detail.closed_sessions[0].last_cwd != null);
-    try std.testing.expectEqualStrings("/srv/app", detail.closed_sessions[0].last_cwd.?);
+    const summaries = try store.listProjectSummaries(std.testing.allocator);
+    defer freeProjectSummaries(summaries);
+    try std.testing.expectEqual(@as(i64, 1), summaries[0].recently_closed_sessions);
 }
 
 test "session activity updates project list recency" {
@@ -212,9 +208,9 @@ test "session activity updates project list recency" {
     {
         var store = try core.Store.open(path);
         defer store.deinit();
-        const alpha_id = try store.createProject(std.testing.allocator, "alpha");
+        const alpha_id = try store.createProject(std.testing.allocator, "alpha", "", .local);
         defer std.testing.allocator.free(alpha_id);
-        const beta_id = try store.createProject(std.testing.allocator, "beta");
+        const beta_id = try store.createProject(std.testing.allocator, "beta", "", .local);
         defer std.testing.allocator.free(beta_id);
 
         const after_create = try store.listProjectSummaries(std.testing.allocator);
@@ -236,13 +232,13 @@ test "session activity updates project list recency" {
         defer freeProjectSummaries(after_start);
         try std.testing.expectEqualStrings(alpha_id, after_start[0].id);
 
-        const gamma_id = try store.createProject(std.testing.allocator, "gamma");
+        const gamma_id = try store.createProject(std.testing.allocator, "gamma", "", .local);
         defer std.testing.allocator.free(gamma_id);
         const after_gamma = try store.listProjectSummaries(std.testing.allocator);
         defer freeProjectSummaries(after_gamma);
         try std.testing.expectEqualStrings(gamma_id, after_gamma[0].id);
 
-        try store.closeSession(session_id, .user_closed, "/tmp", null);
+        try store.closeSession(session_id, .user_closed, "/tmp");
 
         const after_close = try store.listProjectSummaries(std.testing.allocator);
         defer freeProjectSummaries(after_close);
@@ -272,10 +268,10 @@ test "start session rejects missing project without creating orphan row" {
     try std.testing.expectEqual(@as(i64, 0), session_count);
 }
 
-test "final snapshot and restore recipe are available for a closed ssh session" {
+test "snapshot recording succeeds for a closed session" {
     var store = try core.Store.open(":memory:");
     defer store.deinit();
-    const project_id = try store.createProject(std.testing.allocator, "release");
+    const project_id = try store.createProject(std.testing.allocator, "release", "", .local);
     defer std.testing.allocator.free(project_id);
     const session_id = try store.startSession(std.testing.allocator, .{
         .project_id = project_id,
@@ -293,102 +289,17 @@ test "final snapshot and restore recipe are available for a closed ssh session" 
         .cwd = "/srv/app",
         .grid = .{ .cols = 80, .rows = 24, .lines = &.{ "tail -f log", "error line" } },
     });
-    try store.closeSession(session_id, .user_closed, "/srv/app", null);
+    try store.closeSession(session_id, .user_closed, "/srv/app");
 
-    var detail = try store.projectDetail(std.testing.allocator, project_id);
-    defer detail.deinit(std.testing.allocator);
-    try std.testing.expectEqualStrings("error line", detail.closed_sessions[0].snapshot_preview.lines[1]);
-    try std.testing.expectEqualStrings(
-        "ssh prod -- 'cd /srv/app && exec zsh -l'",
-        detail.closed_sessions[0].restore_recipe.launch_command,
-    );
-}
-
-test "restore recipe prefers latest snapshot cwd over stale session paths" {
-    var store = try core.Store.open(":memory:");
-    defer store.deinit();
-    const project_id = try store.createProject(std.testing.allocator, "release");
-    defer std.testing.allocator.free(project_id);
-    const session_id = try store.startSession(std.testing.allocator, .{
-        .project_id = project_id,
-        .transport = .ssh,
-        .target_label = "prod",
-        .title = "prod shell",
-        .shell = "zsh",
-        .initial_cwd = "/srv/app",
-    });
-    defer std.testing.allocator.free(session_id);
-
-    try store.recordSnapshot(.{
-        .session_id = session_id,
-        .kind = .final,
-        .cwd = "/srv/app/releases/2026-04-01",
-        .grid = .{ .cols = 80, .rows = 24, .lines = &.{ "pwd", "/srv/app/releases/2026-04-01" } },
-    });
-    try store.closeSession(session_id, .user_closed, "/srv/app", null);
-
-    var detail = try store.projectDetail(std.testing.allocator, project_id);
-    defer detail.deinit(std.testing.allocator);
-    try std.testing.expect(detail.closed_sessions[0].last_cwd != null);
-    try std.testing.expectEqualStrings("/srv/app/releases/2026-04-01", detail.closed_sessions[0].last_cwd.?);
-    try std.testing.expectEqualStrings(
-        "ssh prod -- 'cd /srv/app/releases/2026-04-01 && exec zsh -l'",
-        detail.closed_sessions[0].restore_recipe.launch_command,
-    );
-}
-
-test "finalized non closed states are hydrated as closed session summaries" {
-    const path = try uniqueDbPath("snapshot-restore");
-    defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
-
-    {
-        var store = try core.Store.open(path);
-        defer store.deinit();
-        const project_id = try store.createProject(std.testing.allocator, "release");
-        defer std.testing.allocator.free(project_id);
-        const session_id = try store.startSession(std.testing.allocator, .{
-            .project_id = project_id,
-            .transport = .ssh,
-            .target_label = "prod",
-            .title = "prod worker",
-            .shell = "bash",
-            .initial_cwd = "/srv/app",
-        });
-        defer std.testing.allocator.free(session_id);
-
-        try store.recordSnapshot(.{
-            .session_id = session_id,
-            .kind = .final,
-            .cwd = "/srv/app",
-            .grid = .{ .cols = 80, .rows = 24, .lines = &.{ "deploy", "finished" } },
-        });
-
-        try execSql(path,
-            "update sessions\n" ++
-            " set state = 'exited',\n" ++
-            "     close_reason = 'process_exited',\n" ++
-            "     updated_at = updated_at + 1\n" ++
-            " where id = ?1",
-            session_id,
-        );
-
-        var detail = try store.projectDetail(std.testing.allocator, project_id);
-        defer detail.deinit(std.testing.allocator);
-        try std.testing.expectEqual(@as(usize, 1), detail.closed_sessions.len);
-        try std.testing.expectEqualStrings("prod worker", detail.closed_sessions[0].title);
-        try std.testing.expectEqualStrings("finished", detail.closed_sessions[0].snapshot_preview.lines[1]);
-        try std.testing.expectEqualStrings(
-            "ssh prod -- 'cd /srv/app && exec bash -l'",
-            detail.closed_sessions[0].restore_recipe.launch_command,
-        );
-    }
+    const summaries = try store.listProjectSummaries(std.testing.allocator);
+    defer freeProjectSummaries(summaries);
+    try std.testing.expectEqual(@as(i64, 1), summaries[0].recently_closed_sessions);
 }
 
 test "unfinalized live sessions are marked interrupted on next launch" {
     var store = try core.Store.open(":memory:");
     defer store.deinit();
-    const project_id = try store.createProject(std.testing.allocator, "spark3");
+    const project_id = try store.createProject(std.testing.allocator, "spark3", "", .local);
     defer std.testing.allocator.free(project_id);
     const session_id = try store.startSession(std.testing.allocator, .{
         .project_id = project_id,
@@ -415,19 +326,13 @@ test "unfinalized live sessions are marked interrupted on next launch" {
 
     var detail = try store.projectDetail(std.testing.allocator, project_id);
     defer detail.deinit(std.testing.allocator);
-    try std.testing.expectEqual(@as(usize, 1), detail.closed_sessions.len);
-    try std.testing.expectEqualStrings("cargo test", detail.closed_sessions[0].snapshot_preview.lines[0]);
-    try std.testing.expectEqual(core.CloseReason.app_crashed, detail.closed_sessions[0].close_reason);
-    try std.testing.expectEqualStrings(
-        "cd /Users/jinto/projects/spark3/crates/workspace-core && exec zsh -l",
-        detail.closed_sessions[0].restore_recipe.launch_command,
-    );
+    try std.testing.expectEqual(@as(usize, 0), detail.live_sessions.len);
 }
 
 test "updateSessionTitle changes the session title" {
     var store = try core.Store.open(":memory:");
     defer store.deinit();
-    const project_id = try store.createProject(std.testing.allocator, "spark3");
+    const project_id = try store.createProject(std.testing.allocator, "spark3", "", .local);
     defer std.testing.allocator.free(project_id);
 
     const session_id = try store.startSession(std.testing.allocator, .{
@@ -452,7 +357,7 @@ test "updateSessionTitle changes the session title" {
 test "renameProject changes the project name" {
     var store = try core.Store.open(":memory:");
     defer store.deinit();
-    const project_id = try store.createProject(std.testing.allocator, "Original");
+    const project_id = try store.createProject(std.testing.allocator, "Original", "", .local);
     defer std.testing.allocator.free(project_id);
 
     try store.renameProject(project_id, "Renamed");
@@ -467,9 +372,9 @@ test "renameProject changes the project name" {
 test "deleteProject removes the project from the list" {
     var store = try core.Store.open(":memory:");
     defer store.deinit();
-    const alpha_id = try store.createProject(std.testing.allocator, "alpha");
+    const alpha_id = try store.createProject(std.testing.allocator, "alpha", "", .local);
     defer std.testing.allocator.free(alpha_id);
-    const beta_id = try store.createProject(std.testing.allocator, "beta");
+    const beta_id = try store.createProject(std.testing.allocator, "beta", "", .local);
     defer std.testing.allocator.free(beta_id);
 
     try store.deleteProject(alpha_id);
@@ -484,7 +389,7 @@ test "deleteProject removes the project from the list" {
 test "deleteProject cascades to sessions and snapshots" {
     var store = try core.Store.open(":memory:");
     defer store.deinit();
-    const project_id = try store.createProject(std.testing.allocator, "doomed");
+    const project_id = try store.createProject(std.testing.allocator, "doomed", "", .local);
     defer std.testing.allocator.free(project_id);
 
     const session_id = try store.startSession(std.testing.allocator, .{
@@ -518,7 +423,7 @@ test "corrupt transport returns error instead of panic" {
     defer std.fs.cwd().deleteFile(path) catch {};
 
     var store = try core.Store.open(path);
-    const project_id = try store.createProject(std.testing.allocator, "test");
+    const project_id = try store.createProject(std.testing.allocator, "test", "", .local);
     defer std.testing.allocator.free(project_id);
     const session_id = try store.startSession(std.testing.allocator, .{
         .project_id = project_id,
@@ -539,74 +444,10 @@ test "corrupt transport returns error instead of panic" {
     try std.testing.expectError(core.StoreError.InvalidData, result);
 }
 
-test "corrupt close reason returns error instead of panic" {
-    const path = try uniqueDbPath("corrupt-reason");
-    defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
-
-    var store = try core.Store.open(path);
-    const project_id = try store.createProject(std.testing.allocator, "test");
-    defer std.testing.allocator.free(project_id);
-    const session_id = try store.startSession(std.testing.allocator, .{
-        .project_id = project_id,
-        .transport = .local,
-        .target_label = "local",
-        .title = "shell",
-        .shell = "zsh",
-        .initial_cwd = null,
-    });
-    defer std.testing.allocator.free(session_id);
-
-    try store.closeSession(session_id, .user_closed, null, null);
-    store.deinit();
-
-    try execSql(path, "update sessions set close_reason = 'alien_abduction' where id = ?1", session_id);
-
-    var reopened = try core.Store.open(path);
-    defer reopened.deinit();
-    const result = reopened.projectDetail(std.testing.allocator, project_id);
-    try std.testing.expectError(core.StoreError.InvalidData, result);
-}
-
-test "oversized snapshot cols returns error instead of truncating" {
-    const path = try uniqueDbPath("corrupt-cols");
-    defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
-
-    var store = try core.Store.open(path);
-    const project_id = try store.createProject(std.testing.allocator, "test");
-    defer std.testing.allocator.free(project_id);
-    const session_id = try store.startSession(std.testing.allocator, .{
-        .project_id = project_id,
-        .transport = .local,
-        .target_label = "local",
-        .title = "shell",
-        .shell = "zsh",
-        .initial_cwd = null,
-    });
-    defer std.testing.allocator.free(session_id);
-
-    try store.recordSnapshot(.{
-        .session_id = session_id,
-        .kind = .final,
-        .cwd = null,
-        .grid = .{ .cols = 80, .rows = 24, .lines = &.{"hello"} },
-    });
-    try store.closeSession(session_id, .user_closed, null, null);
-    store.deinit();
-
-    try execSql(path, "update snapshots set cols = 70000 where session_id = ?1", session_id);
-
-    var reopened = try core.Store.open(path);
-    defer reopened.deinit();
-    const result = reopened.projectDetail(std.testing.allocator, project_id);
-    try std.testing.expectError(core.StoreError.InvalidData, result);
-}
-
-test "many closed sessions return correct snapshots" {
+test "many closed sessions are counted correctly" {
     var store = try core.Store.open(":memory:");
     defer store.deinit();
-    const project_id = try store.createProject(std.testing.allocator, "bench");
+    const project_id = try store.createProject(std.testing.allocator, "bench", "", .local);
     defer std.testing.allocator.free(project_id);
 
     for (0..20) |i| {
@@ -614,8 +455,6 @@ test "many closed sessions return correct snapshots" {
         defer std.testing.allocator.free(title);
         const cwd = try std.fmt.allocPrint(std.testing.allocator, "/tmp/{d}", .{i});
         defer std.testing.allocator.free(cwd);
-        const line = try std.fmt.allocPrint(std.testing.allocator, "output-{d}", .{i});
-        defer std.testing.allocator.free(line);
 
         const session_id = try store.startSession(std.testing.allocator, .{
             .project_id = project_id,
@@ -627,24 +466,12 @@ test "many closed sessions return correct snapshots" {
         });
         defer std.testing.allocator.free(session_id);
 
-        try store.recordSnapshot(.{
-            .session_id = session_id,
-            .kind = .final,
-            .cwd = cwd,
-            .grid = .{ .cols = 80, .rows = 24, .lines = &.{line} },
-        });
-        try store.closeSession(session_id, .user_closed, cwd, null);
+        try store.closeSession(session_id, .user_closed, cwd);
     }
 
-    var detail = try store.projectDetail(std.testing.allocator, project_id);
-    defer detail.deinit(std.testing.allocator);
-    try std.testing.expectEqual(@as(usize, 20), detail.closed_sessions.len);
-    try std.testing.expectEqualStrings("session-19", detail.closed_sessions[0].title);
-    try std.testing.expectEqualStrings("output-19", detail.closed_sessions[0].snapshot_preview.lines[0]);
-    try std.testing.expect(detail.closed_sessions[0].last_cwd != null);
-    try std.testing.expectEqualStrings("/tmp/19", detail.closed_sessions[0].last_cwd.?);
-    try std.testing.expectEqualStrings("session-0", detail.closed_sessions[19].title);
-    try std.testing.expectEqualStrings("output-0", detail.closed_sessions[19].snapshot_preview.lines[0]);
+    const summaries = try store.listProjectSummaries(std.testing.allocator);
+    defer freeProjectSummaries(summaries);
+    try std.testing.expectEqual(@as(i64, 20), summaries[0].recently_closed_sessions);
 }
 
 test "project service returns project detail for swift" {
@@ -656,15 +483,10 @@ test "project service returns project detail for swift" {
     var project_id: ?[*:0]u8 = null;
     try std.testing.expectEqual(
         core.project_status_t.PROJECT_STATUS_OK,
-        core.project_service_create_project(service, "spark3", &project_id),
+        core.project_service_create_project(service, "spark3", "/tmp/spark3", .PROJECT_SESSION_TRANSPORT_LOCAL, &project_id),
     );
     defer core.project_free_string(project_id);
     try std.testing.expect(project_id != null);
-
-    try std.testing.expectEqual(
-        core.project_status_t.PROJECT_STATUS_OK,
-        core.project_service_update_project_note(service, project_id.?, "check release flow"),
-    );
 
     var detail = std.mem.zeroes(core.project_detail_t);
     defer core.project_free_detail(&detail);
@@ -675,11 +497,12 @@ test "project service returns project detail for swift" {
 
     try std.testing.expect(detail.name != null);
     try std.testing.expectEqualStrings("spark3", std.mem.span(detail.name.?));
-    try std.testing.expect(detail.note_body != null);
-    try std.testing.expectEqualStrings("check release flow", std.mem.span(detail.note_body.?));
+    try std.testing.expect(detail.path != null);
+    try std.testing.expectEqualStrings("/tmp/spark3", std.mem.span(detail.path.?));
+    try std.testing.expectEqual(core.project_session_transport_t.PROJECT_SESSION_TRANSPORT_LOCAL, detail.transport);
 }
 
-test "project service file store exposes live and closed sessions" {
+test "project service file store exposes live sessions" {
     const path = try uniqueDbPath("project-service");
     defer std.testing.allocator.free(path);
     defer std.fs.cwd().deleteFile(path) catch {};
@@ -692,13 +515,9 @@ test "project service file store exposes live and closed sessions" {
         try std.testing.expectEqual(core.project_status_t.PROJECT_STATUS_OK, status);
         try std.testing.expectEqual(
             core.project_status_t.PROJECT_STATUS_OK,
-            core.project_service_create_project(service, "release", &project_id),
+            core.project_service_create_project(service, "release", "/tmp/release", .PROJECT_SESSION_TRANSPORT_LOCAL, &project_id),
         );
         try std.testing.expect(project_id != null);
-        try std.testing.expectEqual(
-            core.project_status_t.PROJECT_STATUS_OK,
-            core.project_service_update_project_note(service, project_id.?, "check prod logs"),
-        );
     }
     defer core.project_free_string(project_id);
 
@@ -726,7 +545,7 @@ test "project service file store exposes live and closed sessions" {
         });
         defer std.testing.allocator.free(closed_session_id);
 
-        try store.closeSession(closed_session_id, .user_closed, "/srv/app", null);
+        try store.closeSession(closed_session_id, .user_closed, "/srv/app");
     }
 
     const service = core.project_service_new(path.ptr, &status);
@@ -744,16 +563,8 @@ test "project service file store exposes live and closed sessions" {
     try std.testing.expect(detail.live_sessions != null);
     try std.testing.expectEqualStrings("live shell", std.mem.span(detail.live_sessions.?[0].title.?));
     try std.testing.expectEqual(core.project_session_transport_t.PROJECT_SESSION_TRANSPORT_LOCAL, detail.live_sessions.?[0].transport);
-
-    try std.testing.expectEqual(@as(i32, 1), detail.closed_session_count);
-    try std.testing.expect(detail.closed_sessions != null);
-    try std.testing.expectEqualStrings("prod logs", std.mem.span(detail.closed_sessions.?[0].title.?));
-    try std.testing.expectEqual(core.project_close_reason_t.PROJECT_CLOSE_REASON_USER_CLOSED, detail.closed_sessions.?[0].close_reason);
-    try std.testing.expectEqualStrings(
-        "ssh prod -- 'cd /srv/app && exec zsh -l'",
-        std.mem.span(detail.closed_sessions.?[0].restore_recipe.launch_command.?),
-    );
-    try std.testing.expectEqual(@as(i32, 0), detail.closed_sessions.?[0].snapshot_preview.line_count);
+    try std.testing.expect(detail.path != null);
+    try std.testing.expectEqualStrings("/tmp/release", std.mem.span(detail.path.?));
 }
 
 test "project detail reports which operation failed" {
@@ -779,7 +590,7 @@ test "project service renames and deletes a project via C API" {
     var project_id: ?[*:0]u8 = null;
     try std.testing.expectEqual(
         core.project_status_t.PROJECT_STATUS_OK,
-        core.project_service_create_project(service, "Original", &project_id),
+        core.project_service_create_project(service, "Original", "", .PROJECT_SESSION_TRANSPORT_LOCAL, &project_id),
     );
     defer core.project_free_string(project_id);
     try std.testing.expect(project_id != null);
