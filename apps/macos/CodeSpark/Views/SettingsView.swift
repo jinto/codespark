@@ -1,8 +1,8 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @AppStorage("terminalFontFamily") private var fontFamily = ""
-    @AppStorage("terminalFontSize") private var fontSize: Double = 0
+    @AppStorage(StorageKeys.terminalFontFamily) private var fontFamily = ""
+    @AppStorage(StorageKeys.terminalFontSize) private var fontSize: Double = 0
     @State private var saved = false
     @State private var hooksStatus: ClaudeHooksStatus = .installed
     @State private var symlinkFailed = false

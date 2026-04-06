@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 struct OnboardingView: View {
-    @AppStorage("terminalFontFamily") private var savedFontFamily = ""
-    @AppStorage("terminalFontSize") private var savedFontSize: Double = 0
+    @AppStorage(StorageKeys.terminalFontFamily) private var savedFontFamily = ""
+    @AppStorage(StorageKeys.terminalFontSize) private var savedFontSize: Double = 0
 
     @State private var selectedFont = ""
     @State private var fontSize: Double = 13

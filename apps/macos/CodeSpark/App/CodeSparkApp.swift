@@ -7,9 +7,9 @@ import UserNotifications
 struct CodeSparkApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var model = AppModel(core: ProjectCoreClient.live)
-    @AppStorage("selectedProjectID") private var savedProjectID: String = ""
-    @AppStorage("hiddenProjectIDs") private var savedHiddenIDs: String = ""
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage(StorageKeys.selectedProjectID) private var savedProjectID: String = ""
+    @AppStorage(StorageKeys.hiddenProjectIDs) private var savedHiddenIDs: String = ""
+    @AppStorage(StorageKeys.hasCompletedOnboarding) private var hasCompletedOnboarding = false
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -126,18 +126,18 @@ struct CodeSparkApp: App {
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
 
         // Migrate AppStorage keys from workspace→project naming (one-time)
-        if !UserDefaults.standard.bool(forKey: "migratedToProjectNaming") {
+        if !UserDefaults.standard.bool(forKey: StorageKeys.migratedToProjectNaming) {
             for (old, new) in [
-                ("selectedWorkspaceID", "selectedProjectID"),
-                ("expandedWorkspaceIDs", "expandedProjectIDs"),
-                ("hiddenWorkspaceIDs", "hiddenProjectIDs"),
+                ("selectedWorkspaceID", StorageKeys.selectedProjectID),
+                ("expandedWorkspaceIDs", StorageKeys.expandedProjectIDs),
+                ("hiddenWorkspaceIDs", StorageKeys.hiddenProjectIDs),
             ] {
                 if let val = UserDefaults.standard.string(forKey: old), !val.isEmpty {
                     UserDefaults.standard.set(val, forKey: new)
                     UserDefaults.standard.removeObject(forKey: old)
                 }
             }
-            UserDefaults.standard.set(true, forKey: "migratedToProjectNaming")
+            UserDefaults.standard.set(true, forKey: StorageKeys.migratedToProjectNaming)
         }
 
         // Start hook socket server for Claude Code integration

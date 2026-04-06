@@ -50,6 +50,7 @@
 		DDD0640824A174AFD49933F8 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 85F9E2DCA6D0CF00B744A92C /* IOKit.framework */; };
 		E0A153DE5FCE17D9559AC0C3 /* ProjectViewData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 372FF5235CD476B7A3D7D120 /* ProjectViewData.swift */; };
 		E1275E7403FDD3DEE3FB06A2 /* CodeSparkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CCE58232FA2D383F208923 /* CodeSparkApp.swift */; };
+		E898DEED2F56E2BA70A0166F /* StorageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32DD666C1E320049CFEF78CE /* StorageKeys.swift */; };
 		E8CF80B13D9BFCC8278965D6 /* SessionSidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */; };
 		EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */; };
 		EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1188AFD5C69D085D60330D02 /* AppTheme.swift */; };
@@ -94,6 +95,7 @@
 		1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostFactoryTests.swift; sourceTree = "<group>"; };
 		23C1F099F0619FDF11DD53CF /* MockProjectCoreClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockProjectCoreClient.swift; sourceTree = "<group>"; };
 		2E0D94021E6A37AA34942EED /* CodeSparkWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSparkWindow.swift; sourceTree = "<group>"; };
+		32DD666C1E320049CFEF78CE /* StorageKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageKeys.swift; sourceTree = "<group>"; };
 		34B3EF915455EE5A5AEFAE01 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
 		372FF5235CD476B7A3D7D120 /* ProjectViewData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectViewData.swift; sourceTree = "<group>"; };
 		381AF8F6420D8B1CC3F1D29A /* CodeSpark-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CodeSpark-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -266,6 +268,7 @@
 				5130A58E2FC5881608127D41 /* AppModel+Hook.swift */,
 				F6AB5E91D161AAA64F9501C4 /* AppModel+Monitor.swift */,
 				372FF5235CD476B7A3D7D120 /* ProjectViewData.swift */,
+				32DD666C1E320049CFEF78CE /* StorageKeys.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -542,6 +545,7 @@
 				47E722B3A80D8F6EA4095FAA /* SessionTabBarView.swift in Sources */,
 				4A72F1CFFEF80585ED500C3F /* SettingsView.swift in Sources */,
 				366A365CFA1EFA718DEF53C6 /* SidebarView.swift in Sources */,
+				E898DEED2F56E2BA70A0166F /* StorageKeys.swift in Sources */,
 				17F6D4887541BEBCDD9EBD85 /* TerminalFontSettings.swift in Sources */,
 				EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */,
 				2A53F0D0BC3764E0C66B0969 /* TerminalHostProtocol.swift in Sources */,

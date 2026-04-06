@@ -49,7 +49,7 @@
 
 ### Design
 - [ ] **Hook 시스템 분리** — HookEventProcessor 추출, AppModel은 결과만 처리
-- [ ] **AppStorage 키 상수화** — 하드코딩 문자열 → 상수
+- [x] **AppStorage 키 상수화** — StorageKeys enum으로 8개 키 상수화
 - [ ] **비즈니스 로직 Zig 이동** — 세션 상태 머신, hook 이벤트 타입 정의를 Zig로
 
 ## M11: 터미널 분할 + 검색

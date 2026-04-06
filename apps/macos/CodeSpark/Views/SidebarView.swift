@@ -3,7 +3,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @ObservedObject var model: AppModel
-    @AppStorage("expandedProjectIDs") private var expandedRaw: String = ""
+    @AppStorage(StorageKeys.expandedProjectIDs) private var expandedRaw: String = ""
     @State private var expandedProjectIDs: Set<String> = []
     @State private var editingProjectID: String?
     @State private var editProjectName = ""
