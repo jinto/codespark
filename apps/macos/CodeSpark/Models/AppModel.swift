@@ -41,6 +41,7 @@ final class AppModel: ObservableObject {
         self.idleTimer = Timer.publish(every: 10, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
+                guard NSApp.isActive else { return }
                 self?.updateIdleStates()
                 self?.refreshGitBranches()
             }

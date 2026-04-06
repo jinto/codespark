@@ -7,8 +7,7 @@ class GhosttyTerminalSurfaceView: NSView {
 
     init(app: ghostty_app_t, workingDirectory: String?, command: String?) {
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
-        wantsLayer = true
-        layer?.isOpaque = true
+        autoresizingMask = [.width, .height]
 
         var config = ghostty_surface_config_new()
         config.platform_tag = GHOSTTY_PLATFORM_MACOS
@@ -58,19 +57,40 @@ class GhosttyTerminalSurfaceView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if let surface, let window {
-            let scale = Double(window.backingScaleFactor)
-            ghostty_surface_set_content_scale(surface, scale, scale)
-        }
+        guard let surface, window != nil else { return }
+
+        let fbFrame = convertToBacking(frame)
+        let xScale = fbFrame.size.width / frame.size.width
+        let yScale = fbFrame.size.height / frame.size.height
+        ghostty_surface_set_content_scale(surface, xScale, yScale)
+        syncSurfaceSize(frame.size)
     }
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
+        guard surface != nil else { return }
+        syncSurfaceSize(newSize)
+    }
+
+    /// Ghostty's set_size expects physical (framebuffer) pixels, not points.
+    private func syncSurfaceSize(_ size: NSSize) {
         guard let surface else { return }
-        ghostty_surface_set_size(surface, UInt32(newSize.width), UInt32(newSize.height))
+        let scaled = convertToBacking(size)
+        ghostty_surface_set_size(surface, UInt32(scaled.width), UInt32(scaled.height))
     }
 
     // MARK: - Keyboard Input
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard event.type == .keyDown, surface != nil else { return false }
+        // Control-modified keys (Ctrl+C, Ctrl+D, Ctrl+Z, etc.) must reach the terminal.
+        // macOS routes these through performKeyEquivalent before keyDown.
+        if event.modifierFlags.contains(.control) {
+            keyDown(with: event)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 
     override func keyDown(with event: NSEvent) {
         guard let surface else { return }
@@ -86,8 +106,19 @@ class GhosttyTerminalSurfaceView: NSView {
             return
         }
 
-        if let chars = event.characters, !chars.isEmpty {
-            chars.withCString { ptr in
+        // Match official Ghostty: control characters (< 0x20) must be sent as
+        // the original character with Ctrl modifier, not as the raw control code.
+        // Ghostty handles Ctrl+key encoding internally via KeyEncoder.
+        let text: String?
+        if let chars = event.characters, chars.count == 1,
+           let scalar = chars.unicodeScalars.first, scalar.value < 0x20 {
+            text = event.characters(byApplyingModifiers: event.modifierFlags.subtracting(.control))
+        } else {
+            text = event.characters
+        }
+
+        if let text, !text.isEmpty {
+            text.withCString { ptr in
                 var key = makeKeyInput(event, action: GHOSTTY_ACTION_PRESS)
                 key.text = ptr
                 ghostty_surface_key(surface, key)

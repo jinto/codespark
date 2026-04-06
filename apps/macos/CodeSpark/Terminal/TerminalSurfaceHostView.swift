@@ -17,6 +17,7 @@ struct TerminalSurfaceHostView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: GhosttyTerminalSurfaceView, context: Context) {
+        nsView.isHidden = !isActive
         if isActive, nsView.window?.firstResponder !== nsView {
             DispatchQueue.main.async {
                 nsView.window?.makeFirstResponder(nsView)

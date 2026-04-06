@@ -9,7 +9,15 @@
 
 ## M9: 알림 시스템 (cmux 스타일)
 
-- [ ] **사이드바 정렬** — Needs input 워크스페이스를 상단으로 자동 정렬
-- [ ] **사이드바 벨 아이콘** — unread count 뱃지
-- [ ] **macOS 데스크톱 알림** — idle 전환 시 알림 (다른 ws 보고 있을 때)
+- [x] **사이드바 정렬** — Needs input 워크스페이스를 상단으로 자동 정렬
+- [x] **사이드바 벨 아이콘** — unread count 뱃지
+- [x] **macOS 데스크톱 알림** — idle 전환 시 알림 (다른 ws 보고 있을 때)
 - [ ] **알림 스니펫** — 워크스페이스 카드에 마지막 출력 요약
+
+## M10: 터미널 성능 + 너비 + Ctrl 키 수정
+
+- [x] **터미널 너비** — `convertToBacking`으로 physical pixels 전달 + `autoresizingMask` 추가
+- [x] **터미널 성능** — GhosttyKit ReleaseFast 빌드 (debug allocator 제거) + wakeup coalescing + run loop yield
+- [x] **Ctrl+C/D/Z** — `performKeyEquivalent` override + control char text 재계산 (공식 Ghostty 패턴)
+- [x] **비활성 세션** — opacity → `isHidden` 전환
+- [x] **Timer guard** — background 시 idle/git 타이머 skip

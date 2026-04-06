@@ -133,7 +133,6 @@ struct MainContentView: View {
                     #if GHOSTTY_FIRST
                     if let app = GhosttyRuntime.shared.app {
                         TerminalSurfaceHostView(session: session, app: app, isActive: session.id == model.activeSessionID)
-                            .opacity(session.id == model.activeSessionID ? 1 : 0)
                     }
                     #else
                     TerminalSurfaceHostView(session: session, isActive: session.id == model.activeSessionID)

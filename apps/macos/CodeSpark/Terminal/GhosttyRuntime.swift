@@ -8,6 +8,11 @@ final class GhosttyRuntime {
 
     private(set) var app: ghostty_app_t?
 
+    /// Coalesces wakeup signals: skip dispatch if a tick is already queued.
+    /// Unlike official Ghostty (no SwiftUI overhead), CodeSpark needs this because
+    /// the SwiftUI view hierarchy makes main thread work much heavier per drain cycle.
+    nonisolated(unsafe) private var tickPending = false
+
     deinit {
         if let app {
             ghostty_app_free(app)
@@ -40,11 +45,19 @@ final class GhosttyRuntime {
             userdata: Unmanaged.passUnretained(self).toOpaque(),
             supports_selection_clipboard: false,
             wakeup_cb: { userdata in
+                guard let userdata else { return }
+                let rt = Unmanaged<GhosttyRuntime>.fromOpaque(userdata).takeUnretainedValue()
+                guard !rt.tickPending else { return }
+                rt.tickPending = true
                 DispatchQueue.main.async {
-                    guard let userdata else { return }
-                    let rt = Unmanaged<GhosttyRuntime>.fromOpaque(userdata).takeUnretainedValue()
-                    guard let app = rt.app else { return }
+                    guard let app = rt.app else {
+                        rt.tickPending = false
+                        return
+                    }
                     ghostty_app_tick(app)
+                    // Yield one run-loop pass before allowing the next tick,
+                    // so user events (Cmd+Tab, mouse) aren't starved by heavy output.
+                    RunLoop.main.perform { rt.tickPending = false }
                 }
             },
             action_cb: { _, _, _ in false },
