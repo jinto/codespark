@@ -10,3 +10,4 @@
 /libs/workspace-core/.zig-global-cache/
 /libs/workspace-core/zig-out/
 /libs/workspace-core/vendor/
+*.profraw
