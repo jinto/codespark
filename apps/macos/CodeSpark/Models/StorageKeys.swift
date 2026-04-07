@@ -8,4 +8,5 @@ enum StorageKeys {
     static let terminalFontFamily = "terminalFontFamily"
     static let terminalFontSize = "terminalFontSize"
     static let migratedToProjectNaming = "migratedToProjectNaming"
+    static let isSidebarVisible = "isSidebarVisible"
 }

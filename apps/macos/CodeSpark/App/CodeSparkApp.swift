@@ -10,25 +10,35 @@ struct CodeSparkApp: App {
     @AppStorage(StorageKeys.selectedProjectID) private var savedProjectID: String = ""
     @AppStorage(StorageKeys.hiddenProjectIDs) private var savedHiddenIDs: String = ""
     @AppStorage(StorageKeys.hasCompletedOnboarding) private var hasCompletedOnboarding = false
+    @AppStorage(StorageKeys.isSidebarVisible) private var isSidebarVisible = true
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             Group {
                 if hasCompletedOnboarding {
-                    Group {
-                        if model.projects.isEmpty {
-                            MainContentView(model: model)
-                        } else {
-                            HStack(spacing: 0) {
-                                SidebarView(model: model)
-                                    .frame(width: 240)
-
-                                Divider()
-
-                                MainContentView(model: model)
+                    NavigationSplitView(columnVisibility: Binding(
+                        get: { isSidebarVisible ? .all : .detailOnly },
+                        set: { isSidebarVisible = $0 != .detailOnly }
+                    )) {
+                        SidebarView(model: model, onToggleSidebar: {
+                            withAnimation { isSidebarVisible.toggle() }
+                        })
+                        .toolbar(removing: .sidebarToggle)
+                        .toolbar {
+                            ToolbarItemGroup(placement: .automatic) {
+                                sidebarToolbarItems
                             }
-                            .background(AppTheme.toolbarBackground.ignoresSafeArea())
+                        }
+                        .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
+                    } detail: {
+                        MainContentView(model: model, onToggleSidebar: {
+                            withAnimation { isSidebarVisible.toggle() }
+                        })
+                        .toolbar {
+                            ToolbarItemGroup(placement: .navigation) {
+                                projectToolbarItems
+                            }
                         }
                     }
                     .task {
@@ -41,7 +51,6 @@ struct CodeSparkApp: App {
                 }
             }
             .preferredColorScheme(.dark)
-            .modifier(HideToolbarBackgroundModifier())
             .frame(minWidth: 600, minHeight: 400)
             .onChange(of: model.selectedProjectID) { _, newValue in
                 savedProjectID = newValue ?? ""
@@ -50,7 +59,7 @@ struct CodeSparkApp: App {
                 savedHiddenIDs = newValue.joined(separator: ",")
             }
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowToolbarStyle(.unified(showsTitle: false))
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -88,6 +97,12 @@ struct CodeSparkApp: App {
                 .keyboardShortcut("w", modifiers: .command)
                 .disabled(model.selectedProjectID == nil)
             }
+            CommandGroup(replacing: .sidebar) {
+                Button("Toggle Sidebar") {
+                    withAnimation(.easeInOut(duration: 0.2)) { isSidebarVisible.toggle() }
+                }
+                .keyboardShortcut("s", modifiers: [.command, .control])
+            }
             CommandGroup(after: .windowArrangement) {
                 Button("Select Next Tab") {
                     model.selectNextSession()
@@ -117,6 +132,35 @@ struct CodeSparkApp: App {
 
         Settings {
             SettingsView()
+        }
+    }
+
+    @ViewBuilder
+    private var sidebarToolbarItems: some View {
+        Button { withAnimation { isSidebarVisible.toggle() } } label: {
+            Image(systemName: "sidebar.left")
+        }
+        Button { Task { await model.createProjectFromFolder() } } label: {
+            Image(systemName: "plus")
+        }
+    }
+
+    @ViewBuilder
+    private var projectToolbarItems: some View {
+        if let project = model.selectedProject {
+            HStack(spacing: 5) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.blue)
+                Text(project.name)
+                    .font(.system(size: 13, weight: .semibold))
+                if let ws = model.workspaces.first(where: { $0.path == model.selectedWorkspacePath }) {
+                    Text("›")
+                        .foregroundStyle(.secondary)
+                    Text(ws.branch)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 

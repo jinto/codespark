@@ -2,7 +2,7 @@ import SwiftUI
 
 struct MainContentView: View {
     @ObservedObject var model: AppModel
-    // Note panel removed in project simplification
+    var onToggleSidebar: (() -> Void)?
     @State private var showCloseSessionAlert = false
     @State private var showCloseProjectAlert = false
 
@@ -10,49 +10,15 @@ struct MainContentView: View {
         Group {
         if let project = model.selectedProject {
             VStack(spacing: 0) {
-                WindowDragArea {
-                    VStack(spacing: 0) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "folder.fill")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.blue)
-
-                            Text(project.name)
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-
-                            if let ws = model.workspaces.first(where: { $0.path == model.selectedWorkspacePath }),
-                               model.workspaces.count > 1 {
-                                Text("›")
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(.white.opacity(0.35))
-                                Image(systemName: "arrow.triangle.branch")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.white.opacity(0.7))
-                                Text(ws.branch)
-                                    .font(.system(size: 13, weight: .regular))
-                                    .foregroundStyle(.white.opacity(0.5))
-                                    .lineLimit(1)
-                            }
-
-                            Spacer()
-                        }
-                        .padding(.horizontal, 14)
-                        .frame(height: 28)
-                        .background(AppTheme.sidebarBackground)
-
-                        SessionTabBarView(
-                            sessions: model.liveSessions,
-                            activeSessionID: model.activeSessionID,
-                            onSelect: { id in model.activeSessionID = id },
-                            onClose: { id in model.closeSession(id: id) },
-                            onNew: { Task { await model.newSession() } }
-                        )
-                        .frame(height: 24)
-                        .background(AppTheme.toolbarBackground)
-                    }
-                }
+                SessionTabBarView(
+                    sessions: model.liveSessions,
+                    activeSessionID: model.activeSessionID,
+                    onSelect: { id in model.activeSessionID = id },
+                    onClose: { id in model.closeSession(id: id) },
+                    onNew: { Task { await model.newSession() } }
+                )
+                .frame(height: 24)
+                .background(AppTheme.toolbarBackground)
 
                 Divider().background(AppTheme.divider)
 

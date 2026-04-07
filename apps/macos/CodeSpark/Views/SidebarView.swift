@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @ObservedObject var model: AppModel
+    var onToggleSidebar: () -> Void
     @AppStorage(StorageKeys.expandedProjectIDs) private var expandedRaw: String = ""
     @State private var expandedProjectIDs: Set<String> = []
     @State private var editingProjectID: String?
@@ -157,44 +158,6 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            WindowDragArea {
-                HStack(spacing: 10) {
-                    Spacer()
-                    if needsInputCount > 0 {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "bell.fill")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.orange)
-                            Text("\(needsInputCount)")
-                                .font(.system(size: 8, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(2)
-                                .background(Circle().fill(.red))
-                                .offset(x: 5, y: -5)
-                        }
-                    }
-                    Button {
-                        Task { await model.createProjectFromFolder() }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.secondary)
-                            if showHotkeys {
-                                Text("\u{2318}N")
-                                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .focusable(false)
-                    .help("New project (\u{2318}N)")
-                }
-                .padding(.horizontal, 12)
-                .frame(height: 28)
-            }
-
             if model.claudeHooksStatus != .installed {
                 Button {
                     model.installClaudeHooks()
