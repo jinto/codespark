@@ -103,6 +103,20 @@ struct CodeSparkApp: App {
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
             }
+            CommandGroup(after: .appInfo) {
+                Button("Uninstall CodeSpark...") {
+                    let alert = NSAlert()
+                    alert.messageText = "Uninstall CodeSpark?"
+                    alert.informativeText = "This will remove Claude hooks, the CLI tool, and all app data."
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "Uninstall")
+                    alert.addButton(withTitle: "Cancel")
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        ClaudeHooksManager.fullUninstall()
+                        NSApp.terminate(nil)
+                    }
+                }
+            }
             CommandGroup(after: .windowArrangement) {
                 Button("Select Next Tab") {
                     model.selectNextSession()
@@ -208,6 +222,22 @@ struct CodeSparkApp: App {
         }
         #endif
         appDelegate.model = model
+
+        // Option key held on launch → offer reset
+        if NSEvent.modifierFlags.contains(.option) {
+            let alert = NSAlert()
+            alert.messageText = "Reset CodeSpark?"
+            alert.informativeText = "This will remove all data, hooks, and CLI tool. Hold Option while launching to trigger this."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Reset")
+            alert.addButton(withTitle: "Cancel")
+            if alert.runModal() == .alertFirstButtonReturn {
+                ClaudeHooksManager.fullUninstall()
+                hasCompletedOnboarding = false
+                return
+            }
+        }
+
         if !savedHiddenIDs.isEmpty {
             model.hiddenProjectIDs = Set(savedHiddenIDs.split(separator: ",").map(String.init))
         }

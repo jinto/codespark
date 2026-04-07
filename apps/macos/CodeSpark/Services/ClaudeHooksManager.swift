@@ -87,6 +87,24 @@ enum ClaudeHooksManager {
         writeSettings(settings)
     }
 
+    static func fullUninstall() {
+        uninstall()
+        // Remove CLI binary
+        try? FileManager.default.removeItem(atPath: cliPath)
+        // Remove app data
+        let appSupport = NSHomeDirectory() + "/Library/Application Support"
+        let fm = FileManager.default
+        if let contents = try? fm.contentsOfDirectory(atPath: appSupport) {
+            for dir in contents where dir.hasPrefix("com.jinto.codespark") {
+                try? fm.removeItem(atPath: appSupport + "/" + dir)
+            }
+        }
+        // Reset UserDefaults
+        if let bundleID = Bundle.main.bundleIdentifier {
+            UserDefaults.standard.removePersistentDomain(forName: bundleID)
+        }
+    }
+
     static func uninstall() {
         var settings = readSettings()
         guard var hooks = settings["hooks"] as? [String: Any] else { return }

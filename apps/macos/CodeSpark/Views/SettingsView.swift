@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var saved = false
     @State private var hooksStatus: ClaudeHooksStatus = .installed
     @State private var symlinkFailed = false
+    @State private var showUninstallConfirm = false
 
     private var displayFamily: String {
         fontFamily.isEmpty ? "Auto (\(TerminalFontSettings.resolvedFontFamily()))" : fontFamily
@@ -100,11 +101,32 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
+
+            Section("Uninstall") {
+                Button("Uninstall CodeSpark...") {
+                    showUninstallConfirm = true
+                }
+                .buttonStyle(.bordered)
+                .foregroundStyle(.red)
+
+                Text("Removes hooks from Claude settings, CLI binary, and all app data.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 400)
         .padding()
         .onAppear { refreshStatus() }
+        .alert("Uninstall CodeSpark?", isPresented: $showUninstallConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Uninstall", role: .destructive) {
+                ClaudeHooksManager.fullUninstall()
+                NSApp.terminate(nil)
+            }
+        } message: {
+            Text("This will remove Claude hooks, the CLI tool, and all app data. The app itself will remain but can be moved to Trash.")
+        }
     }
 
     private var hooksStatusLabel: String {
