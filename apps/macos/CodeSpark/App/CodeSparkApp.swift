@@ -18,7 +18,7 @@ struct CodeSparkApp: App {
             Group {
                 if hasCompletedOnboarding {
                     NavigationSplitView(columnVisibility: Binding(
-                        get: { isSidebarVisible ? .all : .detailOnly },
+                        get: { isSidebarVisible && !model.projects.isEmpty ? .all : .detailOnly },
                         set: { isSidebarVisible = $0 != .detailOnly }
                     )) {
                         SidebarView(model: model, onToggleSidebar: {
@@ -51,6 +51,9 @@ struct CodeSparkApp: App {
             .frame(minWidth: 600, minHeight: 400)
             .onChange(of: model.selectedProjectID) { _, newValue in
                 savedProjectID = newValue ?? ""
+            }
+            .onChange(of: model.projects.count) { _, newCount in
+                if newCount > 0 { isSidebarVisible = true }
             }
             .onChange(of: model.hiddenProjectIDs) { _, newValue in
                 savedHiddenIDs = newValue.joined(separator: ",")
@@ -213,6 +216,9 @@ struct CodeSparkApp: App {
         }
         await model.load()
         model.checkClaudeHooksHealth()
+        if model.claudeHooksStatus != .installed {
+            model.installClaudeHooks()
+        }
     }
 }
 
