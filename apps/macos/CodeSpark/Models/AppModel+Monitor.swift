@@ -76,10 +76,10 @@ extension AppModel {
     }
 
     func refreshGitWorktrees() {
-        let projectPaths = projects.map(\.path).filter { !$0.isEmpty }
-        guard !projectPaths.isEmpty else { return }
+        // Only refresh worktrees for the selected project to avoid unnecessary git spawns
+        guard let selectedPath = selectedProject?.path, !selectedPath.isEmpty else { return }
         Task {
-            await gitWorktreeService.refreshWorktrees(for: projectPaths)
+            await gitWorktreeService.refreshWorktrees(for: [selectedPath])
             recomputeWorkspaces()
         }
     }

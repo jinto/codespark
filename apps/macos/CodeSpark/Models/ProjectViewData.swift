@@ -66,27 +66,6 @@ enum CloseReasonViewData: Equatable {
     case appCrashed
     case hostQuit
 
-    static func from(ffi reason: CloseReason) -> Self {
-        switch reason {
-        case .userClosed: return .userClosed
-        case .processExited: return .processExited
-        case .sshDisconnected: return .sshDisconnected
-        case .appCrashed: return .appCrashed
-        case .hostQuit: return .hostQuit
-        }
-    }
-
-    static func from(cReason: project_close_reason_t) -> Self {
-        switch cReason {
-        case PROJECT_CLOSE_REASON_USER_CLOSED: return .userClosed
-        case PROJECT_CLOSE_REASON_PROCESS_EXITED: return .processExited
-        case PROJECT_CLOSE_REASON_SSH_DISCONNECTED: return .sshDisconnected
-        case PROJECT_CLOSE_REASON_APP_CRASHED: return .appCrashed
-        case PROJECT_CLOSE_REASON_HOST_QUIT: return .hostQuit
-        default: return .userClosed
-        }
-    }
-
     func toCReason() -> project_close_reason_t {
         switch self {
         case .userClosed: return PROJECT_CLOSE_REASON_USER_CLOSED

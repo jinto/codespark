@@ -99,7 +99,6 @@ extension AppModel {
 
     func installClaudeHooks() {
         ClaudeHooksManager.install()
-        _ = ClaudeHooksManager.installCLISymlink()
         checkClaudeHooksHealth()
     }
 }

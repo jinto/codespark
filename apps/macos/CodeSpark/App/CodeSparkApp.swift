@@ -159,26 +159,6 @@ struct CodeSparkApp: App {
         }
     }
 
-    @ViewBuilder
-    private var projectToolbarItems: some View {
-        if let project = model.selectedProject {
-            HStack(spacing: 5) {
-                Image(systemName: "folder.fill")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.blue)
-                Text(project.name)
-                    .font(.system(size: 15, weight: .semibold))
-                if let ws = model.workspaces.first(where: { $0.path == model.selectedWorkspacePath }) {
-                    Text("›")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                    Text(ws.branch)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
 
     @MainActor
     private func initializeAndLoad() async {
@@ -312,15 +292,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
-    }
-}
-
-private struct HideToolbarBackgroundModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 15.0, *) {
-            content.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        } else {
-            content
-        }
     }
 }

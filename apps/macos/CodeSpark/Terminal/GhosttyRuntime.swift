@@ -1,6 +1,7 @@
 #if GHOSTTY_FIRST
 import AppKit
 import GhosttyKit
+import os
 
 @MainActor
 final class GhosttyRuntime {
@@ -12,9 +13,8 @@ final class GhosttyRuntime {
     var onTerminalOutput: (() -> Void)?
 
     /// Coalesces wakeup signals: skip dispatch if a tick is already queued.
-    /// Unlike official Ghostty (no SwiftUI overhead), CodeSpark needs this because
-    /// the SwiftUI view hierarchy makes main thread work much heavier per drain cycle.
-    nonisolated(unsafe) private var tickPending = false
+    /// Uses os_unfair_lock for thread-safe access from Ghostty's C runtime thread.
+    private let tickLock = OSAllocatedUnfairLock(initialState: false)
 
     deinit {
         if let app {
@@ -50,18 +50,22 @@ final class GhosttyRuntime {
             wakeup_cb: { userdata in
                 guard let userdata else { return }
                 let rt = Unmanaged<GhosttyRuntime>.fromOpaque(userdata).takeUnretainedValue()
-                guard !rt.tickPending else { return }
-                rt.tickPending = true
+                let alreadyPending = rt.tickLock.withLock { pending -> Bool in
+                    if pending { return true }
+                    pending = true
+                    return false
+                }
+                guard !alreadyPending else { return }
                 DispatchQueue.main.async {
                     guard let app = rt.app else {
-                        rt.tickPending = false
+                        rt.tickLock.withLock { $0 = false }
                         return
                     }
                     ghostty_app_tick(app)
                     rt.onTerminalOutput?()
                     // Yield one run-loop pass before allowing the next tick,
                     // so user events (Cmd+Tab, mouse) aren't starved by heavy output.
-                    RunLoop.main.perform { rt.tickPending = false }
+                    RunLoop.main.perform { rt.tickLock.withLock { $0 = false } }
                 }
             },
             action_cb: { _, _, _ in false },

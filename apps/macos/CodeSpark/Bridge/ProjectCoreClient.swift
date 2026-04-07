@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 protocol ProjectCoreClientProtocol {
@@ -34,6 +35,12 @@ enum ProjectCoreClient {
             )
             return try LiveProjectCoreClient(storePath: dbPath)
         } catch {
+            NSLog("[CodeSpark] FATAL: Failed to initialize project store at \(dbPath): \(error)")
+            let alert = NSAlert()
+            alert.messageText = "Cannot open database"
+            alert.informativeText = "CodeSpark failed to open its data store. Try removing ~/Library/Application Support/\(appName) and restarting.\n\n\(error.localizedDescription)"
+            alert.alertStyle = .critical
+            alert.runModal()
             fatalError("Failed to initialize project store: \(error)")
         }
     }
@@ -114,16 +121,21 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
         guard status == PROJECT_STATUS_OK else { throw projectError(status) }
         defer { project_free_summaries(summaries, count) }
 
-        return (0..<Int(count)).map { i in
-            let s = summaries![i]
-            let details = (0..<Int(s.live_session_detail_count)).map { j in
-                let d = s.live_session_details![j]
-                return SessionSummary(
-                    id: String(cString: d.id),
-                    title: String(cString: d.title),
-                    targetLabel: String(cString: d.target_label),
-                    lastCwd: d.last_cwd != nil ? String(cString: d.last_cwd) : nil
-                )
+        guard let summaries, count > 0 else { return [] }
+        return UnsafeBufferPointer(start: summaries, count: Int(count)).map { s in
+            let detailCount = Int(s.live_session_detail_count)
+            let details: [SessionSummary]
+            if let detailPtr = s.live_session_details, detailCount > 0 {
+                details = UnsafeBufferPointer(start: detailPtr, count: detailCount).map { d in
+                    SessionSummary(
+                        id: String(cString: d.id),
+                        title: String(cString: d.title),
+                        targetLabel: String(cString: d.target_label),
+                        lastCwd: d.last_cwd != nil ? String(cString: d.last_cwd) : nil
+                    )
+                }
+            } else {
+                details = []
             }
             let transportStr: String = s.transport == PROJECT_SESSION_TRANSPORT_SSH ? "ssh" : "local"
             return ProjectSummaryViewData(

@@ -10,7 +10,7 @@ struct GitWorktree: Identifiable, Equatable {
 
 final class GitWorktreeService: @unchecked Sendable {
     private var cache: [String: CacheEntry] = [:]
-    private let normalTTL: TimeInterval = 10
+    private let normalTTL: TimeInterval = 30
     private let failureTTL: TimeInterval = 60
     private var isRefreshing = false
 

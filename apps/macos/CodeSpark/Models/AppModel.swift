@@ -31,7 +31,7 @@ final class AppModel: ObservableObject {
 
     let core: ProjectCoreClientProtocol
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
-    var hosts: [String: any TerminalHostProtocol] = [:]
+    private(set) var hosts: [String: any TerminalHostProtocol] = [:]
     private var detailTask: Task<Void, Never>?
     var idleTimer: AnyCancellable?
     var checkpointTimer: AnyCancellable?
@@ -223,10 +223,17 @@ final class AppModel: ObservableObject {
     /// Returns the adjacent project ID for selection after removal.
     private func teardownProject(id: String) -> String? {
         let nextID = adjacentProjectID(excluding: id)
+        // Close sessions belonging to this project (from summary details or current liveSessions)
+        let sessionIDs: [String]
         if selectedProjectID == id {
-            for session in liveSessions {
-                closeSession(id: session.id)
-            }
+            sessionIDs = liveSessions.map(\.id)
+        } else if let proj = projects.first(where: { $0.id == id }) {
+            sessionIDs = proj.liveSessionDetails.map(\.id)
+        } else {
+            sessionIDs = []
+        }
+        for sessionID in sessionIDs {
+            closeSession(id: sessionID)
         }
         projects.removeAll(where: { $0.id == id })
         return nextID
@@ -415,7 +422,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    var closingSessionIDs: Set<String> = []
+    private(set) var closingSessionIDs: Set<String> = []
 
     func markActiveSessionOutput() {
         guard let id = activeSessionID, let host = hosts[id] else { return }
@@ -450,16 +457,19 @@ final class AppModel: ObservableObject {
 
 extension AppModel: TerminalHostDelegate {
     func terminalHostDidClose(sessionID: String, snapshot: TerminalSnapshotViewData, closeReason: CloseReasonViewData) {
-        guard let index = liveSessions.firstIndex(where: { $0.id == sessionID }) else { return }
-        liveSessions.remove(at: index)
+        // Always clean up global state regardless of which project is selected
         allSessions.removeAll { $0.id == sessionID }
         hosts.removeValue(forKey: sessionID)
         closingSessionIDs.remove(sessionID)
 
-        if activeSessionID == sessionID {
-            activeSessionID = liveSessions.isEmpty ? nil : liveSessions[max(0, index - 1)].id
+        // Update current project's live sessions if applicable
+        if let index = liveSessions.firstIndex(where: { $0.id == sessionID }) {
+            liveSessions.remove(at: index)
+            if activeSessionID == sessionID {
+                activeSessionID = liveSessions.isEmpty ? nil : liveSessions[max(0, index - 1)].id
+            }
+            recomputeWorkspaces()
         }
-        recomputeWorkspaces()
 
         Task { [weak self] in
             do {

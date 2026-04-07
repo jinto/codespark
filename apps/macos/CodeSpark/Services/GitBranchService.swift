@@ -2,7 +2,7 @@ import Foundation
 
 final class GitBranchService: @unchecked Sendable {
     private var cache: [String: CacheEntry] = [:]
-    private let normalTTL: TimeInterval = 10
+    private let normalTTL: TimeInterval = 30
     private let failureTTL: TimeInterval = 60
     private var isRefreshing = false
 
@@ -61,13 +61,15 @@ final class GitBranchService: @unchecked Sendable {
 
         do {
             try process.run()
-            let branch: String? = await withCheckedContinuation { cont in
+            // Read stdout BEFORE waiting for termination to avoid pipe deadlock
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let exitStatus: Int32 = await withCheckedContinuation { cont in
                 process.terminationHandler = { proc in
-                    guard proc.terminationStatus == 0 else { cont.resume(returning: nil); return }
-                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-                    cont.resume(returning: String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines))
+                    cont.resume(returning: proc.terminationStatus)
                 }
             }
+            guard exitStatus == 0 else { return (path, nil) }
+            let branch = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
             return (path, branch)
         } catch {
             return (path, nil)

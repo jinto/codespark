@@ -75,10 +75,8 @@ struct SettingsView: View {
                 if hooksStatus != .installed {
                     Button("Install Hooks") {
                         ClaudeHooksManager.install()
-                        if !ClaudeHooksManager.installCLISymlink() {
-                            symlinkFailed = true
-                        }
                         refreshStatus()
+                        symlinkFailed = hooksStatus != .installed && hooksStatus != .missingHooks
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.blue)

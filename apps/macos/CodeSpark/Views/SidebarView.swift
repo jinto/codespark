@@ -15,6 +15,7 @@ struct SidebarView: View {
     @State private var expandedWorkspacePaths: Set<String> = []
     @State private var showAddWorktreeSheet = false
     @State private var addWorktreeBranch = ""
+    @State private var addWorktreeProjectPath = ""
     @State private var pendingRemoveWorktreePath: String?
     @State private var showRemoveWorktreeConfirmation = false
 
@@ -216,6 +217,7 @@ struct SidebarView: View {
                                 if !project.path.isEmpty {
                                     Button("Add Worktree...") {
                                         addWorktreeBranch = ""
+                                        addWorktreeProjectPath = project.path
                                         showAddWorktreeSheet = true
                                     }
                                 }
@@ -316,7 +318,7 @@ struct SidebarView: View {
         .sheet(isPresented: $showAddWorktreeSheet) {
             AddWorktreeSheet(
                 branchName: $addWorktreeBranch,
-                projectPath: model.selectedProject?.path ?? "",
+                projectPath: addWorktreeProjectPath,
                 onCreate: {
                     let branch = addWorktreeBranch
                     showAddWorktreeSheet = false
