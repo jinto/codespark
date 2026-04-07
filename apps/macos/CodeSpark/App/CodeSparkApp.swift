@@ -35,7 +35,7 @@ struct CodeSparkApp: App {
                         MainContentView(model: model, onToggleSidebar: {
                             withAnimation { isSidebarVisible.toggle() }
                         })
-                        .navigationTitle("📁 " + (model.selectedProject?.name ?? ""))
+                        .navigationTitle("\u{1F4C2} " + (model.selectedProject?.name ?? ""))
                         .navigationSubtitle(model.workspaces.first(where: { $0.path == model.selectedWorkspacePath })?.branch ?? "")
                     }
                     .task {
@@ -56,7 +56,7 @@ struct CodeSparkApp: App {
                 savedHiddenIDs = newValue.joined(separator: ",")
             }
         }
-        .windowToolbarStyle(.unified)
+        .windowToolbarStyle(.unifiedCompact)
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -242,6 +242,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func configureWindowFrame() {
         guard let window = NSApp.windows.first else { return }
         window.titlebarSeparatorStyle = .none
+        // Show proxy icon (folder) permanently in titlebar
+        if let proxyIcon = window.standardWindowButton(.documentIconButton) {
+            proxyIcon.image = NSImage(systemSymbolName: "folder.fill", accessibilityDescription: nil)
+            proxyIcon.isHidden = false
+        }
         window.setFrameAutosaveName("CodeSparkMain")
     }
 
