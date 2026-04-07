@@ -25,6 +25,7 @@ final class AppModel: ObservableObject {
     @Published var hookSnippets: [String: String] = [:]  // projectID → last output snippet
     @Published var claudeHooksStatus: ClaudeHooksStatus = .installed
     @Published var workspaces: [WorkspaceViewData] = []
+    @Published var selectedWorkspacePath: String?
 
     var hookServer: HookSocketServer?
 
@@ -71,22 +72,6 @@ final class AppModel: ObservableObject {
             let allProjects = try await core.listProjectSummaries()
             let projects = allProjects.filter { !hiddenProjectIDs.contains($0.id) }
             self.projects = projects
-
-            if projects.isEmpty {
-                let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
-                let projId = try await core.createProject(name: "Default", path: homeDir, transport: "local")
-                let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-                _ = try await core.startSession(
-                    projectId: projId,
-                    transport: "local",
-                    targetLabel: "local",
-                    title: "Terminal",
-                    shell: shell,
-                    initialCwd: homeDir
-                )
-                let refreshed = try await core.listProjectSummaries()
-                self.projects = refreshed
-            }
 
             guard !projects.isEmpty else {
                 cancelInflightWork()
@@ -184,35 +169,6 @@ final class AppModel: ObservableObject {
         let path = url.path
         let name = url.lastPathComponent
         await createProject(name: name, path: path)
-        await importWorktreesIfNeeded(path: path)
-    }
-
-    private func importWorktreesIfNeeded(path: String) async {
-        guard !path.isEmpty else { return }
-
-        gitWorktreeService.invalidateCache(for: path)
-        await gitWorktreeService.refreshWorktrees(for: [path])
-
-        guard let worktrees = gitWorktreeService.worktrees(for: path),
-              worktrees.count > 1 else { return }
-
-        let nonMainCount = worktrees.filter { !$0.isMainWorktree }.count
-
-        let alert = NSAlert()
-        alert.messageText = "워크스페이스 가져오기"
-        alert.informativeText = "\(nonMainCount)개의 워크트리가 발견되었습니다. 각 워크트리에 터미널을 열까요?"
-        alert.addButton(withTitle: "가져오기")
-        alert.addButton(withTitle: "건너뛰기")
-
-        guard alert.runModal() == .alertFirstButtonReturn else {
-            recomputeWorkspaces()
-            return
-        }
-
-        recomputeWorkspaces()
-        for wt in worktrees {
-            await newSession(inWorkspacePath: wt.path)
-        }
     }
 
     func createProject(name: String, path: String = "", transport: String = "local") async {
@@ -358,6 +314,8 @@ final class AppModel: ObservableObject {
         let workspacePath: String
         if let explicit = inWorkspacePath {
             workspacePath = explicit
+        } else if let selected = selectedWorkspacePath {
+            workspacePath = selected
         } else if let activeID = activeSessionID,
                   let activeSession = liveSessions.first(where: { $0.id == activeID }),
                   let activeCwd = activeSession.lastCwd,

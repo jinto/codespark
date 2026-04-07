@@ -46,23 +46,25 @@ private struct SessionTab: View {
             Text(title)
                 .font(.system(.caption, weight: isActive ? .semibold : .regular))
                 .lineLimit(1)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onSelect)
 
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .opacity(isActive || isHovering ? 1 : 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 2)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isActive ? AppTheme.accent.opacity(0.25) : Color.clear)
         )
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onSelect)
         .onHover { isHovering = $0 }
     }
 }

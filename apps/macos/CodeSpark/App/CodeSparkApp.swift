@@ -16,16 +16,21 @@ struct CodeSparkApp: App {
         WindowGroup {
             Group {
                 if hasCompletedOnboarding {
-                    HStack(spacing: 0) {
-                        SidebarView(model: model)
-                            .frame(width: 240)
+                    Group {
+                        if model.projects.isEmpty {
+                            MainContentView(model: model)
+                        } else {
+                            HStack(spacing: 0) {
+                                SidebarView(model: model)
+                                    .frame(width: 240)
 
-                        Divider()
+                                Divider()
 
-                        MainContentView(model: model)
+                                MainContentView(model: model)
+                            }
+                            .background(AppTheme.toolbarBackground.ignoresSafeArea())
+                        }
                     }
-                    .background(AppTheme.toolbarBackground)
-                    .ignoresSafeArea()
                     .task {
                         await initializeAndLoad()
                     }
@@ -36,6 +41,7 @@ struct CodeSparkApp: App {
                 }
             }
             .preferredColorScheme(.dark)
+            .modifier(HideToolbarBackgroundModifier())
             .frame(minWidth: 600, minHeight: 400)
             .onChange(of: model.selectedProjectID) { _, newValue in
                 savedProjectID = newValue ?? ""
@@ -192,6 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureWindowFrame() {
         guard let window = NSApp.windows.first else { return }
+        window.titlebarAppearsTransparent = true
         window.setFrameAutosaveName("CodeSparkMain")
     }
 
@@ -221,5 +228,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
+    }
+}
+
+private struct HideToolbarBackgroundModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        } else {
+            content
+        }
     }
 }

@@ -98,7 +98,10 @@ struct SidebarView: View {
                 } ?? false
             )
             .contentShape(Rectangle())
-            .onTapGesture { toggleWorkspaceExpanded(workspace.path) }
+            .onTapGesture {
+                model.selectedWorkspacePath = workspace.path
+                toggleWorkspaceExpanded(workspace.path)
+            }
             .contextMenu {
                 Button("New Terminal") {
                     Task { await model.newSession(inWorkspacePath: workspace.path) }
@@ -220,6 +223,24 @@ struct SidebarView: View {
             }
 
             ScrollView {
+                if model.projects.isEmpty {
+                    VStack(spacing: 12) {
+                        Spacer().frame(height: 40)
+                        Image(systemName: "folder.badge.plus")
+                            .font(.system(size: 28))
+                            .foregroundStyle(.tertiary)
+                        Text("Open a project folder\nto get started")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button("Open Project...") {
+                            Task { await model.createProjectFromFolder() }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
                 LazyVStack(alignment: .leading, spacing: 4) {
                     ForEach(Array(sortedProjects.enumerated()), id: \.element.id) { index, project in
                         VStack(alignment: .leading, spacing: 0) {

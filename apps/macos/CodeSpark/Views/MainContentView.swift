@@ -11,20 +11,36 @@ struct MainContentView: View {
         if let project = model.selectedProject {
             VStack(spacing: 0) {
                 WindowDragArea {
-                    HStack(spacing: 0) {
-                        Image(systemName: "folder.fill")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.blue)
-                            .padding(.leading, 16)
-                            .padding(.trailing, 6)
+                    VStack(spacing: 0) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "folder.fill")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.blue)
 
-                        Text(project.name)
-                            .font(.system(.caption, weight: .semibold))
-                            .lineLimit(1)
+                            Text(project.name)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
 
-                        Divider()
-                            .frame(height: 14)
-                            .padding(.horizontal, 8)
+                            if let ws = model.workspaces.first(where: { $0.path == model.selectedWorkspacePath }),
+                               model.workspaces.count > 1 {
+                                Text("›")
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(.white.opacity(0.35))
+                                Image(systemName: "arrow.triangle.branch")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.white.opacity(0.7))
+                                Text(ws.branch)
+                                    .font(.system(size: 13, weight: .regular))
+                                    .foregroundStyle(.white.opacity(0.5))
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(height: 28)
+                        .background(AppTheme.sidebarBackground)
 
                         SessionTabBarView(
                             sessions: model.liveSessions,
@@ -33,14 +49,10 @@ struct MainContentView: View {
                             onClose: { id in model.closeSession(id: id) },
                             onNew: { Task { await model.newSession() } }
                         )
-
-                        Spacer()
-
+                        .frame(height: 24)
+                        .background(AppTheme.toolbarBackground)
                     }
-                    .frame(height: 34)
                 }
-                .frame(height: 34)
-                .background(AppTheme.toolbarBackground)
 
                 Divider().background(AppTheme.divider)
 
@@ -59,12 +71,17 @@ struct MainContentView: View {
             .background(AppTheme.surfaceBackground)
         } else {
             VStack(spacing: 16) {
-                Image(systemName: "terminal")
+                Image(systemName: "folder.badge.plus")
                     .font(.system(size: 48))
                     .foregroundStyle(.quaternary)
-                Text("Select a project")
+                Text("No projects open")
                     .font(.title3)
                     .foregroundStyle(.secondary)
+                Button("Open Project...") {
+                    Task { await model.createProjectFromFolder() }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 if let err = model.loadErrorMessage {
                     Text(err).font(.caption).foregroundStyle(.red)
                 }
