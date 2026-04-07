@@ -18,6 +18,11 @@ struct SidebarView: View {
     @State private var addWorktreeProjectPath = ""
     @State private var pendingRemoveWorktreePath: String?
     @State private var showRemoveWorktreeConfirmation = false
+    @State private var showNewSSHSheet = false
+    @State private var sshHost = ""
+    @State private var sshUser = ""
+    @State private var sshPort = ""
+    @State private var sshRemotePath = ""
 
     private var sortedProjects: [ProjectSummaryViewData] {
         let selected = model.selectedProjectID
@@ -52,6 +57,12 @@ struct SidebarView: View {
     }
 
     private func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
+        if project.transport == "ssh" {
+            if let info = SSHConnectionInfo(uri: project.path) {
+                return info.displayLabel
+            }
+            return project.path
+        }
         guard let cwd = project.liveSessionDetails.first?.lastCwd else { return nil }
         let path = abbreviatePath(cwd)
         if let branch = model.gitBranches[cwd] {
@@ -185,6 +196,12 @@ struct SidebarView: View {
                             .multilineTextAlignment(.center)
                         Button("Open Project...") {
                             Task { await model.createProjectFromFolder() }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        Button("SSH Project...") {
+                            sshHost = ""; sshUser = ""; sshPort = ""; sshRemotePath = ""
+                            showNewSSHSheet = true
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -347,6 +364,31 @@ struct SidebarView: View {
                 let count = ws.sessions.count
                 Text("This will close \(count) terminal\(count == 1 ? "" : "s") and remove the worktree directory.")
             }
+        }
+        .sheet(isPresented: $showNewSSHSheet) {
+            NewSSHProjectSheet(
+                host: $sshHost,
+                user: $sshUser,
+                port: $sshPort,
+                remotePath: $sshRemotePath,
+                onCreate: {
+                    let info = SSHConnectionInfo(
+                        host: sshHost,
+                        user: sshUser.isEmpty ? nil : sshUser,
+                        port: Int(sshPort),
+                        remotePath: sshRemotePath.isEmpty ? nil : sshRemotePath
+                    )
+                    showNewSSHSheet = false
+                    Task {
+                        await model.createProject(
+                            name: info.displayLabel,
+                            path: info.uri,
+                            transport: "ssh"
+                        )
+                    }
+                },
+                onCancel: { showNewSSHSheet = false }
+            )
         }
     }
 }

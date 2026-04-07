@@ -54,6 +54,10 @@
 		EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1188AFD5C69D085D60330D02 /* AppTheme.swift */; };
 		F42B900FB3E9710ABADC4D48 /* AppModel+Hook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5130A58E2FC5881608127D41 /* AppModel+Hook.swift */; };
 		F47361B02296F2A523F06A08 /* ClaudeHooksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */; };
+		552061F050EC181BD64E2449 /* SSHConnectionInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */; };
+		0EEC708F84CF823A8E360EC4 /* NewSSHProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */; };
+		7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */; };
+		450EF5449C0B78E86452B863 /* SSHIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -132,6 +136,10 @@
 		F3450FDDB010612C39DC6A6B /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostFactory.swift; sourceTree = "<group>"; };
 		F6AB5E91D161AAA64F9501C4 /* AppModel+Monitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Monitor.swift"; sourceTree = "<group>"; };
+		8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionInfo.swift; sourceTree = "<group>"; };
+		A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSSHProjectSheet.swift; sourceTree = "<group>"; };
+		105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionInfoTests.swift; sourceTree = "<group>"; };
+		A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHIntegrationTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -191,6 +199,8 @@
 			isa = PBXGroup;
 			children = (
 				34B3EF915455EE5A5AEFAE01 /* AppModelTests.swift */,
+				105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */,
+				A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */,
 				23C1F099F0619FDF11DD53CF /* MockProjectCoreClient.swift */,
 				48CA429791ED61F383243326 /* MockTerminalHost.swift */,
 				8CA1F37A49DC57DD259D7C23 /* ProjectFlowTests.swift */,
@@ -204,6 +214,7 @@
 			children = (
 				7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */,
 				C84785B7B190829BA72AF822 /* GitBranchService.swift */,
+				8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */,
 				982886C18B94884FEA504409 /* GitWorktreeService.swift */,
 				813E0BA18FE27147BC9B017D /* HookEventProcessor.swift */,
 				3A611C18C82E4858E7E1A2B3 /* HookSocketServer.swift */,
@@ -216,6 +227,7 @@
 			isa = PBXGroup;
 			children = (
 				787ED7070EA378E8B9A0199D /* AddWorktreeSheet.swift */,
+				A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */,
 				BE51452DABDDDB623C9F8A37 /* MainContentView.swift */,
 				F3450FDDB010612C39DC6A6B /* OnboardingView.swift */,
 				A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */,
@@ -488,6 +500,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				0453F36CBDA670D2FF405A59 /* AppModelTests.swift in Sources */,
+				7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */,
+				450EF5449C0B78E86452B863 /* SSHIntegrationTests.swift in Sources */,
 				A3C9A10ACAD571C82C1DCB74 /* MockProjectCoreClient.swift in Sources */,
 				3389CBD887323FCBA7DD452F /* MockTerminalHost.swift in Sources */,
 				05775B2732E4FEE5DF603358 /* ProjectFlowTests.swift in Sources */,
@@ -539,6 +553,8 @@
 				47E722B3A80D8F6EA4095FAA /* SessionTabBarView.swift in Sources */,
 				4A72F1CFFEF80585ED500C3F /* SettingsView.swift in Sources */,
 				366A365CFA1EFA718DEF53C6 /* SidebarView.swift in Sources */,
+				0EEC708F84CF823A8E360EC4 /* NewSSHProjectSheet.swift in Sources */,
+				552061F050EC181BD64E2449 /* SSHConnectionInfo.swift in Sources */,
 				E898DEED2F56E2BA70A0166F /* StorageKeys.swift in Sources */,
 				17F6D4887541BEBCDD9EBD85 /* TerminalFontSettings.swift in Sources */,
 				EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */,

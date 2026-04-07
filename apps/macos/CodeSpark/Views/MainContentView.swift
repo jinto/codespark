@@ -23,7 +23,9 @@ struct MainContentView: View {
 
                 HStack(spacing: 0) {
                     VStack(spacing: 0) {
-                        if model.liveSessions.isEmpty {
+                        if model.pendingSSHReconnectProjectID != nil && model.liveSessions.isEmpty {
+                            sshReconnectState
+                        } else if model.liveSessions.isEmpty {
                             emptyState
                         } else {
                             terminalContent
@@ -106,6 +108,28 @@ struct MainContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         }
+    }
+
+    private var sshReconnectState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "network")
+                .font(.system(size: 36))
+                .foregroundStyle(.secondary)
+            Text("SSH Project")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            if let info = model.selectedProject.flatMap({ SSHConnectionInfo(uri: $0.path) }) {
+                Text(info.displayLabel)
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+            }
+            Button("Connect") {
+                Task { await model.newSession() }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyState: some View {

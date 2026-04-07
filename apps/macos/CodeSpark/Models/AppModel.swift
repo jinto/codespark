@@ -26,6 +26,7 @@ final class AppModel: ObservableObject {
     @Published var claudeHooksStatus: ClaudeHooksStatus = .installed
     @Published var workspaces: [WorkspaceViewData] = []
     @Published var selectedWorkspacePath: String?
+    @Published var pendingSSHReconnectProjectID: String?
 
     var hookServer: HookSocketServer?
 
@@ -50,6 +51,12 @@ final class AppModel: ObservableObject {
 
     func attachLiveSessions() async {
         guard let project = selectedProject else { return }
+        // SSH projects don't auto-attach — user must explicitly reconnect
+        guard project.transport != "ssh" else {
+            liveSessions = []
+            activeSessionID = nil
+            return
+        }
         liveSessions = project.liveSessions
         for session in liveSessions where hosts[session.id] == nil {
             if !allSessions.contains(where: { $0.id == session.id }) {
@@ -116,7 +123,13 @@ final class AppModel: ObservableObject {
                 guard !Task.isCancelled else { return }
                 apply(detail: detail)
                 await attachLiveSessions()
-                if !detail.path.isEmpty {
+                // SSH projects: show reconnect prompt if no live sessions
+                if detail.transport == "ssh" && liveSessions.isEmpty {
+                    pendingSSHReconnectProjectID = id
+                } else {
+                    pendingSSHReconnectProjectID = nil
+                }
+                if !detail.path.isEmpty && detail.transport != "ssh" {
                     gitWorktreeService.invalidateCache(for: detail.path)
                     await gitWorktreeService.refreshWorktrees(for: [detail.path])
                     recomputeWorkspaces()
@@ -332,6 +345,27 @@ final class AppModel: ObservableObject {
             workspacePath = project.path.isEmpty
                 ? FileManager.default.homeDirectoryForCurrentUser.path
                 : project.path
+        }
+
+        // SSH projects: use ssh command instead of local shell
+        if project.transport == "ssh", let info = SSHConnectionInfo(uri: project.path) {
+            let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+            do {
+                let sessionID = try await startAndAttachSession(
+                    projectID: projectID,
+                    transport: "ssh",
+                    targetLabel: info.displayLabel,
+                    title: info.displayLabel,
+                    shell: shell,
+                    cwd: nil,
+                    command: info.sshCommand
+                )
+                activeSessionID = sessionID
+                pendingSSHReconnectProjectID = nil
+            } catch {
+                loadErrorMessage = error.localizedDescription
+            }
+            return
         }
 
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
