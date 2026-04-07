@@ -35,7 +35,7 @@ struct CodeSparkApp: App {
                         MainContentView(model: model, onToggleSidebar: {
                             withAnimation { isSidebarVisible.toggle() }
                         })
-                        .navigationTitle(model.selectedProject?.name ?? "")
+                        .navigationTitle("📁 " + (model.selectedProject?.name ?? ""))
                         .navigationSubtitle(model.workspaces.first(where: { $0.path == model.selectedWorkspacePath })?.branch ?? "")
                     }
                     .task {
