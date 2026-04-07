@@ -122,11 +122,6 @@ enum ClaudeHooksManager {
         writeSettings(settings)
     }
 
-    @discardableResult
-    static func installCLISymlink() -> Bool {
-        installCLI()
-        return FileManager.default.isExecutableFile(atPath: cliPath)
-    }
 
     // MARK: - Helpers
 

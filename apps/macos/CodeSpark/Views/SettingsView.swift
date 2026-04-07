@@ -82,7 +82,7 @@ struct SettingsView: View {
                     .tint(.blue)
 
                     if symlinkFailed {
-                        Text("Could not create /usr/local/bin/codespark-hook symlink. CLI is still available inside CodeSpark terminals.")
+                        Text("Could not install CLI tool to ~/.local/bin. CLI is still available inside CodeSpark terminals.")
                             .font(.caption)
                             .foregroundStyle(.orange)
                     }

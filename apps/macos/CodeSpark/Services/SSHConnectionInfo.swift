@@ -79,7 +79,8 @@ struct SSHConnectionInfo: Equatable {
             parts.append(host)
         }
         if let remotePath {
-            parts.append(contentsOf: ["-t", "cd \(remotePath) && exec $SHELL"])
+            let quoted = remotePath.replacingOccurrences(of: "'", with: "'\\''")
+            parts.append(contentsOf: ["-t", "cd '\(quoted)' && exec $SHELL"])
         }
         return parts.joined(separator: " ")
     }

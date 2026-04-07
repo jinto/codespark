@@ -26,7 +26,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertEqual(info.host, "myhost")
         XCTAssertNil(info.user)
         XCTAssertEqual(info.remotePath, "/home/user/project")
-        XCTAssertEqual(info.sshCommand, "ssh myhost -t cd /home/user/project && exec $SHELL")
+        XCTAssertEqual(info.sshCommand, "ssh myhost -t cd '/home/user/project' && exec $SHELL")
     }
 
     func test_parse_full_uri() {
@@ -35,7 +35,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertEqual(info.user, "jinto")
         XCTAssertEqual(info.port, 2222)
         XCTAssertEqual(info.remotePath, "/srv/app")
-        XCTAssertEqual(info.sshCommand, "ssh -p 2222 jinto@myhost -t cd /srv/app && exec $SHELL")
+        XCTAssertEqual(info.sshCommand, "ssh -p 2222 jinto@myhost -t cd '/srv/app' && exec $SHELL")
     }
 
     func test_parse_host_and_port() {

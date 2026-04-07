@@ -51,10 +51,16 @@ final class AppModel: ObservableObject {
 
     func attachLiveSessions() async {
         guard let project = selectedProject else { return }
-        // SSH projects don't auto-attach — user must explicitly reconnect
-        guard project.transport != "ssh" else {
-            liveSessions = []
-            activeSessionID = nil
+        // SSH projects: reattach existing sessions if any, otherwise show reconnect prompt
+        if project.transport == "ssh" {
+            let existingSSH = project.liveSessions.filter { hosts[$0.id] != nil }
+            if !existingSSH.isEmpty {
+                liveSessions = existingSSH
+                activeSessionID = existingSSH.first?.id
+            } else {
+                liveSessions = []
+                activeSessionID = nil
+            }
             return
         }
         liveSessions = project.liveSessions
@@ -153,6 +159,7 @@ final class AppModel: ObservableObject {
         selectedProject = detail
         liveSessions = detail.liveSessions
         activeSessionID = liveSessions.first?.id
+        selectedWorkspacePath = nil
         recomputeWorkspaces()
     }
 
@@ -347,9 +354,10 @@ final class AppModel: ObservableObject {
                 : project.path
         }
 
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+
         // SSH projects: use ssh command instead of local shell
         if project.transport == "ssh", let info = SSHConnectionInfo(uri: project.path) {
-            let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
             do {
                 let sessionID = try await startAndAttachSession(
                     projectID: projectID,
@@ -367,8 +375,6 @@ final class AppModel: ObservableObject {
             }
             return
         }
-
-        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         do {
             let sessionID = try await startAndAttachSession(
                 projectID: projectID,
@@ -451,7 +457,8 @@ final class AppModel: ObservableObject {
     }
 
     func saveAllSessionsAndClose() {
-        for (sessionID, host) in hosts {
+        let snapshot = Array(hosts)
+        for (sessionID, host) in snapshot {
             host.close(sessionID: sessionID)
         }
     }
