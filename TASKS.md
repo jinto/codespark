@@ -69,6 +69,12 @@
 - [x] **worktree 관리 UI** — Add Worktree 시트 (.worktrees/<name>/) + Remove Worktree context menu
 - [ ] **내장 Diff 뷰어** — 프로젝트 내 코드 변경사항 검토 (git diff 시각화)
 
+## M12.5: SSH 원격 세션 상태 파악
+
+- [ ] **SSH 소켓 포워딩** — CodeSpark 터미널에서 SSH 접속 시 Unix 소켓을 `-R` 옵션으로 원격에 자동 포워딩, 원격에 경량 codespark-hook 배포
+- [ ] **PTY 출력 파싱 대안** — hook 없이 터미널 출력 패턴 분석으로 Claude Code 상태 감지 (대기/실행/완료)
+- [ ] **원격 상태 미지원 표시** — SSH 세션에서 hooks 미작동 시 사이드바에 "Remote (no hooks)" 표시
+
 ## M13: 외부 통합
 
 - [ ] **포트 모니터링** — 프로젝트별 활성 포트 감지 및 표시
