@@ -324,14 +324,14 @@ final class AppModel: ObservableObject {
             targetLabel: targetLabel,
             lastCwd: cwd
         )
-        liveSessions.append(session)
-        if !allSessions.contains(where: { $0.id == sessionID }) {
-            allSessions.append(session)
-        }
         var host = terminalFactory(session)
         host.delegate = self
         host.attach(sessionID: sessionID, command: command)
         hosts[sessionID] = host
+        liveSessions.append(session)
+        if !allSessions.contains(where: { $0.id == sessionID }) {
+            allSessions.append(session)
+        }
         syncProjectSessionDetails()
         return sessionID
     }

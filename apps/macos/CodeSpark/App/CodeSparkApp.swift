@@ -6,7 +6,17 @@ import UserNotifications
 @main
 struct CodeSparkApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var model = AppModel(core: ProjectCoreClient.live)
+    @StateObject private var model = AppModel(
+        core: ProjectCoreClient.live,
+        terminalFactory: { session in
+            #if GHOSTTY_FIRST
+            if let app = GhosttyRuntime.shared.app {
+                return GhosttyTerminalHost(app: app, session: session)
+            }
+            #endif
+            return NoOpTerminalHost()
+        }
+    )
     @AppStorage(StorageKeys.selectedProjectID) private var savedProjectID: String = ""
     @AppStorage(StorageKeys.hiddenProjectIDs) private var savedHiddenIDs: String = ""
     @AppStorage(StorageKeys.hasCompletedOnboarding) private var hasCompletedOnboarding = false
