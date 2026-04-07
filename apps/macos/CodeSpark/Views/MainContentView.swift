@@ -18,7 +18,6 @@ struct MainContentView: View {
                     onNew: { Task { await model.newSession() } }
                 )
                 .frame(height: 24)
-                .background(AppTheme.toolbarBackground)
 
                 Divider().background(AppTheme.divider)
 

@@ -35,11 +35,8 @@ struct CodeSparkApp: App {
                         MainContentView(model: model, onToggleSidebar: {
                             withAnimation { isSidebarVisible.toggle() }
                         })
-                        .toolbar {
-                            ToolbarItemGroup(placement: .navigation) {
-                                projectToolbarItems
-                            }
-                        }
+                        .navigationTitle(model.selectedProject?.name ?? "")
+                        .navigationSubtitle(model.workspaces.first(where: { $0.path == model.selectedWorkspacePath })?.branch ?? "")
                     }
                     .task {
                         await initializeAndLoad()
@@ -59,7 +56,7 @@ struct CodeSparkApp: App {
                 savedHiddenIDs = newValue.joined(separator: ",")
             }
         }
-        .windowToolbarStyle(.unified(showsTitle: false))
+        .windowToolbarStyle(.unified)
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {
@@ -150,14 +147,16 @@ struct CodeSparkApp: App {
         if let project = model.selectedProject {
             HStack(spacing: 5) {
                 Image(systemName: "folder.fill")
-                    .font(.system(size: 11))
+                    .font(.system(size: 12))
                     .foregroundStyle(.blue)
                 Text(project.name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 15, weight: .semibold))
                 if let ws = model.workspaces.first(where: { $0.path == model.selectedWorkspacePath }) {
                     Text("›")
+                        .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                     Text(ws.branch)
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -242,7 +241,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func configureWindowFrame() {
         guard let window = NSApp.windows.first else { return }
-        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
         window.setFrameAutosaveName("CodeSparkMain")
     }
 
