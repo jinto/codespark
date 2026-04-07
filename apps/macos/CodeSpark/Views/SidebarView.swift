@@ -93,14 +93,6 @@ struct SidebarView: View {
     }
 
     @ViewBuilder
-    private func flatSessions(for project: ProjectSummaryViewData) -> some View {
-        ForEach(project.liveSessionDetails) { session in
-            sessionRow(session: session, projectID: project.id)
-                .padding(.leading, 18)
-        }
-    }
-
-    @ViewBuilder
     private func workspaceGroupedSessions(for project: ProjectSummaryViewData) -> some View {
         ForEach(model.workspaces) { workspace in
             WorkspaceSidebarRow(
@@ -128,35 +120,7 @@ struct SidebarView: View {
                 }
             }
 
-            if expandedWorkspacePaths.contains(workspace.path) {
-                ForEach(workspace.sessions) { session in
-                    sessionRow(session: session, projectID: project.id)
-                        .padding(.leading, 30)
-                }
-            }
         }
-    }
-
-    @ViewBuilder
-    private func sessionRow(session: SessionSummary, projectID: String) -> some View {
-        SessionSidebarRow(
-            session: session,
-            isActive: model.activeSessionID == session.id,
-            isIdle: model.idleSessionIDs.contains(session.id),
-            onSelect: {
-                if model.selectedProjectID == projectID {
-                    model.activeSessionID = session.id
-                } else {
-                    Task {
-                        await model.selectProject(id: projectID)
-                        model.activeSessionID = session.id
-                    }
-                }
-            },
-            onRename: { newTitle in
-                Task { await model.renameSession(id: session.id, title: newTitle) }
-            }
-        )
     }
 
     private func toggleExpanded(_ id: String) {
@@ -252,8 +216,6 @@ struct SidebarView: View {
                                 let isSelected = model.selectedProjectID == project.id
                                 if isSelected && model.workspaces.count > 1 {
                                     workspaceGroupedSessions(for: project)
-                                } else {
-                                    flatSessions(for: project)
                                 }
                             }
                         }
