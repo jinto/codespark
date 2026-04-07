@@ -1,0 +1,24 @@
+#!/bin/bash
+set -e
+
+echo "🔨 Pre-commit: building + unit tests..."
+
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+xcodebuild -project apps/macos/CodeSpark.xcodeproj \
+  -scheme CodeSpark \
+  -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' \
+  -quiet \
+  build-for-testing
+
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+xcodebuild -project apps/macos/CodeSpark.xcodeproj \
+  -scheme CodeSpark \
+  -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' \
+  -quiet \
+  test-without-building \
+  -skip-testing:CodeSparkUITests \
+  -skip-testing:CodeSparkTests/SSHIntegrationTests
+
+echo "✅ Unit tests passed."
