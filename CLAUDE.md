@@ -44,6 +44,22 @@ apps/macos/CodeSpark/
 apps/macos/CLI/ — codespark-hook CLI (Claude Code hook → Unix socket bridge)
 ```
 
+## Window Layout
+
+Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
+- Sidebar icons (toggle, +) placed via `.toolbar` in sidebar column
+- Project name + branch shown via `.navigationTitle` / `.navigationSubtitle` in detail column
+- Sidebar hidden when no projects exist, auto-shown on first project add
+- Sidebar toggle persisted via `@AppStorage(StorageKeys.isSidebarVisible)`
+
+## Claude Hooks
+
+`codespark-hook` CLI is auto-installed on app launch:
+- Binary copied to `~/.local/bin/codespark-hook` (not symlinked)
+- Hooks registered in `~/.claude/settings.json` with **absolute paths**
+- Uninstall available via Settings, app menu, or Option+launch reset
+
 ## Known Issues
 
 - Terminal hosts (NoOpTerminalHost) are disconnected from real Ghostty surfaces
+- SSH remote sessions cannot use codespark-hook (local Unix socket only)
