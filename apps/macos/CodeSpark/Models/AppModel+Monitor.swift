@@ -62,7 +62,7 @@ extension AppModel {
     }
 
     func refreshGitBranches() {
-        let paths = projects.flatMap { $0.liveSessionDetails.compactMap(\.lastCwd) }
+        let paths = Array(Set(projects.flatMap { $0.liveSessionDetails.compactMap(\.lastCwd) }))
         guard !paths.isEmpty else { return }
         Task {
             await gitBranchService.refreshBranches(for: paths)

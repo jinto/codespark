@@ -200,6 +200,9 @@ struct CodeSparkApp: App {
         GhosttyRuntime.shared.onTerminalOutput = { [weak model] in
             model?.markActiveSessionOutput()
         }
+        GhosttyRuntime.shared.onSurfaceClose = { [weak model] surfaceView, processAlive in
+            model?.handleSurfaceClose(surfaceView, processAlive: processAlive)
+        }
         #endif
         appDelegate.model = model
 

@@ -29,6 +29,8 @@ Key patterns:
 - `ghostty_surface_set_size` expects **physical pixels** (use `convertToBacking`)
 - Control characters (< 0x20) must be sent as original char + Ctrl modifier, not raw control code
 - Ghostty manages its own Metal layer — do NOT set `wantsLayer = true`
+- `close_surface_cb` receives **surface's NSView userdata** (not runtime userdata) + `processAlive` bool
+- One surface per session — host owns it, `TerminalSurfaceHostView` borrows via `surfaceNSView`
 
 ## Architecture
 
@@ -61,5 +63,4 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 
 ## Known Issues
 
-- Terminal hosts (NoOpTerminalHost) are disconnected from real Ghostty surfaces
 - SSH remote sessions cannot use codespark-hook (local Unix socket only)

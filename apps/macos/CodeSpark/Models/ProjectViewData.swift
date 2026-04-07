@@ -43,10 +43,10 @@ struct ProjectSummaryViewData: Identifiable, Equatable {
     var name: String
     let path: String
     let transport: String
-    let liveSessions: Int
+    var liveSessions: Int
     let recentlyClosedSessions: Int
     let hasInterruptedSessions: Bool
-    let liveSessionDetails: [SessionSummary]
+    var liveSessionDetails: [SessionSummary]
 }
 
 struct TerminalSnapshotViewData: Equatable {

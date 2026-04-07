@@ -12,6 +12,10 @@ final class GhosttyRuntime {
     /// Called on main thread when Ghostty processes terminal output (wakeup → tick).
     var onTerminalOutput: (() -> Void)?
 
+    /// Called on main thread when Ghostty requests a surface close (process exit or close action).
+    /// Parameters: the surface view that should close, and whether the process is still alive.
+    var onSurfaceClose: ((GhosttyTerminalSurfaceView, Bool) -> Void)?
+
     /// Coalesces wakeup signals: skip dispatch if a tick is already queued.
     /// Uses os_unfair_lock for thread-safe access from Ghostty's C runtime thread.
     private let tickLock = OSAllocatedUnfairLock(initialState: false)
@@ -82,8 +86,12 @@ final class GhosttyRuntime {
                     pasteboard.setString(String(cString: data), forType: .string)
                 }
             },
-            close_surface_cb: { _, _ in
-                // Surface close is handled by GhosttyTerminalHost
+            close_surface_cb: { userdata, processAlive in
+                guard let userdata else { return }
+                let surfaceView = Unmanaged<GhosttyTerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
+                DispatchQueue.main.async {
+                    GhosttyRuntime.shared.onSurfaceClose?(surfaceView, processAlive)
+                }
             }
         )
 

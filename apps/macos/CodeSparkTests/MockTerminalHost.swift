@@ -1,9 +1,10 @@
-import Foundation
+import AppKit
 @testable import CodeSpark
 
 final class MockTerminalHost: TerminalHostProtocol {
     weak var delegate: (any TerminalHostDelegate)?
     var lastOutputTime: Date? { nil }
+    var surfaceNSView: NSView? { nil }
 
     func markOutput() {}
     func attach(sessionID: String, command: String? = nil) {}

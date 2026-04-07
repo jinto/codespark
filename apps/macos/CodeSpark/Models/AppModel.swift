@@ -74,6 +74,7 @@ final class AppModel: ObservableObject {
             hosts[session.id] = host
         }
         activeSessionID = liveSessions.first?.id
+        syncProjectSessionDetails()
     }
 
     func load() async {
@@ -331,6 +332,7 @@ final class AppModel: ObservableObject {
         host.delegate = self
         host.attach(sessionID: sessionID, command: command)
         hosts[sessionID] = host
+        syncProjectSessionDetails()
         return sessionID
     }
 
@@ -470,6 +472,18 @@ final class AppModel: ObservableObject {
         host.markOutput()
     }
 
+    #if GHOSTTY_FIRST
+    func handleSurfaceClose(_ surfaceView: GhosttyTerminalSurfaceView, processAlive: Bool) {
+        guard let (sessionID, host) = hosts.first(where: { _, host in
+            host.surfaceNSView === surfaceView
+        }) else { return }
+        guard !closingSessionIDs.contains(sessionID) else { return }
+        let snapshot = host.extractSnapshot()
+            ?? TerminalSnapshotViewData(cols: 0, rows: 0, lines: [])
+        terminalHostDidClose(sessionID: sessionID, snapshot: snapshot, closeReason: .processExited)
+    }
+    #endif
+
     func projectStatus(for project: ProjectSummaryViewData) -> ProjectStatus {
         if project.hasInterruptedSessions { return .needsInput }
 
@@ -485,6 +499,16 @@ final class AppModel: ObservableObject {
             return allIdle ? .idle : .running
         }
         return .idle
+    }
+
+    /// Keep projects[].liveSessionDetails in sync with current liveSessions.
+    func syncProjectSessionDetails() {
+        guard let projectID = selectedProjectID,
+              let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
+        projects[index].liveSessionDetails = liveSessions.map { session in
+            SessionSummary(id: session.id, title: session.title, targetLabel: session.targetLabel, lastCwd: session.lastCwd)
+        }
+        projects[index].liveSessions = liveSessions.count
     }
 
     private func clearDetailState() {
@@ -511,6 +535,7 @@ extension AppModel: TerminalHostDelegate {
             }
             recomputeWorkspaces()
         }
+        syncProjectSessionDetails()
 
         Task { [weak self] in
             do {

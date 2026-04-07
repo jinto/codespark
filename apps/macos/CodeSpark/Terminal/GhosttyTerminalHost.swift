@@ -1,11 +1,12 @@
 #if GHOSTTY_FIRST
-import Foundation
+import AppKit
 import GhosttyKit
 
 final class GhosttyTerminalHost: TerminalHostProtocol {
     weak var delegate: (any TerminalHostDelegate)?
     var lastOutputTime: Date? = nil
-    private var surfaceView: GhosttyTerminalSurfaceView?
+    private(set) var surfaceView: GhosttyTerminalSurfaceView?
+    var surfaceNSView: NSView? { surfaceView }
     private let app: ghostty_app_t
     private let session: SessionViewData
 

@@ -4,16 +4,11 @@ import SwiftUI
 import GhosttyKit
 
 struct TerminalSurfaceHostView: NSViewRepresentable {
-    let session: SessionViewData
-    let app: ghostty_app_t
+    let surfaceView: GhosttyTerminalSurfaceView
     var isActive: Bool = false
 
     func makeNSView(context: Context) -> GhosttyTerminalSurfaceView {
-        GhosttyTerminalSurfaceView(
-            app: app,
-            workingDirectory: session.lastCwd,
-            command: nil
-        )
+        surfaceView
     }
 
     func updateNSView(_ nsView: GhosttyTerminalSurfaceView, context: Context) {

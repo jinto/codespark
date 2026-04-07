@@ -96,8 +96,8 @@ struct MainContentView: View {
             ZStack {
                 ForEach(model.allSessions) { session in
                     #if GHOSTTY_FIRST
-                    if let app = GhosttyRuntime.shared.app {
-                        TerminalSurfaceHostView(session: session, app: app, isActive: session.id == model.activeSessionID)
+                    if let surfaceView = model.hosts[session.id]?.surfaceNSView as? GhosttyTerminalSurfaceView {
+                        TerminalSurfaceHostView(surfaceView: surfaceView, isActive: session.id == model.activeSessionID)
                     }
                     #else
                     TerminalSurfaceHostView(session: session, isActive: session.id == model.activeSessionID)

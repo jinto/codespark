@@ -9,13 +9,17 @@ struct SessionTabBarView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(sessions) { session in
-                SessionTab(
-                    title: session.title,
-                    isActive: session.id == activeSessionID,
-                    onSelect: { onSelect(session.id) },
-                    onClose: { onClose(session.id) }
-                )
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ForEach(sessions) { session in
+                        SessionTab(
+                            title: session.title,
+                            isActive: session.id == activeSessionID,
+                            onSelect: { onSelect(session.id) },
+                            onClose: { onClose(session.id) }
+                        )
+                    }
+                }
             }
 
             Button(action: onNew) {
