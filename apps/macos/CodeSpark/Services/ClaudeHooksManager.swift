@@ -9,19 +9,22 @@ enum ClaudeHooksStatus: Equatable {
 
 enum ClaudeHooksManager {
     private static let settingsPath = NSHomeDirectory() + "/.claude/settings.json"
+    private static let cliBinDir = NSHomeDirectory() + "/.local/bin"
+    private static let cliPath = NSHomeDirectory() + "/.local/bin/codespark-hook"
+
     private static let hookEvents: [(String, String)] = [
-        ("Stop", "codespark-hook stop"),
-        ("UserPromptSubmit", "codespark-hook prompt-submit"),
-        ("SessionStart", "codespark-hook session-start"),
-        ("SessionEnd", "codespark-hook session-end"),
-        ("Notification", "codespark-hook notification"),
+        ("Stop", cliPath + " stop"),
+        ("UserPromptSubmit", cliPath + " prompt-submit"),
+        ("SessionStart", cliPath + " session-start"),
+        ("SessionEnd", cliPath + " session-end"),
+        ("Notification", cliPath + " notification"),
     ]
 
     // MARK: - Health check
 
     static func checkStatus() -> ClaudeHooksStatus {
         let hasHooks = settingsContainHook()
-        let hasCLI = cliFoundInPath()
+        let hasCLI = FileManager.default.isExecutableFile(atPath: cliPath)
         return switch (hasHooks, hasCLI) {
         case (true, true): .installed
         case (false, true): .missingHooks
@@ -36,37 +39,47 @@ enum ClaudeHooksManager {
         return text.contains("codespark-hook")
     }
 
-    private static func cliFoundInPath() -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        process.arguments = ["codespark-hook"]
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch { return false }
-    }
-
     // MARK: - Install / Uninstall
 
     static func install() {
+        installCLI()
+        installHooks()
+    }
+
+    private static func installCLI() {
+        guard let srcURL = Bundle.main.url(forResource: "bin", withExtension: nil)?
+            .appendingPathComponent("codespark-hook") else { return }
+
+        // Ensure ~/.local/bin/ exists
+        try? FileManager.default.createDirectory(
+            atPath: cliBinDir, withIntermediateDirectories: true)
+
+        // Copy binary (overwrite if exists)
+        let destURL = URL(fileURLWithPath: cliPath)
+        try? FileManager.default.removeItem(at: destURL)
+        try? FileManager.default.copyItem(at: srcURL, to: destURL)
+
+        // Ensure executable
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o755], ofItemAtPath: cliPath)
+    }
+
+    private static func installHooks() {
         var settings = readSettings()
         var hooks = settings["hooks"] as? [String: Any] ?? [:]
 
         for (event, command) in hookEvents {
             var entries = hooks[event] as? [[String: Any]] ?? []
-            let exists = entries.contains { entry in
+            // Remove old entries (bare command or different path)
+            entries.removeAll { entry in
                 guard let list = entry["hooks"] as? [[String: Any]] else { return false }
                 return list.contains { ($0["command"] as? String)?.contains("codespark-hook") == true }
             }
-            if !exists {
-                entries.append([
-                    "matcher": "",
-                    "hooks": [["type": "command", "command": command, "timeout": 3] as [String: Any]]
-                ] as [String: Any])
-            }
+            // Add with absolute path
+            entries.append([
+                "matcher": "",
+                "hooks": [["type": "command", "command": command, "timeout": 3] as [String: Any]]
+            ] as [String: Any])
             hooks[event] = entries
         }
 
@@ -91,15 +104,10 @@ enum ClaudeHooksManager {
         writeSettings(settings)
     }
 
+    @discardableResult
     static func installCLISymlink() -> Bool {
-        guard let binURL = Bundle.main.url(forResource: "bin", withExtension: nil)?
-            .appendingPathComponent("codespark-hook") else { return false }
-        let linkPath = "/usr/local/bin/codespark-hook"
-        try? FileManager.default.removeItem(atPath: linkPath)
-        do {
-            try FileManager.default.createSymbolicLink(atPath: linkPath, withDestinationPath: binURL.path)
-            return true
-        } catch { return false }
+        installCLI()
+        return FileManager.default.isExecutableFile(atPath: cliPath)
     }
 
     // MARK: - Helpers
