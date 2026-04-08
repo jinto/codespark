@@ -76,6 +76,14 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
   -scheme CodeSpark -destination 'platform=macOS'
 ```
 
+**구현 완료 후 필수 검증 절차:**
+1. 유닛 테스트 전체 통과 확인
+2. 앱 빌드 후 실행하여 accessibility API (`osascript`)로 UI 요소 존재 확인:
+   - 사이드바 toolbar 버튼들 (sidebar toggle, + 버튼)
+   - 프로젝트/워크스페이스 행 표시
+   - Cmd 홀드 시 핫키 overlay 표시
+3. 모든 검증 통과 후에만 완료 보고
+
 ## Known Issues
 
 - SSH remote sessions cannot use codespark-hook (local Unix socket only)

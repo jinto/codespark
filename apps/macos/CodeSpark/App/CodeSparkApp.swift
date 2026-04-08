@@ -170,17 +170,8 @@ struct CodeSparkApp: App {
         Button { withAnimation { isSidebarVisible.toggle() } } label: {
             Image(systemName: "sidebar.left")
         }
-        Menu {
-            Button("Local Project...") {
-                Task { await model.createProjectFromFolder() }
-            }
-            Button("SSH Project...") {
-                model.showNewSSHSheet = true
-            }
-        } label: {
+        Button { Task { await model.createProjectFromFolder() } } label: {
             Image(systemName: "plus")
-        } primaryAction: {
-            Task { await model.createProjectFromFolder() }
         }
     }
 
