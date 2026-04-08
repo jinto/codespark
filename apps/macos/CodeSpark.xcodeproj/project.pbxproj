@@ -62,6 +62,8 @@
 		0EEC708F84CF823A8E360EC4 /* NewSSHProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */; };
 		7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */; };
 		450EF5449C0B78E86452B863 /* SSHIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */; };
+		93FAA0C0CD93FC076C934EB3 /* ClipboardImageHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257D067859E4ABC83E423AF3 /* ClipboardImageHandler.swift */; };
+		9F862F9EEFF5775836F6DA22 /* ClipboardImageHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CF9045C1A9AED8862C73FD /* ClipboardImageHandlerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -148,6 +150,8 @@
 		A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSSHProjectSheet.swift; sourceTree = "<group>"; };
 		105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionInfoTests.swift; sourceTree = "<group>"; };
 		A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHIntegrationTests.swift; sourceTree = "<group>"; };
+		257D067859E4ABC83E423AF3 /* ClipboardImageHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardImageHandler.swift; sourceTree = "<group>"; };
+		82CF9045C1A9AED8862C73FD /* ClipboardImageHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardImageHandlerTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -207,6 +211,7 @@
 			isa = PBXGroup;
 			children = (
 				34B3EF915455EE5A5AEFAE01 /* AppModelTests.swift */,
+				82CF9045C1A9AED8862C73FD /* ClipboardImageHandlerTests.swift */,
 				9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */,
 				105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */,
 				A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */,
@@ -267,6 +272,7 @@
 		93D62B78FDD0C92C09A47DC1 /* Terminal */ = {
 			isa = PBXGroup;
 			children = (
+				257D067859E4ABC83E423AF3 /* ClipboardImageHandler.swift */,
 				61B66760C324727703F07319 /* GhosttyRuntime.swift */,
 				6465D8D71A356DB935A2D94C /* GhosttyTerminalHost.swift */,
 				BDF23B602753F8B2AC6D2D29 /* GhosttyTerminalSurfaceView.swift */,
@@ -512,6 +518,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0453F36CBDA670D2FF405A59 /* AppModelTests.swift in Sources */,
+				9F862F9EEFF5775836F6DA22 /* ClipboardImageHandlerTests.swift in Sources */,
 				9ED695B19FC93D927CBF1CBD /* KeyEventRouterTests.swift in Sources */,
 				7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */,
 				450EF5449C0B78E86452B863 /* SSHIntegrationTests.swift in Sources */,
@@ -545,6 +552,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				296B053DAC2476A9C82A1570 /* AddWorktreeSheet.swift in Sources */,
+				93FAA0C0CD93FC076C934EB3 /* ClipboardImageHandler.swift in Sources */,
 				F42B900FB3E9710ABADC4D48 /* AppModel+Hook.swift in Sources */,
 				C32074958E57BD4DEAFFCCC1 /* AppModel+Monitor.swift in Sources */,
 				566296EC328127177468735C /* AppModel.swift in Sources */,

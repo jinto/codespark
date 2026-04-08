@@ -110,6 +110,17 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
 
         // Cmd+V: paste from system clipboard (keyCode 9 = V, IME-independent)
         if event.modifierFlags.contains(.command), event.keyCode == 9 {
+            // Image paste: save to temp file and paste the path
+            if ClipboardImageHandler.hasImage() {
+                if let path = ClipboardImageHandler.saveImageToTempFile() {
+                    let data = Array(path.utf8)
+                    data.withUnsafeBufferPointer { buf in
+                        ghostty_surface_text(surface, buf.baseAddress, UInt(buf.count))
+                    }
+                }
+                return
+            }
+            // Text paste
             if let str = NSPasteboard.general.string(forType: .string) {
                 let data = Array(str.utf8)
                 data.withUnsafeBufferPointer { buf in
