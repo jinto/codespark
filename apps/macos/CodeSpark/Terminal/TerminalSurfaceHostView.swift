@@ -12,10 +12,18 @@ struct TerminalSurfaceHostView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: GhosttyTerminalSurfaceView, context: Context) {
+        let wasHidden = nsView.isHidden
         nsView.isHidden = !isActive
-        if isActive, nsView.window?.firstResponder !== nsView {
-            DispatchQueue.main.async {
-                nsView.window?.makeFirstResponder(nsView)
+        if isActive {
+            // Force full re-render after unhide — prevents CJK glyph loss
+            if wasHidden, let surface = nsView.surface {
+                let scaled = nsView.convertToBacking(nsView.frame.size)
+                ghostty_surface_set_size(surface, UInt32(scaled.width), UInt32(scaled.height))
+            }
+            if nsView.window?.firstResponder !== nsView {
+                DispatchQueue.main.async {
+                    nsView.window?.makeFirstResponder(nsView)
+                }
             }
         }
     }
