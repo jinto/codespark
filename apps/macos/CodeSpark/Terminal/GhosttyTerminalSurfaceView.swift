@@ -354,7 +354,7 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         var key = ghostty_input_key_s()
         key.action = action
         key.mods = translateMods(event.modifierFlags)
-        key.consumed_mods = GHOSTTY_MODS_NONE
+        key.consumed_mods = translateMods(event.modifierFlags.subtracting([.control, .command]))
         key.keycode = UInt32(event.keyCode)
         key.text = nil
         key.composing = false
