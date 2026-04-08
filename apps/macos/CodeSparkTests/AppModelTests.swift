@@ -189,6 +189,31 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func test_create_project_opens_initial_terminal() async {
+        let client = MockProjectCoreClient(
+            summaries: [],
+            details: [
+                ProjectDetailViewData(
+                    id: "mock-project-id",
+                    name: "NewProj",
+                    path: "/tmp/newproj",
+                    transport: "local",
+                    liveSessions: []
+                )
+            ]
+        )
+        let model = AppModel(core: client, terminalFactory: { _ in MockTerminalHost() })
+
+        await model.load()
+        await model.createProject(name: "NewProj", path: "/tmp/newproj")
+
+        XCTAssertEqual(model.selectedProjectID, "mock-project-id")
+        XCTAssertNotNil(model.selectedProject, "selectedProject should be set after selectProject")
+        XCTAssertEqual(model.liveSessions.count, 1, "New project should auto-create one terminal session (liveSessions=\(model.liveSessions.count), selectedProject=\(model.selectedProject?.name ?? "nil"))")
+        XCTAssertNotNil(model.activeSessionID, "Active session should be set")
+    }
+
+    @MainActor
     func test_delete_project_removes_from_list() async {
         let client = MockProjectCoreClient(
             summaries: [

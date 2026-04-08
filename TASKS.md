@@ -69,6 +69,22 @@
 - [x] **worktree 관리 UI** — Add Worktree 시트 (.worktrees/<name>/) + Remove Worktree context menu
 - [ ] **내장 Diff 뷰어** — 프로젝트 내 코드 변경사항 검토 (git diff 시각화)
 
+## M12.1: Workspace-First Sidebar
+
+### Model Layer
+- [x] **groupSessions 항상 반환** — 단일 worktree에서도 workspace 반환 (guard 제거). 테스트: 단일 worktree 프로젝트에서 workspaces.count == 1
+- [x] **workspaceSelectedSessions 추가** — AppModel에 [workspacePath: sessionID] 딕셔너리 추가. 테스트: workspace 전환 시 각각 다른 selectedSession 유지
+- [x] **activeSessionID computed** — getter: workspaceSelectedSessions[activeWorkspacePath], setter: 역방향 저장. 테스트: 기존 ProjectFlowTests 전부 통과
+- [x] **세션 닫기 fallback** — selected session 닫히면 같은 workspace의 다른 세션 자동 선택. 테스트: 선택된 세션 닫기 → 같은 workspace의 남은 세션 선택됨
+
+### Sidebar Redesign
+- [x] **ProjectSidebarRow 그룹 스타일** — 확장/축소 가능한 그룹 헤더로 변경 (핫키 제거). 테스트: 빌드 + 렌더링 확인
+- [x] **WorkspaceSidebarRow 주인공** — active(●)/inactive(○) 상태, 브랜치명 강조. 테스트: 터미널 유무에 따른 상태 표시
+- [x] **핫키 overlay** — Cmd 홀드 시 active workspace에 z-index overlay로 ⌘1~⌘9 표시 (레이아웃 불변). 테스트: overlay 표시 전후 parent frame 동일
+
+### Hotkey Routing
+- [x] **Cmd+N workspace 전환** — CodeSparkApp의 Cmd+1~9를 active workspace 기반으로 변경. 테스트: Cmd+1 → 첫 번째 active workspace의 selected terminal 활성화
+
 ## M12.5: SSH 원격 세션 상태 파악
 
 - [ ] **SSH 소켓 포워딩** — CodeSpark 터미널에서 SSH 접속 시 Unix 소켓을 `-R` 옵션으로 원격에 자동 포워딩, 원격에 경량 codespark-hook 배포

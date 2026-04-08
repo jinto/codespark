@@ -140,9 +140,10 @@ struct CodeSparkApp: App {
 
                 Divider()
 
-                ForEach(Array(model.projects.prefix(9).enumerated()), id: \.element.id) { index, project in
-                    Button(project.name) {
-                        Task { await model.selectProject(id: project.id) }
+                // Cmd+1~9: switch to active workspaces (workspaces with terminals)
+                ForEach(Array(model.workspaces.filter { !$0.sessions.isEmpty }.prefix(9).enumerated()), id: \.element.id) { index, workspace in
+                    Button(workspace.branch) {
+                        model.activeWorkspacePath = workspace.path
                     }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
                 }

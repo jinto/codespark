@@ -61,6 +61,21 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - Hooks registered in `~/.claude/settings.json` with **absolute paths**
 - Uninstall available via Settings, app menu, or Option+launch reset
 
+## Testing
+
+**TDD**: 중요 기능은 반드시 실패하는 테스트를 먼저 작성한 후 구현한다 (red → green → refactor).
+
+테스트 수준:
+- **Unit tests**: 모델 로직, 서비스, 프로토콜 준수 (`ProjectFlowTests` 등)
+- **Integration tests**: 화면 캡처(`screencapture`)로 렌더링 검증, 키보드 이벤트 시뮬레이션(`CGEvent`)으로 입력 경로 검증
+
+```bash
+# Unit tests
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+  xcodebuild test -project apps/macos/CodeSpark.xcodeproj \
+  -scheme CodeSpark -destination 'platform=macOS'
+```
+
 ## Known Issues
 
 - SSH remote sessions cannot use codespark-hook (local Unix socket only)

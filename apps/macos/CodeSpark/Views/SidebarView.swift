@@ -92,35 +92,76 @@ struct SidebarView: View {
         }
     }
 
+    /// All active workspaces across projects, in sidebar order — for hotkey numbering.
+    private var activeWorkspaces: [WorkspaceViewData] {
+        guard model.selectedProjectID != nil else { return [] }
+        return model.workspaces.filter { !$0.sessions.isEmpty }
+    }
+
     @ViewBuilder
-    private func workspaceGroupedSessions(for project: ProjectSummaryViewData) -> some View {
-        ForEach(model.workspaces) { workspace in
-            WorkspaceSidebarRow(
-                workspace: workspace,
-                isExpanded: expandedWorkspacePaths.contains(workspace.path),
-                isActive: model.activeSessionID.map { id in
-                    workspace.sessions.contains { $0.id == id }
-                } ?? false
-            )
-            .contentShape(Rectangle())
-            .onTapGesture {
-                model.selectedWorkspacePath = workspace.path
-                toggleWorkspaceExpanded(workspace.path)
-            }
-            .contextMenu {
-                Button("New Terminal") {
-                    Task { await model.newSession(inWorkspacePath: workspace.path) }
+    private func workspaceRows(for project: ProjectSummaryViewData) -> some View {
+        let isSelected = model.selectedProjectID == project.id
+        if isSelected {
+            ForEach(model.workspaces) { workspace in
+                WorkspaceSidebarRow(
+                    workspace: workspace,
+                    isActive: !workspace.sessions.isEmpty,
+                    isFocused: model.activeWorkspacePath == workspace.path,
+                    hotkeyIndex: hotkeyIndex(for: workspace)
+                )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    model.activeWorkspacePath = workspace.path
+                    model.selectedWorkspacePath = workspace.path
+                    if !workspace.sessions.isEmpty {
+                        Task { await model.selectProject(id: project.id) }
+                    }
                 }
-                if !workspace.isMainWorktree {
-                    Divider()
-                    Button("Remove Worktree", role: .destructive) {
-                        pendingRemoveWorktreePath = workspace.path
-                        showRemoveWorktreeConfirmation = true
+                .contextMenu {
+                    Button("New Terminal") {
+                        Task { await model.newSession(inWorkspacePath: workspace.path) }
+                    }
+                    if !workspace.isMainWorktree {
+                        Divider()
+                        Button("Remove Worktree", role: .destructive) {
+                            pendingRemoveWorktreePath = workspace.path
+                            showRemoveWorktreeConfirmation = true
+                        }
                     }
                 }
             }
-
+        } else {
+            // Non-selected project: show single workspace with branch info
+            let branch = model.gitBranches[project.path] ?? "default"
+            let isActive = project.liveSessions > 0
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(isActive ? Color.green : Color.gray.opacity(0.4))
+                    .frame(width: 6, height: 6)
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                Text(branch)
+                    .font(.system(.caption, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Spacer()
+                if project.liveSessions > 0 {
+                    Text("\(project.liveSessions)")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .padding(.leading, 16)
         }
+    }
+
+    private func hotkeyIndex(for workspace: WorkspaceViewData) -> Int? {
+        guard showHotkeys, !workspace.sessions.isEmpty else { return nil }
+        guard let idx = activeWorkspaces.firstIndex(where: { $0.id == workspace.id }), idx < 9 else { return nil }
+        return idx + 1
     }
 
     private func toggleExpanded(_ id: String) {
@@ -172,16 +213,14 @@ struct SidebarView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(sortedProjects.enumerated()), id: \.element.id) { index, project in
+                LazyVStack(alignment: .leading, spacing: 2) {
+                    ForEach(sortedProjects) { project in
                         VStack(alignment: .leading, spacing: 0) {
                             ProjectSidebarRow(
                                 project: project,
                                 isSelected: model.selectedProjectID == project.id,
                                 isExpanded: expandedProjectIDs.contains(project.id),
-                                hotkeyIndex: index < 9 && showHotkeys ? index + 1 : nil,
                                 status: model.projectStatus(for: project),
-                                infoLine: projectInfoLine(for: project),
                                 snippet: model.hookSnippets[project.id]
                             )
                             .contentShape(Rectangle())
@@ -213,10 +252,7 @@ struct SidebarView: View {
                             }
 
                             if expandedProjectIDs.contains(project.id) {
-                                let isSelected = model.selectedProjectID == project.id
-                                if isSelected && model.workspaces.count > 1 {
-                                    workspaceGroupedSessions(for: project)
-                                }
+                                workspaceRows(for: project)
                             }
                         }
                     }
@@ -359,94 +395,58 @@ struct ProjectSidebarRow: View {
     let project: ProjectSummaryViewData
     let isSelected: Bool
     let isExpanded: Bool
-    let hotkeyIndex: Int?
     let status: ProjectStatus
-    let infoLine: String?
     var snippet: String? = nil
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(spacing: 6) {
             Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(size: 8, weight: .bold))
                 .foregroundStyle(isSelected ? .white.opacity(0.7) : .secondary)
                 .frame(width: 10)
-                .padding(.top, 5)
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(project.name)
-                        .font(.system(.body, weight: .semibold))
-                        .foregroundStyle(isSelected ? .white : .primary)
-                        .accessibilityIdentifier("projectName")
+            Text(project.name)
+                .font(.system(.caption, weight: .semibold))
+                .foregroundStyle(isSelected ? .white : .primary)
+                .lineLimit(1)
+                .accessibilityIdentifier("projectName")
 
-                    Spacer()
+            Spacer()
 
-                    if let hotkeyIndex {
-                        Text("\u{2318}\(hotkeyIndex)")
-                            .font(.system(size: 10, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.5))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 3))
-                    }
-                }
-
-                if status == .needsInput {
-                    Text(snippet ?? "Claude is waiting for your input")
-                        .font(.system(size: 10))
-                        .foregroundStyle(status.color.opacity(0.8))
-                        .lineLimit(2)
-                }
-
-                HStack(spacing: 6) {
-                    Image(systemName: status.icon)
-                        .font(.system(size: 7))
-                        .foregroundStyle(status.color)
-                    Text(status.label)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(status.color)
-                }
-
-                if let infoLine {
-                    Text(infoLine)
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(AppTheme.infoText)
-                        .lineLimit(1)
-                }
+            if status == .needsInput {
+                Circle()
+                    .fill(status.color)
+                    .frame(width: 6, height: 6)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? AppTheme.accentSubtle : AppTheme.sidebarItemBackground)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(isSelected ? AppTheme.accent.opacity(0.5) : .clear, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(isSelected ? AppTheme.accentSubtle.opacity(0.3) : .clear)
         )
     }
 }
 
 struct WorkspaceSidebarRow: View {
     let workspace: WorkspaceViewData
-    let isExpanded: Bool
     let isActive: Bool
+    var isFocused: Bool = false
+    var hotkeyIndex: Int? = nil
 
     var body: some View {
         HStack(spacing: 6) {
-            Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                .font(.system(size: 8, weight: .bold))
-                .foregroundStyle(.secondary)
-                .frame(width: 8)
+            Circle()
+                .fill(isActive ? Color.green : Color.gray.opacity(0.4))
+                .frame(width: 6, height: 6)
 
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 10))
-                .foregroundStyle(isActive ? AppTheme.accent : .secondary)
+                .foregroundStyle(isFocused ? AppTheme.accent : .secondary)
 
             Text(workspace.branch)
-                .font(.system(.caption, weight: isActive ? .semibold : .medium))
-                .foregroundStyle(isActive ? .white : .primary)
+                .font(.system(.caption, weight: isFocused ? .semibold : .medium))
+                .foregroundStyle(isFocused ? .white : .primary)
                 .lineLimit(1)
 
             Spacer()
@@ -458,12 +458,23 @@ struct WorkspaceSidebarRow: View {
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .padding(.leading, 12)
+        .padding(.vertical, 5)
+        .padding(.leading, 16)
         .background(
             RoundedRectangle(cornerRadius: 4)
-                .fill(isActive ? AppTheme.accentSubtle.opacity(0.5) : .clear)
+                .fill(isFocused ? AppTheme.accentSubtle.opacity(0.5) : .clear)
         )
+        .overlay(alignment: .trailing) {
+            if let hotkeyIndex {
+                Text("\u{2318}\(hotkeyIndex)")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(AppTheme.accent.opacity(0.85), in: RoundedRectangle(cornerRadius: 4))
+                    .padding(.trailing, 6)
+            }
+        }
     }
 }
 

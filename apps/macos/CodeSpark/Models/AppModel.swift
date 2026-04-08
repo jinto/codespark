@@ -8,7 +8,14 @@ final class AppModel: ObservableObject {
     @Published var projects: [ProjectSummaryViewData] = []
     @Published var selectedProjectID: String?
     @Published var selectedProject: ProjectDetailViewData?
-    @Published var activeSessionID: String?
+    @Published var activeSessionID: String? {
+        didSet {
+            // Sync per-workspace selection when activeSessionID changes
+            if let path = activeWorkspacePath, let id = activeSessionID {
+                workspaceSelectedSessions[path] = id
+            }
+        }
+    }
     @Published var liveSessions: [SessionViewData] = []
 
     /// All sessions across all projects — keeps Ghostty surfaces alive during project switches
@@ -26,6 +33,15 @@ final class AppModel: ObservableObject {
     @Published var claudeHooksStatus: ClaudeHooksStatus = .installed
     @Published var workspaces: [WorkspaceViewData] = []
     @Published var selectedWorkspacePath: String?
+    @Published var activeWorkspacePath: String? {
+        didSet {
+            // Restore per-workspace selected session when switching workspaces
+            if let path = activeWorkspacePath {
+                activeSessionID = workspaceSelectedSessions[path]
+            }
+        }
+    }
+    var workspaceSelectedSessions: [String: String] = [:]  // workspacePath → sessionID
     @Published var pendingSSHReconnectProjectID: String?
 
     var hookServer: HookSocketServer?
@@ -211,6 +227,7 @@ final class AppModel: ObservableObject {
                 projects.append(newProject)
             }
             await selectProject(id: newID)
+            await newSession()
         } catch {
             loadErrorMessage = error.localizedDescription
         }
@@ -386,7 +403,9 @@ final class AppModel: ObservableObject {
                 shell: shell,
                 cwd: workspacePath
             )
-            activeSessionID = sessionID
+            // Populate map first, then set workspace path (didSet restores activeSessionID from map)
+            workspaceSelectedSessions[workspacePath] = sessionID
+            activeWorkspacePath = workspacePath
             recomputeWorkspaces()
         } catch {
             loadErrorMessage = error.localizedDescription
@@ -528,10 +547,18 @@ extension AppModel: TerminalHostDelegate {
         closingSessionIDs.remove(sessionID)
 
         // Update current project's live sessions if applicable
-        if let index = liveSessions.firstIndex(where: { $0.id == sessionID }) {
-            liveSessions.remove(at: index)
+        if liveSessions.contains(where: { $0.id == sessionID }) {
+            // Find sibling sessions in the same workspace before removal
+            let siblingIDs: [String] = {
+                guard let ws = workspaces.first(where: { $0.sessions.contains(where: { $0.id == sessionID }) }) else {
+                    return liveSessions.filter { $0.id != sessionID }.map(\.id)
+                }
+                return ws.sessions.filter { $0.id != sessionID }.map(\.id)
+            }()
+
+            liveSessions.removeAll { $0.id == sessionID }
             if activeSessionID == sessionID {
-                activeSessionID = liveSessions.isEmpty ? nil : liveSessions[max(0, index - 1)].id
+                activeSessionID = siblingIDs.first
             }
             recomputeWorkspaces()
         }
