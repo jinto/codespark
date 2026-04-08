@@ -150,6 +150,13 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         ghostty_surface_key(surface, key)
     }
 
+    // Suppress system beep for unhandled selectors (Enter, Backspace, etc.)
+    // interpretKeyEvents sends doCommand(by:) for action keys; without this
+    // override the default NSView implementation plays the alert sound.
+    override func doCommand(by selector: Selector) {
+        // intentionally empty — key events already sent to Ghostty via keyDown
+    }
+
     override func flagsChanged(with event: NSEvent) {
         guard let surface else { return }
         if hasMarkedText() { return }
