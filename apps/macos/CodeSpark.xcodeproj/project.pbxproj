@@ -14,6 +14,7 @@
 		07F78497934AA2ABB909879A /* HookEventProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 813E0BA18FE27147BC9B017D /* HookEventProcessor.swift */; };
 		2CE4832E1EECF0838626509C /* KeyEventRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EBC0F80B881E43ADC44ABFA /* KeyEventRouter.swift */; };
 		9ED695B19FC93D927CBF1CBD /* KeyEventRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */; };
+		B4F28A6E1D93C7520EAF6D91 /* UIVerificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */; };
 		0F224C4752D7879585179923 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1981A49E44F4D3FD21B52B2F /* main.swift */; };
 		127138BC65ACF5F05A0DD540 /* TerminalSurfaceHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D401BB4E2423695AD5030BA7 /* TerminalSurfaceHostView.swift */; };
 		17F6D4887541BEBCDD9EBD85 /* TerminalFontSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */; };
@@ -106,6 +107,7 @@
 		48CA429791ED61F383243326 /* MockTerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTerminalHost.swift; sourceTree = "<group>"; };
 		5EBC0F80B881E43ADC44ABFA /* KeyEventRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyEventRouter.swift; sourceTree = "<group>"; };
 		9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyEventRouterTests.swift; sourceTree = "<group>"; };
+		7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIVerificationTests.swift; sourceTree = "<group>"; };
 		5130A58E2FC5881608127D41 /* AppModel+Hook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Hook.swift"; sourceTree = "<group>"; };
 		61B66760C324727703F07319 /* GhosttyRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyRuntime.swift; sourceTree = "<group>"; };
 		63111BBE479AA199E252A364 /* ProjectCoreClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCoreClient.swift; sourceTree = "<group>"; };
@@ -212,6 +214,7 @@
 				48CA429791ED61F383243326 /* MockTerminalHost.swift */,
 				8CA1F37A49DC57DD259D7C23 /* ProjectFlowTests.swift */,
 				1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */,
+				7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */,
 				1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */,
 			);
 			path = CodeSparkTests;
@@ -516,6 +519,7 @@
 				3389CBD887323FCBA7DD452F /* MockTerminalHost.swift in Sources */,
 				05775B2732E4FEE5DF603358 /* ProjectFlowTests.swift in Sources */,
 				C99241FBDBBE4B339BFDFFBC /* TerminalHostFactoryTests.swift in Sources */,
+				B4F28A6E1D93C7520EAF6D91 /* UIVerificationTests.swift in Sources */,
 				3D0FEFA3FAB6C31107E3A49C /* WorkspaceSelectionTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
