@@ -10,6 +10,8 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
     private let app: ghostty_app_t
     private let session: SessionViewData
 
+    var sshConnectionInfo: SSHConnectionInfo?
+
     init(app: ghostty_app_t, session: SessionViewData) {
         self.app = app
         self.session = session
@@ -17,11 +19,13 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
 
     func attach(sessionID: String, command: String? = nil) {
         lastOutputTime = Date()
-        surfaceView = GhosttyTerminalSurfaceView(
+        let sv = GhosttyTerminalSurfaceView(
             app: app,
             workingDirectory: session.lastCwd,
             command: command
         )
+        sv.sshConnectionInfo = sshConnectionInfo
+        surfaceView = sv
     }
 
     func markOutput() {

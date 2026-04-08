@@ -69,6 +69,40 @@ final class ClipboardImageHandlerTests: XCTestCase {
         XCTAssertNil(path)
     }
 
+    // MARK: - SCP arguments
+
+    func test_scpArguments_basic() {
+        let info = SSHConnectionInfo(host: "example.com", user: "alice")
+        let (args, remotePath) = ClipboardImageHandler.scpArguments(
+            localPath: "/tmp/clipboard-2026-04-08-120000-ABCD1234.png",
+            sshInfo: info
+        )
+        XCTAssertEqual(args, [
+            "/tmp/clipboard-2026-04-08-120000-ABCD1234.png",
+            "alice@example.com:/tmp/clipboard-2026-04-08-120000-ABCD1234.png"
+        ])
+        XCTAssertEqual(remotePath, "/tmp/clipboard-2026-04-08-120000-ABCD1234.png")
+    }
+
+    func test_scpArguments_with_port() {
+        let info = SSHConnectionInfo(host: "example.com", user: "bob", port: 2222)
+        let (args, remotePath) = ClipboardImageHandler.scpArguments(
+            localPath: "/var/folders/xx/T/clipboard-test.png",
+            sshInfo: info
+        )
+        XCTAssertEqual(args, ["-P", "2222", "/var/folders/xx/T/clipboard-test.png", "bob@example.com:/tmp/clipboard-test.png"])
+        XCTAssertEqual(remotePath, "/tmp/clipboard-test.png")
+    }
+
+    func test_scpArguments_no_user() {
+        let info = SSHConnectionInfo(host: "myserver.local")
+        let (args, _) = ClipboardImageHandler.scpArguments(
+            localPath: "/tmp/test.png",
+            sshInfo: info
+        )
+        XCTAssertEqual(args, ["/tmp/test.png", "myserver.local:/tmp/test.png"])
+    }
+
     func test_saveImageToTempFile_handles_tiff_clipboard() {
         let pb = NSPasteboard(name: .init("test_tiff"))
         pb.clearContents()

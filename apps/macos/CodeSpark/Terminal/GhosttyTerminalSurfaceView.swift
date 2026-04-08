@@ -9,6 +9,9 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
     private var markedText = NSMutableAttributedString()
     private var keyTextAccumulator: [String]?
 
+    /// Set when this surface belongs to an SSH session — enables remote image paste via scp.
+    var sshConnectionInfo: SSHConnectionInfo?
+
     init(app: ghostty_app_t, workingDirectory: String?, command: String?) {
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         autoresizingMask = [.width, .height]
@@ -112,10 +115,22 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         if event.modifierFlags.contains(.command), event.keyCode == 9 {
             // Image paste: save to temp file and paste the path
             if ClipboardImageHandler.hasImage() {
-                if let path = ClipboardImageHandler.saveImageToTempFile() {
-                    let data = Array(path.utf8)
-                    data.withUnsafeBufferPointer { buf in
-                        ghostty_surface_text(surface, buf.baseAddress, UInt(buf.count))
+                if let localPath = ClipboardImageHandler.saveImageToTempFile() {
+                    if let sshInfo = sshConnectionInfo {
+                        // SSH: transfer to remote, then paste remote path
+                        ClipboardImageHandler.scpToRemote(localPath: localPath, sshInfo: sshInfo) { [weak self] remotePath in
+                            guard let remotePath, let surface = self?.surface else { return }
+                            let data = Array(remotePath.utf8)
+                            data.withUnsafeBufferPointer { buf in
+                                ghostty_surface_text(surface, buf.baseAddress, UInt(buf.count))
+                            }
+                        }
+                    } else {
+                        // Local: paste local path directly
+                        let data = Array(localPath.utf8)
+                        data.withUnsafeBufferPointer { buf in
+                            ghostty_surface_text(surface, buf.baseAddress, UInt(buf.count))
+                        }
                     }
                 }
                 return

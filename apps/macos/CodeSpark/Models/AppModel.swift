@@ -326,7 +326,8 @@ final class AppModel: ObservableObject {
         title: String,
         shell: String,
         cwd: String?,
-        command: String? = nil
+        command: String? = nil,
+        sshInfo: SSHConnectionInfo? = nil
     ) async throws -> String {
         let sessionID = try await core.startSession(
             projectId: projectID,
@@ -344,6 +345,11 @@ final class AppModel: ObservableObject {
         )
         var host = terminalFactory(session)
         host.delegate = self
+        #if GHOSTTY_FIRST
+        if let sshInfo, let ghosttyHost = host as? GhosttyTerminalHost {
+            ghosttyHost.sshConnectionInfo = sshInfo
+        }
+        #endif
         host.attach(sessionID: sessionID, command: command)
         hosts[sessionID] = host
         liveSessions.append(session)
@@ -386,7 +392,8 @@ final class AppModel: ObservableObject {
                     title: info.displayLabel,
                     shell: shell,
                     cwd: nil,
-                    command: info.sshCommand
+                    command: info.sshCommand,
+                    sshInfo: info
                 )
                 activeSessionID = sessionID
                 pendingSSHReconnectProjectID = nil
