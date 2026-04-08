@@ -86,6 +86,35 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(model.activeSessionID, sessionID)
     }
 
+    // MARK: - Task 3b: workspace click fallback when no saved mapping
+
+    @MainActor
+    func test_switching_workspace_falls_back_to_first_session_when_no_mapping() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "Proj", path: "/tmp/proj", transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "Proj", path: "/tmp/proj", transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+
+        await model.newSession()
+        let sessionID = model.liveSessions[0].id
+        let wsPath = model.workspaces.first?.path ?? ""
+
+        // Clear the saved mapping — simulates session restore without mapping
+        model.workspaceSelectedSessions.removeAll()
+        model.activeSessionID = nil
+
+        // Click workspace — should fallback to first session
+        model.activeWorkspacePath = wsPath
+        XCTAssertEqual(model.activeSessionID, sessionID, "Should fallback to first session in workspace")
+        XCTAssertEqual(model.workspaceSelectedSessions[wsPath], sessionID, "Should save mapping for future")
+    }
+
     // MARK: - Task 4: session close fallback
 
     @MainActor

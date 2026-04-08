@@ -37,7 +37,14 @@ final class AppModel: ObservableObject {
         didSet {
             // Restore per-workspace selected session when switching workspaces
             if let path = activeWorkspacePath {
-                activeSessionID = workspaceSelectedSessions[path]
+                if let savedID = workspaceSelectedSessions[path],
+                   liveSessions.contains(where: { $0.id == savedID }) {
+                    activeSessionID = savedID
+                } else if let ws = workspaces.first(where: { $0.path == path }),
+                          let first = ws.sessions.first {
+                    activeSessionID = first.id
+                    workspaceSelectedSessions[path] = first.id
+                }
             }
         }
     }

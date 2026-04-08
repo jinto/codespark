@@ -462,10 +462,12 @@ struct WorkspaceSidebarRow: View {
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 10))
                 .foregroundStyle(isFocused ? AppTheme.accent : .secondary)
+                .opacity(isActive || isFocused ? 1 : 0.45)
 
             Text(workspace.branch)
                 .font(.system(.caption, weight: isFocused ? .semibold : .medium))
                 .foregroundStyle(isFocused ? .white : .primary)
+                .opacity(isActive || isFocused ? 1 : 0.45)
                 .lineLimit(1)
 
             Spacer()
