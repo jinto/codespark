@@ -13,6 +13,7 @@ struct SidebarView: View {
     @State private var showHotkeys = false
     @State private var hotkeyMonitor: Any?
     @State private var expandedWorkspacePaths: Set<String> = []
+    @State private var showInactiveWorkspaces = false
     @State private var showAddWorktreeSheet = false
     @State private var addWorktreeBranch = ""
     @State private var addWorktreeProjectPath = ""
@@ -102,10 +103,13 @@ struct SidebarView: View {
     private func workspaceRows(for project: ProjectSummaryViewData) -> some View {
         let isSelected = model.selectedProjectID == project.id
         if isSelected {
-            ForEach(model.workspaces) { workspace in
+            let active = model.workspaces.filter { !$0.sessions.isEmpty }
+            let inactive = model.workspaces.filter { $0.sessions.isEmpty }
+
+            ForEach(active) { workspace in
                 WorkspaceSidebarRow(
                     workspace: workspace,
-                    isActive: !workspace.sessions.isEmpty,
+                    isActive: true,
                     isFocused: model.activeWorkspacePath == workspace.path,
                     hotkeyIndex: hotkeyIndex(for: workspace)
                 )
@@ -113,9 +117,6 @@ struct SidebarView: View {
                 .onTapGesture {
                     model.activeWorkspacePath = workspace.path
                     model.selectedWorkspacePath = workspace.path
-                    if !workspace.sessions.isEmpty {
-                        Task { await model.selectProject(id: project.id) }
-                    }
                 }
                 .contextMenu {
                     Button("New Terminal") {
@@ -130,8 +131,27 @@ struct SidebarView: View {
                     }
                 }
             }
+
+            if !inactive.isEmpty {
+                InactiveWorkspaceSummaryRow(
+                    count: inactive.count,
+                    workspaces: inactive,
+                    isExpanded: showInactiveWorkspaces,
+                    onToggle: { showInactiveWorkspaces.toggle() },
+                    onSelect: { ws in
+                        model.activeWorkspacePath = ws.path
+                        model.selectedWorkspacePath = ws.path
+                    },
+                    onNewTerminal: { ws in
+                        Task { await model.newSession(inWorkspacePath: ws.path) }
+                    },
+                    onRemoveWorktree: { ws in
+                        pendingRemoveWorktreePath = ws.path
+                        showRemoveWorktreeConfirmation = true
+                    }
+                )
+            }
         } else {
-            // Non-selected project: show single workspace with branch info
             let branch = model.gitBranches[project.path] ?? "default"
             let isActive = project.liveSessions > 0
             HStack(spacing: 6) {
@@ -473,6 +493,54 @@ struct WorkspaceSidebarRow: View {
                     .padding(.vertical, 2)
                     .background(AppTheme.accent.opacity(0.85), in: RoundedRectangle(cornerRadius: 4))
                     .padding(.trailing, 6)
+            }
+        }
+    }
+}
+
+struct InactiveWorkspaceSummaryRow: View {
+    let count: Int
+    let workspaces: [WorkspaceViewData]
+    let isExpanded: Bool
+    let onToggle: () -> Void
+    let onSelect: (WorkspaceViewData) -> Void
+    let onNewTerminal: (WorkspaceViewData) -> Void
+    let onRemoveWorktree: (WorkspaceViewData) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 7, weight: .bold))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 10)
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 5, height: 5)
+                Text("\(count) inactive")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                Spacer()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .padding(.leading, 16)
+            .contentShape(Rectangle())
+            .onTapGesture { onToggle() }
+
+            if isExpanded {
+                ForEach(workspaces) { workspace in
+                    WorkspaceSidebarRow(workspace: workspace, isActive: false)
+                        .contentShape(Rectangle())
+                        .onTapGesture { onSelect(workspace) }
+                        .contextMenu {
+                            Button("New Terminal") { onNewTerminal(workspace) }
+                            if !workspace.isMainWorktree {
+                                Divider()
+                                Button("Remove Worktree", role: .destructive) { onRemoveWorktree(workspace) }
+                            }
+                        }
+                }
             }
         }
     }

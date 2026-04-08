@@ -89,12 +89,19 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown, surface != nil else { return false }
-        if hasMarkedText() { return false }
-        if event.modifierFlags.contains(.control) {
+        switch routeKeyEquivalent(
+            modifiers: event.modifierFlags,
+            hasMarkedText: hasMarkedText(),
+            charactersIgnoringModifiers: event.charactersIgnoringModifiers
+        ) {
+        case .forwardToKeyDown:
             keyDown(with: event)
             return true
+        case .letSystemHandle:
+            return false
+        case .delegateToSuper:
+            return super.performKeyEquivalent(with: event)
         }
-        return super.performKeyEquivalent(with: event)
     }
 
     override func keyDown(with event: NSEvent) {
