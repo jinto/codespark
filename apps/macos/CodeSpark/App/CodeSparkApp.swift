@@ -78,6 +78,11 @@ struct CodeSparkApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
 
+                Button("New SSH Project...") {
+                    model.showNewSSHSheet = true
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+
                 Divider()
 
                 Button("New Session") {
@@ -165,8 +170,17 @@ struct CodeSparkApp: App {
         Button { withAnimation { isSidebarVisible.toggle() } } label: {
             Image(systemName: "sidebar.left")
         }
-        Button { Task { await model.createProjectFromFolder() } } label: {
+        Menu {
+            Button("Local Project...") {
+                Task { await model.createProjectFromFolder() }
+            }
+            Button("SSH Project...") {
+                model.showNewSSHSheet = true
+            }
+        } label: {
             Image(systemName: "plus")
+        } primaryAction: {
+            Task { await model.createProjectFromFolder() }
         }
     }
 

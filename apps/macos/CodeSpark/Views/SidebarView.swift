@@ -19,7 +19,6 @@ struct SidebarView: View {
     @State private var addWorktreeProjectPath = ""
     @State private var pendingRemoveWorktreePath: String?
     @State private var showRemoveWorktreeConfirmation = false
-    @State private var showNewSSHSheet = false
     @State private var sshHost = ""
     @State private var sshUser = ""
     @State private var sshPort = ""
@@ -226,7 +225,7 @@ struct SidebarView: View {
                         .controlSize(.small)
                         Button("SSH Project...") {
                             sshHost = ""; sshUser = ""; sshPort = ""; sshRemotePath = ""
-                            showNewSSHSheet = true
+                            model.showNewSSHSheet = true
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -383,7 +382,7 @@ struct SidebarView: View {
                 Text("This will close \(count) terminal\(count == 1 ? "" : "s") and remove the worktree directory.")
             }
         }
-        .sheet(isPresented: $showNewSSHSheet) {
+        .sheet(isPresented: $model.showNewSSHSheet) {
             NewSSHProjectSheet(
                 host: $sshHost,
                 user: $sshUser,
@@ -396,7 +395,7 @@ struct SidebarView: View {
                         port: Int(sshPort),
                         remotePath: sshRemotePath.isEmpty ? nil : sshRemotePath
                     )
-                    showNewSSHSheet = false
+                    model.showNewSSHSheet = false
                     Task {
                         await model.createProject(
                             name: info.displayLabel,
@@ -405,7 +404,7 @@ struct SidebarView: View {
                         )
                     }
                 },
-                onCancel: { showNewSSHSheet = false }
+                onCancel: { model.showNewSSHSheet = false }
             )
         }
     }

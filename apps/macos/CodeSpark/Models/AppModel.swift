@@ -43,6 +43,7 @@ final class AppModel: ObservableObject {
     }
     var workspaceSelectedSessions: [String: String] = [:]  // workspacePath → sessionID
     @Published var pendingSSHReconnectProjectID: String?
+    @Published var showNewSSHSheet = false
 
     var hookServer: HookSocketServer?
 
