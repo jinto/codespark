@@ -109,4 +109,54 @@ final class UIVerificationTests: XCTestCase {
         }
         XCTAssertEqual(result, "YES")
     }
+
+    // MARK: - Keyboard input
+
+    func test_shift_produces_uppercase_and_special_chars() throws {
+        guard ProcessInfo.processInfo.environment["UI_VERIFICATION"] == "1" else {
+            throw XCTSkip("Set UI_VERIFICATION=1 to run")
+        }
+
+        // Create a test script that reads 4 chars and writes to file
+        let scriptPath = "/tmp/cs_shift_test.sh"
+        let resultPath = "/tmp/cs_shift_result.txt"
+        try "#!/bin/bash\nread -n4 chars\necho \"$chars\" > \(resultPath)".write(
+            toFile: scriptPath, atomically: true, encoding: .utf8)
+        FileManager.default.createFile(atPath: scriptPath, contents: nil)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o755], ofItemAtPath: scriptPath)
+        try? FileManager.default.removeItem(atPath: resultPath)
+
+        // Run script in terminal, then type Shift chars: A B ? !
+        let _ = try runOsascript("""
+        tell application "System Events"
+            tell process "CodeSpark"
+                set frontmost to true
+                delay 0.5
+                keystroke "\(scriptPath)"
+                delay 0.1
+                key code 36
+                delay 1
+                keystroke "A"
+                delay 0.2
+                keystroke "B"
+                delay 0.2
+                keystroke "?"
+                delay 0.2
+                keystroke "!"
+                delay 2
+                return "done"
+            end tell
+        end tell
+        """)
+
+        // Verify output
+        guard FileManager.default.fileExists(atPath: resultPath) else {
+            XCTFail("Shift test: result file not created — terminal may not have executed script")
+            return
+        }
+        let content = try String(contentsOfFile: resultPath, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertEqual(content, "AB?!", "Shift+A→A, Shift+B→B, Shift+/→?, Shift+1→! — got '\(content)'")
+    }
 }
