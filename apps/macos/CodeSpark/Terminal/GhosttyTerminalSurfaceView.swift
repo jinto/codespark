@@ -92,7 +92,8 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         switch routeKeyEquivalent(
             modifiers: event.modifierFlags,
             hasMarkedText: hasMarkedText(),
-            charactersIgnoringModifiers: event.charactersIgnoringModifiers
+            charactersIgnoringModifiers: event.charactersIgnoringModifiers,
+            keyCode: event.keyCode
         ) {
         case .forwardToKeyDown:
             keyDown(with: event)
@@ -107,8 +108,8 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
     override func keyDown(with event: NSEvent) {
         guard let surface else { return }
 
-        // Cmd+V: paste from system clipboard
-        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "v" {
+        // Cmd+V: paste from system clipboard (keyCode 9 = V, IME-independent)
+        if event.modifierFlags.contains(.command), event.keyCode == 9 {
             if let str = NSPasteboard.general.string(forType: .string) {
                 let data = Array(str.utf8)
                 data.withUnsafeBufferPointer { buf in
