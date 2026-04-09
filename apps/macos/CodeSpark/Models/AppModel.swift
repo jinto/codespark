@@ -185,6 +185,7 @@ final class AppModel: ObservableObject {
         liveSessions = detail.liveSessions
         activeSessionID = liveSessions.first?.id
         selectedWorkspacePath = nil
+        activeWorkspacePath = detail.path
         recomputeWorkspaces()
     }
 
@@ -374,13 +375,6 @@ final class AppModel: ObservableObject {
         let workspacePath: String
         if let explicit = inWorkspacePath {
             workspacePath = explicit
-        } else if let selected = selectedWorkspacePath {
-            workspacePath = selected
-        } else if let activeID = activeSessionID,
-                  let activeSession = liveSessions.first(where: { $0.id == activeID }),
-                  let activeCwd = activeSession.lastCwd,
-                  let matchedWS = workspaces.first(where: { activeCwd == $0.path || activeCwd.hasPrefix($0.path + "/") }) {
-            workspacePath = matchedWS.path
         } else {
             workspacePath = project.path.isEmpty
                 ? FileManager.default.homeDirectoryForCurrentUser.path

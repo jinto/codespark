@@ -85,6 +85,33 @@
 ### Hotkey Routing
 - [x] **Cmd+N workspace 전환** — CodeSparkApp의 Cmd+1~9를 active workspace 기반으로 변경. 테스트: Cmd+1 → 첫 번째 active workspace의 selected terminal 활성화
 
+## M16: Sidebar Flatten — Project-Only List ← 현재
+
+### Task 1: AppModel — force activeWorkspacePath on project select
+- [x] 테스트: `selectProject` 후 `activeWorkspacePath == project.path` 검증
+- [x] 구현: `apply(detail:)`에서 `activeWorkspacePath = detail.path` 강제
+- [x] `newSession()`에서 workspace path 해석 단순화 — 항상 `project.path` 사용
+- [x] 테스트 통과 확인 + 커밋
+
+### Task 2: CodeSparkApp — Cmd+1~9 project switch
+- [x] Cmd+1~9를 `model.projects.prefix(9)` 기반 프로젝트 전환으로 변경
+- [x] `.navigationSubtitle` (workspace branch) 제거
+- [x] 빌드 확인 + 커밋
+
+### Task 3: SidebarView — flatten to project-only
+- [x] 워크스페이스 관련 state 변수 제거 (`expandedWorkspacePaths`, `showInactiveWorkspaces`, `showAddWorktreeSheet`, `addWorktreeBranch`, `addWorktreeProjectPath`, `pendingRemoveWorktreePath`, `showRemoveWorktreeConfirmation`)
+- [x] `workspaceRows(for:)` 호출 제거 — 프로젝트 행만 표시
+- [x] 프로젝트 컨텍스트 메뉴에서 "Add Worktree..." 제거
+- [x] 프로젝트에 ⌘1~9 hotkey overlay 추가
+- [x] `WorkspaceSidebarRow`, `InactiveWorkspaceSummaryRow` struct 삭제
+- [x] 워크트리 sheet/confirmation dialog 제거
+- [x] 빌드 + 유닛 테스트 통과 + 커밋
+
+### Task 4: 통합 검증
+- [x] 앱 빌드 + 전체 테스트 통과
+- [x] accessibility API로 사이드바에 workspace 행 없음 확인
+- [x] 커밋
+
 ## M12.5: SSH 원격 세션 상태 파악
 
 - [ ] **SSH 소켓 포워딩** — CodeSpark 터미널에서 SSH 접속 시 Unix 소켓을 `-R` 옵션으로 원격에 자동 포워딩, 원격에 경량 codespark-hook 배포

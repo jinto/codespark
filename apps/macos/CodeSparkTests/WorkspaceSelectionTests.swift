@@ -148,47 +148,15 @@ final class WorkspaceSelectionTests: XCTestCase {
 
     // MARK: - Hotkey overlay logic
 
-    func test_active_workspaces_filters_sessions() {
-        let ws1 = WorkspaceViewData(
-            path: "/tmp/proj", branch: "main", isMainWorktree: true,
-            sessions: [SessionSummary(id: "s1", title: "T", targetLabel: "local", lastCwd: "/tmp/proj")]
+    func test_project_sidebar_row_shows_hotkey_when_set() {
+        let project = ProjectSummaryViewData(
+            id: "p1", name: "Proj", path: "/tmp/proj", transport: "local",
+            liveSessions: 1, recentlyClosedSessions: 0,
+            hasInterruptedSessions: false, liveSessionDetails: []
         )
-        let ws2 = WorkspaceViewData(
-            path: "/tmp/feat", branch: "feature", isMainWorktree: false,
-            sessions: []  // inactive — no sessions
-        )
-        let ws3 = WorkspaceViewData(
-            path: "/tmp/dev", branch: "develop", isMainWorktree: false,
-            sessions: [SessionSummary(id: "s2", title: "T", targetLabel: "local", lastCwd: "/tmp/dev")]
-        )
-
-        let allWorkspaces = [ws1, ws2, ws3]
-        let active = allWorkspaces.filter { !$0.sessions.isEmpty }
-
-        // Only workspaces with sessions are active
-        XCTAssertEqual(active.count, 2)
-        XCTAssertEqual(active[0].branch, "main")
-        XCTAssertEqual(active[1].branch, "develop")
-
-        // Hotkey index assignment: active workspaces get 1-based index
-        let idx0 = active.firstIndex(where: { $0.id == ws1.id }).map { $0 + 1 }
-        let idx1 = active.firstIndex(where: { $0.id == ws2.id }).map { $0 + 1 }
-        let idx2 = active.firstIndex(where: { $0.id == ws3.id }).map { $0 + 1 }
-
-        XCTAssertEqual(idx0, 1)   // main gets ⌘1
-        XCTAssertNil(idx1)        // inactive — no hotkey
-        XCTAssertEqual(idx2, 2)   // develop gets ⌘2
-    }
-
-    func test_workspace_sidebar_row_shows_hotkey_when_set() {
-        // Verify WorkspaceSidebarRow accepts hotkeyIndex parameter
-        let ws = WorkspaceViewData(
-            path: "/tmp/proj", branch: "main", isMainWorktree: true,
-            sessions: [SessionSummary(id: "s1", title: "T", targetLabel: "local", lastCwd: "/tmp/proj")]
-        )
-        // This compiles = hotkeyIndex parameter exists on WorkspaceSidebarRow
-        let _ = WorkspaceSidebarRow(workspace: ws, isActive: true, isFocused: true, hotkeyIndex: 1)
-        let _ = WorkspaceSidebarRow(workspace: ws, isActive: true, isFocused: false, hotkeyIndex: nil)
+        // This compiles = hotkeyIndex parameter exists on ProjectSidebarRow
+        let _ = ProjectSidebarRow(project: project, isSelected: true, status: .running, hotkeyIndex: 1)
+        let _ = ProjectSidebarRow(project: project, isSelected: false, status: .idle, hotkeyIndex: nil)
         // No crash = test passes
     }
 

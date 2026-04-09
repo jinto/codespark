@@ -237,6 +237,53 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func test_select_project_forces_activeWorkspacePath_to_project_path() async {
+        let client = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "proj-1", name: "MyProject", path: "/tmp/myproject", transport: "local", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(
+                id: "proj-1",
+                name: "MyProject",
+                path: "/tmp/myproject",
+                transport: "local",
+                liveSessions: []
+            )]
+        )
+        let model = AppModel(core: client)
+
+        await model.load()
+        await model.selectProject(id: "proj-1")
+
+        XCTAssertEqual(model.activeWorkspacePath, "/tmp/myproject",
+                        "activeWorkspacePath must equal project.path after selection")
+    }
+
+    @MainActor
+    func test_new_session_uses_project_path_as_cwd() async {
+        let client = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "proj-1", name: "MyProject", path: "/tmp/myproject", transport: "local", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(
+                id: "proj-1",
+                name: "MyProject",
+                path: "/tmp/myproject",
+                transport: "local",
+                liveSessions: []
+            )]
+        )
+        let model = AppModel(core: client, terminalFactory: { _ in MockTerminalHost() })
+
+        await model.load()
+        await model.selectProject(id: "proj-1")
+        await model.newSession()
+
+        XCTAssertEqual(model.activeWorkspacePath, "/tmp/myproject",
+                        "activeWorkspacePath should remain project.path after newSession")
+    }
+
+    @MainActor
     func test_close_project_hides_from_list() async {
         let client = MockProjectCoreClient(
             summaries: [

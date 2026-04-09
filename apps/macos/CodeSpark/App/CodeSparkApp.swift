@@ -46,7 +46,7 @@ struct CodeSparkApp: App {
                             withAnimation { isSidebarVisible.toggle() }
                         })
                         .navigationTitle("\u{1F4C2} " + (model.selectedProject?.name ?? ""))
-                        .navigationSubtitle(model.workspaces.first(where: { $0.path == model.selectedWorkspacePath })?.branch ?? "")
+                        .navigationSubtitle(model.gitBranches[model.selectedProject?.path ?? ""] ?? "")
                     }
                     .task {
                         await initializeAndLoad()
@@ -145,10 +145,10 @@ struct CodeSparkApp: App {
 
                 Divider()
 
-                // Cmd+1~9: switch to active workspaces (workspaces with terminals)
-                ForEach(Array(model.workspaces.filter { !$0.sessions.isEmpty }.prefix(9).enumerated()), id: \.element.id) { index, workspace in
-                    Button(workspace.branch) {
-                        model.activeWorkspacePath = workspace.path
+                // Cmd+1~9: switch projects
+                ForEach(Array(model.projects.prefix(9).enumerated()), id: \.element.id) { index, project in
+                    Button(project.name) {
+                        Task { await model.selectProject(id: project.id) }
                     }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
                 }
