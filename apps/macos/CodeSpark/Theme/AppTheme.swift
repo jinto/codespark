@@ -12,7 +12,7 @@ enum AppTheme {
     static let accent = Color(nsColor: .init(red: 0.35, green: 0.55, blue: 0.85, alpha: 1))
     static let accentSubtle = Color(nsColor: .init(red: 0.15, green: 0.25, blue: 0.45, alpha: 0.50))
     static let statusRunning = Color(nsColor: .init(red: 0.25, green: 0.85, blue: 0.45, alpha: 1))
-    static let statusIdle = Color.white.opacity(0.35)
+    static let statusIdle = Color(nsColor: .init(red: 0.45, green: 0.45, blue: 0.50, alpha: 1))
     static let statusNeedsInput = Color(nsColor: .init(red: 1.0, green: 0.60, blue: 0.15, alpha: 1))
     static let infoText = Color.white.opacity(0.50)
     static let sidebarItemBackground = Color.white.opacity(0.04)

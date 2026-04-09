@@ -155,7 +155,7 @@ final class WorkspaceSelectionTests: XCTestCase {
             hasInterruptedSessions: false, liveSessionDetails: []
         )
         // This compiles = hotkeyIndex parameter exists on ProjectSidebarRow
-        let _ = ProjectSidebarRow(project: project, isSelected: true, status: .running, hotkeyIndex: 1)
+        let _ = ProjectSidebarRow(project: project, isSelected: true, status: .running, infoLine: "main • ~/proj", hotkeyIndex: 1)
         let _ = ProjectSidebarRow(project: project, isSelected: false, status: .idle, hotkeyIndex: nil)
         // No crash = test passes
     }

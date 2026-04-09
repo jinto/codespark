@@ -112,13 +112,14 @@ struct SidebarView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                LazyVStack(alignment: .leading, spacing: 2) {
+                LazyVStack(alignment: .leading, spacing: 3) {
                     ForEach(sortedProjects) { project in
                         ProjectSidebarRow(
                             project: project,
                             isSelected: model.selectedProjectID == project.id,
                             status: model.projectStatus(for: project),
                             snippet: model.hookSnippets[project.id],
+                            infoLine: projectInfoLine(for: project),
                             hotkeyIndex: hotkeyIndex(for: project)
                         )
                         .contentShape(Rectangle())
@@ -239,29 +240,60 @@ struct ProjectSidebarRow: View {
     let isSelected: Bool
     let status: ProjectStatus
     var snippet: String? = nil
+    var infoLine: String? = nil
     var hotkeyIndex: Int? = nil
 
+    private var displayInfoLine: String? {
+        if status == .needsInput, let snippet, !snippet.isEmpty {
+            return snippet
+        }
+        return infoLine
+    }
+
     var body: some View {
-        HStack(spacing: 6) {
-            Text(project.name)
-                .font(.system(.caption, weight: .semibold))
-                .foregroundStyle(isSelected ? .white : .primary)
-                .lineLimit(1)
-                .accessibilityIdentifier("projectName")
-
-            Spacer()
-
-            if status == .needsInput {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 5) {
                 Circle()
                     .fill(status.color)
-                    .frame(width: 6, height: 6)
+                    .frame(width: 7, height: 7)
+
+                Text(project.name)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(isSelected ? .white : .primary)
+                    .lineLimit(1)
+                    .accessibilityIdentifier("projectName")
+
+                Spacer()
+
+                if project.liveSessions > 0 {
+                    Text("\(project.liveSessions)")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.white.opacity(0.10), in: Capsule())
+                        .layoutPriority(-1)
+                }
+            }
+
+            if let info = displayInfoLine {
+                Text(info)
+                    .font(.system(size: 10))
+                    .foregroundStyle(
+                        status == .needsInput
+                            ? status.color
+                            : (isSelected ? .white.opacity(0.6) : .white.opacity(0.4))
+                    )
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.leading, 12)
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.vertical, 7)
         .background(
-            RoundedRectangle(cornerRadius: 4)
-                .fill(isSelected ? AppTheme.accentSubtle.opacity(0.3) : .clear)
+            RoundedRectangle(cornerRadius: 5)
+                .fill(isSelected ? AppTheme.accent.opacity(0.3) : Color.white.opacity(0.04))
         )
         .overlay(alignment: .trailing) {
             if let hotkeyIndex {
