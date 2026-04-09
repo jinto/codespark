@@ -54,9 +54,9 @@ struct SidebarView: View {
             }
             return project.path
         }
-        guard let cwd = project.liveSessionDetails.first?.lastCwd else { return nil }
-        let path = abbreviatePath(cwd)
-        if let branch = model.gitBranches[cwd] {
+        guard !project.path.isEmpty else { return nil }
+        let path = abbreviatePath(project.path)
+        if let branch = model.gitBranches[project.path] {
             return "\(branch) \u{2022} \(path)"
         }
         return path

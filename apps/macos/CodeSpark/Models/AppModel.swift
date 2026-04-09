@@ -513,8 +513,6 @@ final class AppModel: ObservableObject {
     #endif
 
     func projectStatus(for project: ProjectSummaryViewData) -> ProjectStatus {
-        if project.hasInterruptedSessions { return .needsInput }
-
         // Hook-based: any live session whose cwd is waiting for input
         let hookNeedsInput = project.liveSessionDetails.contains { session in
             session.lastCwd.map { hookNeedsInputCwds.contains($0) } ?? false
@@ -522,6 +520,7 @@ final class AppModel: ObservableObject {
         if hookNeedsInput { return .needsInput }
 
         if project.liveSessions > 0 {
+            if project.hasInterruptedSessions { return .needsInput }
             let sessionIDs = Set(project.liveSessionDetails.map(\.id))
             let allIdle = !sessionIDs.isEmpty && sessionIDs.isSubset(of: idleSessionIDs)
             return allIdle ? .idle : .running
