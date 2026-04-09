@@ -110,6 +110,79 @@ final class UIVerificationTests: XCTestCase {
         XCTAssertEqual(result, "YES")
     }
 
+    // MARK: - Sidebar status dot colors
+
+    func test_sidebar_dot_is_not_orange_when_idle() throws {
+        // Capture screenshot and verify the status dot is gray (idle), not orange (needsInput)
+        let screenshotPath = "/tmp/cs_sidebar_dot_test.png"
+        try? FileManager.default.removeItem(atPath: screenshotPath)
+
+        // Activate app and capture
+        let _ = try runOsascript("""
+        tell application "CodeSpark" to activate
+        delay 1
+        """)
+
+        let captureProcess = Process()
+        captureProcess.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        captureProcess.arguments = ["-x", screenshotPath]
+        try captureProcess.run()
+        captureProcess.waitUntilExit()
+
+        guard captureProcess.terminationStatus == 0,
+              FileManager.default.fileExists(atPath: screenshotPath) else {
+            throw XCTSkip("screencapture failed — likely no display access (SSH environment)")
+        }
+
+        // Get window position to find sidebar dot area
+        let posResult = try runOsascript("""
+        tell application "System Events"
+            tell process "CodeSpark"
+                set {x, y} to position of window 1
+                set {w, h} to size of window 1
+                return (x as text) & "," & (y as text) & "," & (w as text) & "," & (h as text)
+            end tell
+        end tell
+        """)
+        let parts = posResult.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+        guard parts.count == 4 else {
+            throw XCTSkip("Could not get window position")
+        }
+
+        // Use Python to analyze pixel colors in the dot area
+        // Dot is 7px at ~(winX+16, winY+55) in retina 2x
+        let dotX = parts[0] * 2 + 32  // retina 2x, offset into sidebar
+        let dotY = parts[1] * 2 + 110 // first project row dot area
+        let script = """
+        from PIL import Image
+        img = Image.open('\(screenshotPath)')
+        o, g, gr = 0, 0, 0
+        for dy in range(-3, 4):
+            for dx in range(-3, 4):
+                r, gv, b = img.getpixel((\(dotX)+dx, \(dotY)+dy))[:3]
+                if r > 200 and gv > 100 and gv < 180 and b < 80: o += 1
+                elif r < 80 and gv > 150: g += 1
+                elif abs(r-gv) < 20 and abs(r-b) < 20 and 80 < r < 180: gr += 1
+        print(f'orange={o},gray={gr},green={g}')
+        """
+        let pyProcess = Process()
+        pyProcess.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        pyProcess.arguments = ["-c", script]
+        let pyPipe = Pipe()
+        pyProcess.standardOutput = pyPipe
+        pyProcess.standardError = FileHandle.nullDevice
+        try pyProcess.run()
+        pyProcess.waitUntilExit()
+        let analyzeResult = String(
+            data: pyPipe.fileHandleForReading.readDataToEndOfFile(),
+            encoding: .utf8
+        )?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        let counts = analyzeResult
+        XCTAssertFalse(counts.contains("orange=") && !counts.contains("orange=0"),
+                        "Status dot should NOT be orange when no live sessions. Pixel analysis: \(counts)")
+    }
+
     // MARK: - Keyboard input
 
     func test_shift_produces_uppercase_and_special_chars() throws {

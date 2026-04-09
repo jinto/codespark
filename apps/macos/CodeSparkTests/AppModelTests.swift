@@ -307,6 +307,61 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.hiddenProjectIDs.contains("ws-2"))
     }
 
+    // MARK: - projectStatus
+
+    @MainActor
+    func test_project_status_idle_when_no_live_sessions() async {
+        let project = ProjectSummaryViewData(
+            id: "p1", name: "Proj", path: "/tmp/proj", transport: "local",
+            liveSessions: 0, recentlyClosedSessions: 0,
+            hasInterruptedSessions: false, liveSessionDetails: []
+        )
+        let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []))
+        XCTAssertEqual(model.projectStatus(for: project), .idle)
+    }
+
+    @MainActor
+    func test_project_status_idle_when_no_live_sessions_even_with_interrupted() async {
+        let project = ProjectSummaryViewData(
+            id: "p1", name: "Proj", path: "/tmp/proj", transport: "local",
+            liveSessions: 0, recentlyClosedSessions: 0,
+            hasInterruptedSessions: true, liveSessionDetails: []
+        )
+        let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []))
+        XCTAssertEqual(model.projectStatus(for: project), .idle,
+                        "No live sessions + interrupted should still be idle, not needsInput")
+    }
+
+    @MainActor
+    func test_project_status_running_with_live_sessions() async {
+        let project = ProjectSummaryViewData(
+            id: "p1", name: "Proj", path: "/tmp/proj", transport: "local",
+            liveSessions: 1, recentlyClosedSessions: 0,
+            hasInterruptedSessions: false,
+            liveSessionDetails: [SessionSummary(id: "s1", title: "T", targetLabel: "local", lastCwd: "/tmp/proj")]
+        )
+        let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []))
+        XCTAssertEqual(model.projectStatus(for: project), .running)
+    }
+
+    @MainActor
+    func test_project_status_needs_input_when_live_and_interrupted() async {
+        let project = ProjectSummaryViewData(
+            id: "p1", name: "Proj", path: "/tmp/proj", transport: "local",
+            liveSessions: 1, recentlyClosedSessions: 0,
+            hasInterruptedSessions: true,
+            liveSessionDetails: [SessionSummary(id: "s1", title: "T", targetLabel: "local", lastCwd: "/tmp/proj")]
+        )
+        let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []))
+        XCTAssertEqual(model.projectStatus(for: project), .needsInput)
+    }
+
+    func test_status_color_mapping() {
+        XCTAssertEqual(ProjectStatus.idle.color, .gray)
+        XCTAssertEqual(ProjectStatus.running.color, .green)
+        XCTAssertEqual(ProjectStatus.needsInput.color, .orange)
+    }
+
     @MainActor
     func test_close_session_removes_from_live_sessions() async {
         let client = MockProjectCoreClient.projectWithOneLiveSession()
