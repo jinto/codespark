@@ -43,4 +43,7 @@ xcodebuild -project apps/macos/CodeSpark.xcodeproj -scheme CodeSpark \
 
 ## License
 
-MIT
+[BSL 1.1](LICENSE) — free for non-commercial use. Commercial use requires a separate license.
+Converts to MIT on 2030-04-09.
+
+GhosttyKit is used under the [MIT License](https://github.com/ghostty-org/ghostty/blob/main/LICENSE).
