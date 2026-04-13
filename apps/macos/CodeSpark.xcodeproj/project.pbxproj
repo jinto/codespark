@@ -11,11 +11,9 @@
 		0453F36CBDA670D2FF405A59 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B3EF915455EE5A5AEFAE01 /* AppModelTests.swift */; };
 		05775B2732E4FEE5DF603358 /* ProjectFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA1F37A49DC57DD259D7C23 /* ProjectFlowTests.swift */; };
 		3D0FEFA3FAB6C31107E3A49C /* WorkspaceSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */; };
-		07F78497934AA2ABB909879A /* HookEventProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 813E0BA18FE27147BC9B017D /* HookEventProcessor.swift */; };
 		2CE4832E1EECF0838626509C /* KeyEventRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EBC0F80B881E43ADC44ABFA /* KeyEventRouter.swift */; };
 		9ED695B19FC93D927CBF1CBD /* KeyEventRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */; };
 		B4F28A6E1D93C7520EAF6D91 /* UIVerificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */; };
-		0F224C4752D7879585179923 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1981A49E44F4D3FD21B52B2F /* main.swift */; };
 		127138BC65ACF5F05A0DD540 /* TerminalSurfaceHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D401BB4E2423695AD5030BA7 /* TerminalSurfaceHostView.swift */; };
 		17F6D4887541BEBCDD9EBD85 /* TerminalFontSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */; };
 		296B053DAC2476A9C82A1570 /* AddWorktreeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 787ED7070EA378E8B9A0199D /* AddWorktreeSheet.swift */; };
@@ -43,10 +41,8 @@
 		A3C9A10ACAD571C82C1DCB74 /* MockProjectCoreClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C1F099F0619FDF11DD53CF /* MockProjectCoreClient.swift */; };
 		A8AC8F45878B94C9B42EF42E /* CoreText.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 18CA500C962BD0EB2F45C89C /* CoreText.framework */; };
 		ADC7C90A0E6B40786204C136 /* GhosttyTerminalHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6465D8D71A356DB935A2D94C /* GhosttyTerminalHost.swift */; };
-		BA5F43C11DAFD8871379D34B /* codespark-hook in Resources */ = {isa = PBXBuildFile; fileRef = 89EFB0B5A4636EDF3FFF91CB /* codespark-hook */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C32074958E57BD4DEAFFCCC1 /* AppModel+Monitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6AB5E91D161AAA64F9501C4 /* AppModel+Monitor.swift */; };
 		C99241FBDBBE4B339BFDFFBC /* TerminalHostFactoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */; };
-		D6FB9049A77D020BD711EB57 /* HookSocketServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A611C18C82E4858E7E1A2B3 /* HookSocketServer.swift */; };
 		DBD9D0371990E75C385225FB /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 66BAAF4E673EE8BBBAA95CF7 /* Carbon.framework */; };
 		DD3E928B9A32C6150663F8D8 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6E640D049F79763B0863CD21 /* QuartzCore.framework */; };
 		DDD0640824A174AFD49933F8 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 85F9E2DCA6D0CF00B744A92C /* IOKit.framework */; };
@@ -56,14 +52,14 @@
 		E8CF80B13D9BFCC8278965D6 /* SessionSidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */; };
 		EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */; };
 		EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1188AFD5C69D085D60330D02 /* AppTheme.swift */; };
-		F42B900FB3E9710ABADC4D48 /* AppModel+Hook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5130A58E2FC5881608127D41 /* AppModel+Hook.swift */; };
-		F47361B02296F2A523F06A08 /* ClaudeHooksManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */; };
 		552061F050EC181BD64E2449 /* SSHConnectionInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */; };
 		0EEC708F84CF823A8E360EC4 /* NewSSHProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */; };
 		7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */; };
 		450EF5449C0B78E86452B863 /* SSHIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */; };
 		93FAA0C0CD93FC076C934EB3 /* ClipboardImageHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257D067859E4ABC83E423AF3 /* ClipboardImageHandler.swift */; };
 		9F862F9EEFF5775836F6DA22 /* ClipboardImageHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CF9045C1A9AED8862C73FD /* ClipboardImageHandlerTests.swift */; };
+		A1B2C3D4E5F6A7B8C9D0E1F2 /* TerminalStateDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1E2F3A4B5C6D7E8F9A0B1C2 /* TerminalStateDetector.swift */; };
+		B2C3D4E5F6A7B8C9D0E1F2A3 /* TerminalStateDetectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F3A4B5C6D7E8F9A0B1C2D3 /* TerminalStateDetectorTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,13 +69,6 @@
 			proxyType = 1;
 			remoteGlobalIDString = 2263AD2F95218B1DF797CA6C;
 			remoteInfo = CodeSpark;
-		};
-		4B7D860ED7239D33360EBA8B /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 1DB8162BC007CAA3AE103925 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 9F1ECF6F384D1FB661B8D7D2;
-			remoteInfo = "codespark-hook";
 		};
 		E343C6367A850C12BC39CBBF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -97,7 +86,6 @@
 		13C9EBA2F1A781BC47810CD2 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		17158E6BF62F75313B1E9B2F /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		18CA500C962BD0EB2F45C89C /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
-		1981A49E44F4D3FD21B52B2F /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostFactoryTests.swift; sourceTree = "<group>"; };
 		23C1F099F0619FDF11DD53CF /* MockProjectCoreClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockProjectCoreClient.swift; sourceTree = "<group>"; };
 		2E0D94021E6A37AA34942EED /* CodeSparkWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSparkWindow.swift; sourceTree = "<group>"; };
@@ -105,12 +93,10 @@
 		34B3EF915455EE5A5AEFAE01 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
 		372FF5235CD476B7A3D7D120 /* ProjectViewData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectViewData.swift; sourceTree = "<group>"; };
 		381AF8F6420D8B1CC3F1D29A /* CodeSpark-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CodeSpark-Bridging-Header.h"; sourceTree = "<group>"; };
-		3A611C18C82E4858E7E1A2B3 /* HookSocketServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HookSocketServer.swift; sourceTree = "<group>"; };
 		48CA429791ED61F383243326 /* MockTerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTerminalHost.swift; sourceTree = "<group>"; };
 		5EBC0F80B881E43ADC44ABFA /* KeyEventRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyEventRouter.swift; sourceTree = "<group>"; };
 		9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyEventRouterTests.swift; sourceTree = "<group>"; };
 		7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIVerificationTests.swift; sourceTree = "<group>"; };
-		5130A58E2FC5881608127D41 /* AppModel+Hook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Hook.swift"; sourceTree = "<group>"; };
 		61B66760C324727703F07319 /* GhosttyRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyRuntime.swift; sourceTree = "<group>"; };
 		63111BBE479AA199E252A364 /* ProjectCoreClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCoreClient.swift; sourceTree = "<group>"; };
 		6465D8D71A356DB935A2D94C /* GhosttyTerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyTerminalHost.swift; sourceTree = "<group>"; };
@@ -121,13 +107,10 @@
 		6DE9AB7891F06F27BFD3EC90 /* CoreFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreFoundation.framework; path = System/Library/Frameworks/CoreFoundation.framework; sourceTree = SDKROOT; };
 		6E640D049F79763B0863CD21 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		787ED7070EA378E8B9A0199D /* AddWorktreeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddWorktreeSheet.swift; sourceTree = "<group>"; };
-		7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClaudeHooksManager.swift; sourceTree = "<group>"; };
 		7D0E3CC9722D71DAF836505B /* CodeSparkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodeSparkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7DA64F8FB306B85441226CB5 /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
-		813E0BA18FE27147BC9B017D /* HookEventProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HookEventProcessor.swift; sourceTree = "<group>"; };
 		84115AE2AA0AA4FE8E41BE9A /* CodeSpark.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CodeSpark.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		85F9E2DCA6D0CF00B744A92C /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
-		89EFB0B5A4636EDF3FFF91CB /* codespark-hook */ = {isa = PBXFileReference; includeInIndex = 0; path = "codespark-hook"; sourceTree = BUILT_PRODUCTS_DIR; };
 		8CA1F37A49DC57DD259D7C23 /* ProjectFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFlowTests.swift; sourceTree = "<group>"; };
 		1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSelectionTests.swift; sourceTree = "<group>"; };
 		982886C18B94884FEA504409 /* GitWorktreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitWorktreeService.swift; sourceTree = "<group>"; };
@@ -150,6 +133,8 @@
 		A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSSHProjectSheet.swift; sourceTree = "<group>"; };
 		105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionInfoTests.swift; sourceTree = "<group>"; };
 		A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHIntegrationTests.swift; sourceTree = "<group>"; };
+		D1E2F3A4B5C6D7E8F9A0B1C2 /* TerminalStateDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalStateDetector.swift; sourceTree = "<group>"; };
+		E2F3A4B5C6D7E8F9A0B1C2D3 /* TerminalStateDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalStateDetectorTests.swift; sourceTree = "<group>"; };
 		257D067859E4ABC83E423AF3 /* ClipboardImageHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardImageHandler.swift; sourceTree = "<group>"; };
 		82CF9045C1A9AED8862C73FD /* ClipboardImageHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardImageHandlerTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -202,8 +187,7 @@
 		3599B143BF621B59F3A84E65 /* CLI */ = {
 			isa = PBXGroup;
 			children = (
-				1981A49E44F4D3FD21B52B2F /* main.swift */,
-			);
+				);
 			path = CLI;
 			sourceTree = "<group>";
 		};
@@ -221,6 +205,7 @@
 				1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */,
 				7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */,
 				1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */,
+				E2F3A4B5C6D7E8F9A0B1C2D3 /* TerminalStateDetectorTests.swift */,
 			);
 			path = CodeSparkTests;
 			sourceTree = "<group>";
@@ -228,13 +213,11 @@
 		5ABBBB834E3488F442614934 /* Services */ = {
 			isa = PBXGroup;
 			children = (
-				7CF39B8736DFE22090AA8F11 /* ClaudeHooksManager.swift */,
-				C84785B7B190829BA72AF822 /* GitBranchService.swift */,
+					C84785B7B190829BA72AF822 /* GitBranchService.swift */,
 				8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */,
 				982886C18B94884FEA504409 /* GitWorktreeService.swift */,
-				813E0BA18FE27147BC9B017D /* HookEventProcessor.swift */,
-				3A611C18C82E4858E7E1A2B3 /* HookSocketServer.swift */,
-				B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */,
+						B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */,
+				D1E2F3A4B5C6D7E8F9A0B1C2 /* TerminalStateDetector.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -289,8 +272,7 @@
 			isa = PBXGroup;
 			children = (
 				6D4B27F8AE7CBF0B33461523 /* AppModel.swift */,
-				5130A58E2FC5881608127D41 /* AppModel+Hook.swift */,
-				F6AB5E91D161AAA64F9501C4 /* AppModel+Monitor.swift */,
+					F6AB5E91D161AAA64F9501C4 /* AppModel+Monitor.swift */,
 				372FF5235CD476B7A3D7D120 /* ProjectViewData.swift */,
 				32DD666C1E320049CFEF78CE /* StorageKeys.swift */,
 			);
@@ -317,7 +299,6 @@
 		D613F442A461099B9892C00B = {
 			isa = PBXGroup;
 			children = (
-				3599B143BF621B59F3A84E65 /* CLI */,
 				777DD9D97F6579E6E22A4061 /* CodeSpark */,
 				38FB42A4FD142433C498A9F1 /* CodeSparkTests */,
 				CDA365527906F6E3AAF82D8F /* CodeSparkUITests */,
@@ -329,8 +310,7 @@
 		F32C6BF7E0302B619E889A2C /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				89EFB0B5A4636EDF3FFF91CB /* codespark-hook */,
-				84115AE2AA0AA4FE8E41BE9A /* CodeSpark.app */,
+					84115AE2AA0AA4FE8E41BE9A /* CodeSpark.app */,
 				BAEC4795D26203BF922A48FF /* CodeSparkTests.xctest */,
 				7D0E3CC9722D71DAF836505B /* CodeSparkUITests.xctest */,
 			);
@@ -356,12 +336,10 @@
 				EFA6F634A150CF143B22983A /* Sources */,
 				C17E8870134F39DF9DFB380A /* Resources */,
 				34E16C43B362353B10DC387C /* Frameworks */,
-				95E5C0B0987A8AF10E817869 /* Bundle codespark-hook CLI */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				D6EE85430A4DA6B4350F1BED /* PBXTargetDependency */,
 			);
 			name = CodeSpark;
 			packageProductDependencies = (
@@ -387,23 +365,6 @@
 			productName = CodeSparkTests;
 			productReference = BAEC4795D26203BF922A48FF /* CodeSparkTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
-		};
-		9F1ECF6F384D1FB661B8D7D2 /* codespark-hook */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = C857333AB977A2B41E4C130D /* Build configuration list for PBXNativeTarget "codespark-hook" */;
-			buildPhases = (
-				7BAD6E277FF085EB6D187675 /* Sources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = "codespark-hook";
-			packageProductDependencies = (
-			);
-			productName = "codespark-hook";
-			productReference = 89EFB0B5A4636EDF3FFF91CB /* codespark-hook */;
-			productType = "com.apple.product-type.tool";
 		};
 		F06C3E5A2662563413BCCFFA /* CodeSparkUITests */ = {
 			isa = PBXNativeTarget;
@@ -454,7 +415,6 @@
 				2263AD2F95218B1DF797CA6C /* CodeSpark */,
 				59B016AE83A719EC5EF1DDC2 /* CodeSparkTests */,
 				F06C3E5A2662563413BCCFFA /* CodeSparkUITests */,
-				9F1ECF6F384D1FB661B8D7D2 /* codespark-hook */,
 			);
 		};
 /* End PBXProject section */
@@ -465,8 +425,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2AD588B127E8EA9EA6EBD176 /* Assets.xcassets in Resources */,
-				BA5F43C11DAFD8871379D34B /* codespark-hook in Resources */,
-			);
+				);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
@@ -491,25 +450,6 @@
 			shellPath = /bin/sh;
 			shellScript = "export ZIG_GLOBAL_CACHE_DIR=\"$SRCROOT/../../libs/workspace-core/.zig-global-cache\"\nexport ZIG_LOCAL_CACHE_DIR=\"$SRCROOT/../../libs/workspace-core/.zig-cache\"\ncd \"$SRCROOT/../../libs/workspace-core\"\nif [ \"$CONFIGURATION\" = \"Release\" ]; then\n  zig build -Doptimize=ReleaseFast\nelse\n  zig build -Doptimize=Debug\nfi\n# Re-archive with Apple libtool to fix Zig archive alignment\nLIBPATH=\"zig-out/lib/libworkspace-core.a\"\nTMPDIR=$(mktemp -d)\ncd \"$TMPDIR\"\nar x \"$OLDPWD/$LIBPATH\"\nchmod 644 *.o\nlibtool -static -o \"$OLDPWD/$LIBPATH\" *.o\nrm -rf \"$TMPDIR\"\n";
 		};
-		95E5C0B0987A8AF10E817869 /* Bundle codespark-hook CLI */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Bundle codespark-hook CLI";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "CLI_BIN=\"${BUILT_PRODUCTS_DIR}/codespark-hook\"\nDEST=\"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources/bin\"\nif [ -f \"$CLI_BIN\" ]; then\n  mkdir -p \"$DEST\"\n  cp \"$CLI_BIN\" \"$DEST/codespark-hook\"\nfi\n";
-		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -528,14 +468,7 @@
 				C99241FBDBBE4B339BFDFFBC /* TerminalHostFactoryTests.swift in Sources */,
 				B4F28A6E1D93C7520EAF6D91 /* UIVerificationTests.swift in Sources */,
 				3D0FEFA3FAB6C31107E3A49C /* WorkspaceSelectionTests.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		7BAD6E277FF085EB6D187675 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				0F224C4752D7879585179923 /* main.swift in Sources */,
+				B2C3D4E5F6A7B8C9D0E1F2A3 /* TerminalStateDetectorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -553,21 +486,17 @@
 			files = (
 				296B053DAC2476A9C82A1570 /* AddWorktreeSheet.swift in Sources */,
 				93FAA0C0CD93FC076C934EB3 /* ClipboardImageHandler.swift in Sources */,
-				F42B900FB3E9710ABADC4D48 /* AppModel+Hook.swift in Sources */,
-				C32074958E57BD4DEAFFCCC1 /* AppModel+Monitor.swift in Sources */,
+					C32074958E57BD4DEAFFCCC1 /* AppModel+Monitor.swift in Sources */,
 				566296EC328127177468735C /* AppModel.swift in Sources */,
 				EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */,
-				F47361B02296F2A523F06A08 /* ClaudeHooksManager.swift in Sources */,
-				E1275E7403FDD3DEE3FB06A2 /* CodeSparkApp.swift in Sources */,
+					E1275E7403FDD3DEE3FB06A2 /* CodeSparkApp.swift in Sources */,
 				5066F54CBC80078498D6B71E /* CodeSparkWindow.swift in Sources */,
 				A014AF3F565FAEE68A6AF58D /* GhosttyRuntime.swift in Sources */,
 				ADC7C90A0E6B40786204C136 /* GhosttyTerminalHost.swift in Sources */,
 				4F7109283E67CEE1A8CA7425 /* GhosttyTerminalSurfaceView.swift in Sources */,
 				A1A3C945D732C2265CE7F237 /* GitBranchService.swift in Sources */,
 				60C7CF3D0995795AD79893D3 /* GitWorktreeService.swift in Sources */,
-				07F78497934AA2ABB909879A /* HookEventProcessor.swift in Sources */,
-				D6FB9049A77D020BD711EB57 /* HookSocketServer.swift in Sources */,
-				2CE4832E1EECF0838626509C /* KeyEventRouter.swift in Sources */,
+						2CE4832E1EECF0838626509C /* KeyEventRouter.swift in Sources */,
 				8562620D298BE43C1FD7FF4F /* MainContentView.swift in Sources */,
 				8434723ACD950CD31779E3C5 /* NoOpTerminalHost.swift in Sources */,
 				63F552917CA547901266483B /* OnboardingView.swift in Sources */,
@@ -584,6 +513,7 @@
 				EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */,
 				2A53F0D0BC3764E0C66B0969 /* TerminalHostProtocol.swift in Sources */,
 				127138BC65ACF5F05A0DD540 /* TerminalSurfaceHostView.swift in Sources */,
+				A1B2C3D4E5F6A7B8C9D0E1F2 /* TerminalStateDetector.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -594,11 +524,6 @@
 			isa = PBXTargetDependency;
 			target = 2263AD2F95218B1DF797CA6C /* CodeSpark */;
 			targetProxy = E343C6367A850C12BC39CBBF /* PBXContainerItemProxy */;
-		};
-		D6EE85430A4DA6B4350F1BED /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 9F1ECF6F384D1FB661B8D7D2 /* codespark-hook */;
-			targetProxy = 4B7D860ED7239D33360EBA8B /* PBXContainerItemProxy */;
 		};
 		DAFF45537389257A88081F68 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -800,36 +725,6 @@
 			};
 			name = Release;
 		};
-		C7007B5C437D630D3A4505DF /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_NAME = "codespark-hook";
-				SDKROOT = macosx;
-			};
-			name = Release;
-		};
-		DA0941C0E40DC8F89B381BE2 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_NAME = "codespark-hook";
-				SDKROOT = macosx;
-			};
-			name = Debug;
-		};
 		DB2B304090C1CE840A98382E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -944,15 +839,6 @@
 			buildConfigurations = (
 				8EDA015B8A5615CB34E1739F /* Debug */,
 				9F0B9C41EB9CCA36A139E525 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
-		C857333AB977A2B41E4C130D /* Build configuration list for PBXNativeTarget "codespark-hook" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				DA0941C0E40DC8F89B381BE2 /* Debug */,
-				C7007B5C437D630D3A4505DF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

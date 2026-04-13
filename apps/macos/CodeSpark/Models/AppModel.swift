@@ -21,16 +21,13 @@ final class AppModel: ObservableObject {
     /// All sessions across all projects — keeps Ghostty surfaces alive during project switches
     @Published private(set) var allSessions: [SessionViewData] = []
     @Published var loadErrorMessage: String?
-    @Published var idleSessionIDs: Set<String> = []
+    @Published var sessionStates: [String: TerminalState] = [:]
+    var debounceTasks: [String: Task<Void, Never>] = [:]
     @Published var pendingCloseSessionID: String?
     @Published var pendingCloseProjectID: String?
     @Published var hiddenProjectIDs: Set<String> = []
     @Published var hiddenProjectNames: [String: String] = [:]
     @Published var gitBranches: [String: String] = [:]
-    @Published var hookNeedsInputCwds: Set<String> = []
-    @Published var acknowledgedProjectIDs: Set<String> = []
-    @Published var hookSnippets: [String: String] = [:]  // projectID → last output snippet
-    @Published var claudeHooksStatus: ClaudeHooksStatus = .installed
     @Published var workspaces: [WorkspaceViewData] = []
     @Published var selectedWorkspacePath: String?
     @Published var activeWorkspacePath: String? {
@@ -51,8 +48,6 @@ final class AppModel: ObservableObject {
     var workspaceSelectedSessions: [String: String] = [:]  // workspacePath → sessionID
     @Published var pendingSSHReconnectProjectID: String?
     @Published var showNewSSHSheet = false
-
-    var hookServer: HookSocketServer?
 
     let core: ProjectCoreClientProtocol
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
@@ -498,6 +493,7 @@ final class AppModel: ObservableObject {
     func markActiveSessionOutput() {
         guard let id = activeSessionID, let host = hosts[id] else { return }
         host.markOutput()
+        resetDebounce(sessionID: id)
     }
 
     #if GHOSTTY_FIRST
@@ -513,19 +509,20 @@ final class AppModel: ObservableObject {
     #endif
 
     func projectStatus(for project: ProjectSummaryViewData) -> ProjectStatus {
-        // Hook-based: any live session whose cwd is waiting for input
-        let hookNeedsInput = project.liveSessionDetails.contains { session in
-            session.lastCwd.map { hookNeedsInputCwds.contains($0) } ?? false
-        }
-        if hookNeedsInput { return .needsInput }
+        let sessionIDs = Set(project.liveSessionDetails.map(\.id))
+        guard !sessionIDs.isEmpty, project.liveSessions > 0 else { return .idle }
 
-        if project.liveSessions > 0 {
-            if project.hasInterruptedSessions { return .needsInput }
-            let sessionIDs = Set(project.liveSessionDetails.map(\.id))
-            let allIdle = !sessionIDs.isEmpty && sessionIDs.isSubset(of: idleSessionIDs)
-            return allIdle ? .idle : .running
-        }
-        return .idle
+        if project.hasInterruptedSessions { return .needsInput }
+
+        let states = sessionIDs.compactMap { sessionStates[$0] }
+        if states.contains(.needsInput) { return .needsInput }
+        if !states.isEmpty && states.allSatisfy({ $0 == .idle }) { return .idle }
+        return .running
+    }
+
+    /// Backward-compatible computed property for views that check idle by session ID.
+    var idleSessionIDs: Set<String> {
+        Set(sessionStates.filter { $0.value == .idle }.map(\.key))
     }
 
     /// Keep projects[].liveSessionDetails in sync with current liveSessions.
@@ -553,6 +550,9 @@ extension AppModel: TerminalHostDelegate {
         allSessions.removeAll { $0.id == sessionID }
         hosts.removeValue(forKey: sessionID)
         closingSessionIDs.remove(sessionID)
+        debounceTasks[sessionID]?.cancel()
+        debounceTasks.removeValue(forKey: sessionID)
+        sessionStates.removeValue(forKey: sessionID)
 
         // Update current project's live sessions if applicable
         if liveSessions.contains(where: { $0.id == sessionID }) {

@@ -118,20 +118,6 @@ struct CodeSparkApp: App {
                 }
                 .keyboardShortcut("s", modifiers: [.command, .control])
             }
-            CommandGroup(after: .appInfo) {
-                Button("Uninstall CodeSpark...") {
-                    let alert = NSAlert()
-                    alert.messageText = "Uninstall CodeSpark?"
-                    alert.informativeText = "This will remove Claude hooks, the CLI tool, and all app data."
-                    alert.alertStyle = .warning
-                    alert.addButton(withTitle: "Uninstall")
-                    alert.addButton(withTitle: "Cancel")
-                    if alert.runModal() == .alertFirstButtonReturn {
-                        ClaudeHooksManager.fullUninstall()
-                        NSApp.terminate(nil)
-                    }
-                }
-            }
             CommandGroup(after: .windowArrangement) {
                 Button("Select Next Tab") {
                     model.selectNextSession()
@@ -195,22 +181,6 @@ struct CodeSparkApp: App {
             UserDefaults.standard.set(true, forKey: StorageKeys.migratedToProjectNaming)
         }
 
-        // Start hook socket server for Claude Code integration
-        let hookServer = HookSocketServer(delegate: model)
-        do {
-            try hookServer.start()
-            model.hookServer = hookServer
-            setenv("CODESPARK_SOCK", hookServer.socketPath, 1)
-        } catch {
-            NSLog("[CodeSpark] Hook server failed to start: \(error)")
-        }
-
-        // Add bundled CLI tools to PATH so child processes can find codespark-hook
-        if let binDir = Bundle.main.url(forResource: "bin", withExtension: nil)?.path {
-            let currentPath = ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin"
-            setenv("PATH", "\(binDir):\(currentPath)", 1)
-        }
-
         #if GHOSTTY_FIRST
         GhosttyRuntime.shared.initialize()
         GhosttyRuntime.shared.onTerminalOutput = { [weak model] in
@@ -226,12 +196,11 @@ struct CodeSparkApp: App {
         if NSEvent.modifierFlags.contains(.option) {
             let alert = NSAlert()
             alert.messageText = "Reset CodeSpark?"
-            alert.informativeText = "This will remove all data, hooks, and CLI tool. Hold Option while launching to trigger this."
+            alert.informativeText = "This will remove all app data. Hold Option while launching to trigger this."
             alert.alertStyle = .warning
             alert.addButton(withTitle: "Reset")
             alert.addButton(withTitle: "Cancel")
             if alert.runModal() == .alertFirstButtonReturn {
-                ClaudeHooksManager.fullUninstall()
                 hasCompletedOnboarding = false
                 return
             }
@@ -244,10 +213,6 @@ struct CodeSparkApp: App {
             model.selectedProjectID = savedProjectID
         }
         await model.load()
-        model.checkClaudeHooksHealth()
-        if model.claudeHooksStatus != .installed {
-            model.installClaudeHooks()
-        }
     }
 }
 
@@ -306,7 +271,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        model?.hookServer?.stop()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

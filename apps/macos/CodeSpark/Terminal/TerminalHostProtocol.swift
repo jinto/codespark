@@ -8,6 +8,8 @@ protocol TerminalHostDelegate: AnyObject {
 protocol TerminalHostProtocol: AnyObject {
     var delegate: (any TerminalHostDelegate)? { get set }
     var lastOutputTime: Date? { get }
+    /// The shell process ID for this terminal session — nil for NoOp hosts or if PID capture failed.
+    var shellPID: pid_t? { get }
     /// The underlying NSView for display — nil for NoOp hosts.
     var surfaceNSView: NSView? { get }
     func markOutput()

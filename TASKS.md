@@ -85,7 +85,7 @@
 ### Hotkey Routing
 - [x] **Cmd+N workspace 전환** — CodeSparkApp의 Cmd+1~9를 active workspace 기반으로 변경. 테스트: Cmd+1 → 첫 번째 active workspace의 selected terminal 활성화
 
-## M16: Sidebar Flatten — Project-Only List ← 현재
+## M16: Sidebar Flatten — Project-Only List
 
 ### Task 1: AppModel — force activeWorkspacePath on project select
 - [x] 테스트: `selectProject` 후 `activeWorkspacePath == project.path` 검증
@@ -111,6 +111,16 @@
 - [x] 앱 빌드 + 전체 테스트 통과
 - [x] accessibility API로 사이드바에 workspace 행 없음 확인
 - [x] 커밋
+
+## M17: Terminal State Detection ✅
+
+Plan: `.claude/plans/terminal-state-detection.md`
+
+- [x] **Task 1: TerminalStateDetector — pure detection logic with tests**
+- [x] **Task 2: Shell PID tracking in TerminalHostProtocol**
+- [x] **Task 3: AppModel+Monitor — debounce + state detection**
+- [x] **Task 4: Remove hook infrastructure + UI cleanup**
+- [x] **Task 5: Xcode project cleanup + build verification**
 
 ## M12.5: SSH 원격 세션 상태 파악
 

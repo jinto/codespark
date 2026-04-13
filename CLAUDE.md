@@ -41,9 +41,8 @@ apps/macos/CodeSpark/
   Views/        — SwiftUI views (Sidebar, MainContent, Settings, Onboarding)
   Terminal/     — Ghostty integration (Runtime, SurfaceView, Host, Protocol)
   Bridge/       — workspace-core C FFI bridge
-  Services/     — GitBranchService, GitWorktreeService, TerminalFontSettings, HookSocketServer, ClaudeHooksManager
+  Services/     — GitBranchService, GitWorktreeService, TerminalFontSettings, TerminalStateDetector
   Theme/        — AppTheme colors
-apps/macos/CLI/ — codespark-hook CLI (Claude Code hook → Unix socket bridge)
 ```
 
 ## Window Layout
@@ -54,12 +53,13 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - Sidebar hidden when no projects exist, auto-shown on first project add
 - Sidebar toggle persisted via `@AppStorage(StorageKeys.isSidebarVisible)`
 
-## Claude Hooks
+## Terminal State Detection
 
-`codespark-hook` CLI is auto-installed on app launch:
-- Binary copied to `~/.local/bin/codespark-hook` (not symlinked)
-- Hooks registered in `~/.claude/settings.json` with **absolute paths**
-- Uninstall available via Settings, app menu, or Option+launch reset
+Process detection + screen parsing replaces the old hook system:
+- **Level 1**: `proc_listchildpids(shellPID)` — child process = running
+- **Level 2**: `extractSnapshot()` screen pattern matching — shell prompt = idle, `>` + `?` = needsInput
+- 5s debounce on active session output, 10s polling for inactive sessions
+- `TerminalStateDetector` is a pure-function enum for testability
 
 ## Testing
 
@@ -86,4 +86,4 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 
 ## Known Issues
 
-- SSH remote sessions cannot use codespark-hook (local Unix socket only)
+- SSH remote sessions: terminal state detection works via screen parsing only (no shell PID access for remote processes)

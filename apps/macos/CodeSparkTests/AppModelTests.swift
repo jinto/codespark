@@ -356,6 +356,32 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.projectStatus(for: project), .needsInput)
     }
 
+    @MainActor
+    func test_project_status_idle_when_all_sessions_idle() async {
+        let project = ProjectSummaryViewData(
+            id: "p1", name: "Proj", path: "/tmp/proj", transport: "local",
+            liveSessions: 1, recentlyClosedSessions: 0,
+            hasInterruptedSessions: false,
+            liveSessionDetails: [SessionSummary(id: "s1", title: "T", targetLabel: "local", lastCwd: "/tmp/proj")]
+        )
+        let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []))
+        model.sessionStates["s1"] = .idle
+        XCTAssertEqual(model.projectStatus(for: project), .idle)
+    }
+
+    @MainActor
+    func test_project_status_needsInput_from_session_state() async {
+        let project = ProjectSummaryViewData(
+            id: "p1", name: "Proj", path: "/tmp/proj", transport: "local",
+            liveSessions: 1, recentlyClosedSessions: 0,
+            hasInterruptedSessions: false,
+            liveSessionDetails: [SessionSummary(id: "s1", title: "T", targetLabel: "local", lastCwd: "/tmp/proj")]
+        )
+        let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []))
+        model.sessionStates["s1"] = .needsInput
+        XCTAssertEqual(model.projectStatus(for: project), .needsInput)
+    }
+
     func test_status_color_mapping() {
         XCTAssertEqual(ProjectStatus.idle.color, .gray)
         XCTAssertEqual(ProjectStatus.running.color, .green)

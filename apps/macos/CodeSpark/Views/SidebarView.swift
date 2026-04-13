@@ -39,14 +39,6 @@ struct SidebarView: View {
         }
     }
 
-    private var needsInputCount: Int {
-        model.projects.filter { proj in
-            guard proj.id != model.selectedProjectID else { return false }
-            return model.projectStatus(for: proj) == .needsInput
-                && !model.acknowledgedProjectIDs.contains(proj.id)
-        }.count
-    }
-
     private func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
         if project.transport == "ssh" {
             if let info = SSHConnectionInfo(uri: project.path) {
@@ -74,19 +66,6 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if model.claudeHooksStatus != .installed {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Initializing...")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                }
-                .padding(8)
-                .padding(.horizontal, 8)
-                .padding(.top, 6)
-            }
-
             ScrollView {
                 if model.projects.isEmpty {
                     VStack(spacing: 12) {
@@ -118,13 +97,11 @@ struct SidebarView: View {
                             project: project,
                             isSelected: model.selectedProjectID == project.id,
                             status: model.projectStatus(for: project),
-                            snippet: model.hookSnippets[project.id],
                             infoLine: projectInfoLine(for: project),
                             hotkeyIndex: hotkeyIndex(for: project)
                         )
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            model.acknowledgeProject(project.id)
                             Task { await model.selectProject(id: project.id) }
                         }
                         .contextMenu {
@@ -239,16 +216,8 @@ struct ProjectSidebarRow: View {
     let project: ProjectSummaryViewData
     let isSelected: Bool
     let status: ProjectStatus
-    var snippet: String? = nil
     var infoLine: String? = nil
     var hotkeyIndex: Int? = nil
-
-    private var displayInfoLine: String? {
-        if status == .needsInput, let snippet, !snippet.isEmpty {
-            return snippet
-        }
-        return infoLine
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -276,7 +245,7 @@ struct ProjectSidebarRow: View {
                 }
             }
 
-            if let info = displayInfoLine {
+            if let info = infoLine {
                 Text(info)
                     .font(.system(size: 10))
                     .foregroundStyle(
