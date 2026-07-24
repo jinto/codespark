@@ -728,7 +728,9 @@ const Statement = struct {
 };
 
 fn now() i64 {
-    return @intCast(std.time.nanoTimestamp());
+    var timestamp: std.c.timespec = undefined;
+    _ = std.c.clock_gettime(std.c.CLOCK.REALTIME, &timestamp);
+    return @as(i64, @intCast(timestamp.sec)) * std.time.ns_per_s + @as(i64, @intCast(timestamp.nsec));
 }
 
 fn encodeTerminalGridLines(grid: models.TerminalGridInput) StoreError![]u8 {

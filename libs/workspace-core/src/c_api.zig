@@ -13,6 +13,25 @@ pub const SessionSummary = models.SessionSummary;
 
 const c_allocator = std.heap.c_allocator;
 
+/// A small spin mutex keeps workspace-core compatible with Zig 0.15 and 0.16.
+/// Zig 0.16 moved blocking mutexes from std.Thread to std.Io, but the C API
+/// does not carry an Io instance through its synchronous entry points.
+const Mutex = struct {
+    state: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+
+    fn lock(self: *Mutex) void {
+        while (self.state.cmpxchgWeak(false, true, .acquire, .monotonic) != null) {
+            while (self.state.load(.monotonic)) {
+                std.atomic.spinLoopHint();
+            }
+        }
+    }
+
+    fn unlock(self: *Mutex) void {
+        self.state.store(false, .release);
+    }
+};
+
 pub const project_status_t = enum(c_int) {
     PROJECT_STATUS_OK = 0,
     PROJECT_STATUS_OPEN_STORE_FAILED = 1,
@@ -98,7 +117,7 @@ pub const project_new_snapshot_t = extern struct {
 };
 
 pub const project_service = struct {
-    mutex: std.Thread.Mutex = .{},
+    mutex: Mutex = .{},
     store: store_mod.Store,
 };
 
