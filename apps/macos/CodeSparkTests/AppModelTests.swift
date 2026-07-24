@@ -321,15 +321,14 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
-    func test_project_status_idle_when_no_live_sessions_even_with_interrupted() async {
+    func test_project_status_interrupted_when_no_live_sessions() async {
         let project = ProjectSummaryViewData(
             id: "p1", name: "Proj", path: "/tmp/proj", transport: "local",
             liveSessions: 0, recentlyClosedSessions: 0,
             hasInterruptedSessions: true, liveSessionDetails: []
         )
         let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []))
-        XCTAssertEqual(model.projectStatus(for: project), .idle,
-                        "No live sessions + interrupted should still be idle, not needsInput")
+        XCTAssertEqual(model.projectStatus(for: project), .interrupted)
     }
 
     @MainActor

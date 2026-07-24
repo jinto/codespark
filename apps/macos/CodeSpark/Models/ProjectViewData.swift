@@ -5,12 +5,14 @@ enum ProjectStatus: Equatable {
     case running
     case idle
     case needsInput
+    case interrupted
 
     var label: String {
         switch self {
         case .running: "Running"
         case .idle: "Idle"
         case .needsInput: "Needs input"
+        case .interrupted: "Interrupted"
         }
     }
 
@@ -19,6 +21,7 @@ enum ProjectStatus: Equatable {
         case .running: "bolt.fill"
         case .idle: "circle.fill"
         case .needsInput: "exclamationmark.triangle.fill"
+        case .interrupted: "arrow.clockwise"
         }
     }
 
@@ -27,6 +30,7 @@ enum ProjectStatus: Equatable {
         case .running: AppTheme.statusRunning
         case .idle: AppTheme.statusIdle
         case .needsInput: AppTheme.statusNeedsInput
+        case .interrupted: .gray
         }
     }
 }
@@ -45,7 +49,7 @@ struct ProjectSummaryViewData: Identifiable, Equatable {
     let transport: String
     var liveSessions: Int
     let recentlyClosedSessions: Int
-    let hasInterruptedSessions: Bool
+    var hasInterruptedSessions: Bool
     var liveSessionDetails: [SessionSummary]
 }
 
@@ -99,6 +103,23 @@ struct ProjectDetailViewData: Equatable {
     let path: String
     let transport: String
     let liveSessions: [SessionViewData]
+    let interruptedSessions: [SessionSummary]
+
+    init(
+        id: String,
+        name: String,
+        path: String,
+        transport: String,
+        liveSessions: [SessionViewData],
+        interruptedSessions: [SessionSummary] = []
+    ) {
+        self.id = id
+        self.name = name
+        self.path = path
+        self.transport = transport
+        self.liveSessions = liveSessions
+        self.interruptedSessions = interruptedSessions
+    }
 }
 
 // MARK: - Workspace

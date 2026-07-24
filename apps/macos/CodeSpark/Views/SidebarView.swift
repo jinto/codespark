@@ -18,10 +18,12 @@ struct SidebarView: View {
     private var sortedProjects: [ProjectSummaryViewData] {
         let selected = model.selectedProjectID
         let needsInput = model.projects.filter {
-            model.projectStatus(for: $0) == .needsInput && $0.id != selected
+            let status = model.projectStatus(for: $0)
+            return (status == .needsInput || status == .interrupted) && $0.id != selected
         }
         let rest = model.projects.filter {
-            model.projectStatus(for: $0) != .needsInput || $0.id == selected
+            let status = model.projectStatus(for: $0)
+            return (status != .needsInput && status != .interrupted) || $0.id == selected
         }
         let sortedRest = rest.sorted { a, b in
             let sa = model.projectStatus(for: a)
@@ -102,7 +104,7 @@ struct SidebarView: View {
                         )
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            Task { await model.selectProject(id: project.id) }
+                            Task { await model.selectProject(id: project.id, promptForRecovery: true) }
                         }
                         .contextMenu {
                             Button("Rename") {

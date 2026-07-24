@@ -73,6 +73,8 @@ typedef struct project_detail_t {
     project_session_transport_t transport;
     project_session_summary_t *live_sessions;
     int32_t live_session_count;
+    project_session_summary_t *interrupted_sessions;
+    int32_t interrupted_session_count;
 } project_detail_t;
 
 typedef struct project_new_session_t {

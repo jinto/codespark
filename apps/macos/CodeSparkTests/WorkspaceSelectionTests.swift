@@ -3,6 +3,45 @@ import XCTest
 
 final class WorkspaceSelectionTests: XCTestCase {
 
+    // MARK: - Agent session commands
+
+    func test_agent_resume_commands_match_cli_syntax() {
+        XCTAssertEqual(AgentKind.claude.resumeCommand(id: "claude-id"), "claude --resume claude-id")
+        XCTAssertEqual(AgentKind.codex.resumeCommand(id: "codex-id"), "codex resume codex-id")
+    }
+
+    @MainActor
+    func test_interrupted_project_prompts_only_when_selected_from_sidebar() async {
+        let model = AppModel(
+            core: MockProjectCoreClient.projectWithInterruptedSession(),
+            terminalFactory: { _ in MockTerminalHost() }
+        )
+
+        await model.load()
+        XCTAssertNil(model.pendingWorkspaceRecoveryProjectID)
+
+        await model.selectProject(id: "ws-spark3", promptForRecovery: true)
+        XCTAssertEqual(model.pendingWorkspaceRecoveryProjectID, "ws-spark3")
+        XCTAssertEqual(model.projectStatus(for: model.projects[0]), .interrupted)
+    }
+
+    @MainActor
+    func test_restore_interrupted_tabs_recreates_tab_cwds() async {
+        let model = AppModel(
+            core: MockProjectCoreClient.projectWithInterruptedSession(),
+            terminalFactory: { _ in MockTerminalHost() }
+        )
+
+        await model.load()
+        await model.selectProject(id: "ws-spark3", promptForRecovery: true)
+        await model.restoreInterruptedTabs(projectID: "ws-spark3")
+
+        XCTAssertNil(model.pendingWorkspaceRecoveryProjectID)
+        XCTAssertEqual(model.liveSessions.count, 1)
+        XCTAssertEqual(model.liveSessions[0].lastCwd, "/Users/jinto/projects/spark3")
+        XCTAssertFalse(model.projects[0].hasInterruptedSessions)
+    }
+
     // MARK: - Worktree naming
 
     func test_worktree_name_is_flat_repo_branch_and_id() {

@@ -30,6 +30,7 @@ final class AppModel: ObservableObject {
     @Published var gitBranches: [String: String] = [:]
     @Published var workspaces: [WorkspaceViewData] = []
     @Published var selectedWorkspacePath: String?
+    @Published private(set) var resumableAgentSessions: [ResumableAgentSession] = []
     @Published var activeWorkspacePath: String? {
         didSet {
             // Restore per-workspace selected session when switching workspaces
@@ -47,6 +48,7 @@ final class AppModel: ObservableObject {
     }
     var workspaceSelectedSessions: [String: String] = [:]  // workspacePath → sessionID
     @Published var pendingSSHReconnectProjectID: String?
+    @Published var pendingWorkspaceRecoveryProjectID: String?
     @Published var showNewSSHSheet = false
 
     let core: ProjectCoreClientProtocol
@@ -131,8 +133,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func selectProject(id: String?) async {
+    func selectProject(id: String?, promptForRecovery: Bool = false) async {
         cancelInflightWork()
+        pendingWorkspaceRecoveryProjectID = nil
 
         guard let id else {
             selectedProjectID = nil
@@ -159,6 +162,10 @@ final class AppModel: ObservableObject {
                     gitWorktreeService.invalidateCache(for: detail.path)
                     await gitWorktreeService.refreshWorktrees(for: [detail.path])
                     recomputeWorkspaces()
+                }
+                refreshAgentSessions()
+                if promptForRecovery && !detail.interruptedSessions.isEmpty {
+                    pendingWorkspaceRecoveryProjectID = id
                 }
                 loadErrorMessage = nil
             } catch {
@@ -321,6 +328,16 @@ final class AppModel: ObservableObject {
 
     // MARK: - Session lifecycle
 
+    func refreshAgentSessions() {
+        let paths = Set(
+            [selectedProject?.path, activeWorkspacePath]
+                .compactMap { $0 }
+                .filter { !$0.isEmpty }
+                + workspaces.map(\.path)
+        )
+        resumableAgentSessions = AgentSessionDiscovery.discover(for: Array(paths))
+    }
+
     @discardableResult
     private func startAndAttachSession(
         projectID: String,
@@ -411,6 +428,100 @@ final class AppModel: ObservableObject {
             workspaceSelectedSessions[workspacePath] = sessionID
             activeWorkspacePath = workspacePath
             recomputeWorkspaces()
+        } catch {
+            loadErrorMessage = error.localizedDescription
+        }
+    }
+
+    func restoreInterruptedTabs(projectID: String) async {
+        guard let project = selectedProject,
+              project.id == projectID,
+              !project.interruptedSessions.isEmpty else {
+            pendingWorkspaceRecoveryProjectID = nil
+            return
+        }
+
+        let interruptedSessions = project.interruptedSessions
+        pendingWorkspaceRecoveryProjectID = nil
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+
+        for interrupted in interruptedSessions {
+            do {
+                let sessionID: String
+                if project.transport == "ssh", let info = SSHConnectionInfo(uri: project.path) {
+                    sessionID = try await startAndAttachSession(
+                        projectID: projectID,
+                        transport: "ssh",
+                        targetLabel: interrupted.targetLabel,
+                        title: interrupted.title,
+                        shell: shell,
+                        cwd: nil,
+                        command: info.sshCommand,
+                        sshInfo: info
+                    )
+                } else {
+                    sessionID = try await startAndAttachSession(
+                        projectID: projectID,
+                        transport: "local",
+                        targetLabel: interrupted.targetLabel,
+                        title: interrupted.title,
+                        shell: shell,
+                        cwd: interrupted.lastCwd ?? project.path
+                    )
+                }
+
+                if let cwd = interrupted.lastCwd {
+                    workspaceSelectedSessions[cwd] = sessionID
+                }
+            } catch {
+                loadErrorMessage = error.localizedDescription
+                break
+            }
+        }
+
+        if let index = projects.firstIndex(where: { $0.id == projectID }) {
+            projects[index].hasInterruptedSessions = false
+        }
+        if selectedProject?.id == projectID, let detail = selectedProject {
+            selectedProject = ProjectDetailViewData(
+                id: detail.id,
+                name: detail.name,
+                path: detail.path,
+                transport: detail.transport,
+                liveSessions: detail.liveSessions,
+                interruptedSessions: []
+            )
+        }
+        activeSessionID = liveSessions.last?.id
+        recomputeWorkspaces()
+    }
+
+    func newAgentSession(_ agent: AgentKind, resumeID: String? = nil) async {
+        guard let projectID = selectedProjectID,
+              let project = selectedProject,
+              project.transport == "local" else { return }
+
+        let workspacePath = activeWorkspacePath ?? project.path
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let command: String = if let resumeID {
+            agent.resumeCommand(id: resumeID)
+        } else {
+            agent.command
+        }
+        let title = resumeID.map { "\(agent.title) • \(String($0.prefix(8)))" } ?? agent.title
+
+        do {
+            let sessionID = try await startAndAttachSession(
+                projectID: projectID,
+                transport: "local",
+                targetLabel: agent.rawValue,
+                title: title,
+                shell: shell,
+                cwd: workspacePath,
+                command: command
+            )
+            activeSessionID = sessionID
+            refreshAgentSessions()
         } catch {
             loadErrorMessage = error.localizedDescription
         }
@@ -509,6 +620,7 @@ final class AppModel: ObservableObject {
 
     func projectStatus(for project: ProjectSummaryViewData) -> ProjectStatus {
         let sessionIDs = Set(project.liveSessionDetails.map(\.id))
+        if project.hasInterruptedSessions && project.liveSessions == 0 { return .interrupted }
         guard !sessionIDs.isEmpty, project.liveSessions > 0 else { return .idle }
 
         if project.hasInterruptedSessions { return .needsInput }
@@ -539,6 +651,7 @@ final class AppModel: ObservableObject {
         activeSessionID = nil
         liveSessions = []
         workspaces = []
+        pendingWorkspaceRecoveryProjectID = nil
     }
 
 }
@@ -581,3 +694,100 @@ extension AppModel: TerminalHostDelegate {
     }
 }
 
+enum AgentKind: String, CaseIterable, Identifiable, Hashable {
+    case claude
+    case codex
+
+    var id: String { rawValue }
+
+    var title: String {
+        rawValue.capitalized
+    }
+
+    var command: String {
+        rawValue
+    }
+
+    func resumeCommand(id: String) -> String {
+        switch self {
+        case .claude: "claude --resume \(id)"
+        case .codex: "codex resume \(id)"
+        }
+    }
+}
+
+struct ResumableAgentSession: Identifiable, Equatable, Hashable {
+    let id: String
+    let agent: AgentKind
+    let cwd: String
+    let lastActivity: Date
+
+    var label: String {
+        let shortID = String(id.prefix(8))
+        return "\(agent.title) • \(shortID)"
+    }
+}
+
+enum AgentSessionDiscovery {
+    static func discover(for paths: [String]) -> [ResumableAgentSession] {
+        let normalizedPaths = Set(paths.map { ($0 as NSString).standardizingPath })
+        let claude = normalizedPaths.flatMap { discoverClaude(for: $0) }
+        let codex = discoverCodex(for: normalizedPaths)
+        return Array(Set(claude + codex)).sorted { $0.lastActivity > $1.lastActivity }
+    }
+
+    private static func discoverClaude(for path: String) -> [ResumableAgentSession] {
+        let encodedPath = path.replacingOccurrences(of: "/", with: "-")
+        let root = ("~/.claude/projects/\(encodedPath)" as NSString).expandingTildeInPath
+        guard let files = try? FileManager.default.contentsOfDirectory(atPath: root) else { return [] }
+
+        return files.filter { $0.hasSuffix(".jsonl") }.compactMap { file in
+            let id = String(file.dropLast(6))
+            guard !id.isEmpty else { return nil }
+            let fullPath = (root as NSString).appendingPathComponent(file)
+            return ResumableAgentSession(
+                id: id,
+                agent: .claude,
+                cwd: path,
+                lastActivity: modificationDate(of: fullPath)
+            )
+        }
+    }
+
+    private static func discoverCodex(for paths: Set<String>) -> [ResumableAgentSession] {
+        let root = ("~/.codex/sessions" as NSString).expandingTildeInPath
+        guard let enumerator = FileManager.default.enumerator(atPath: root) else { return [] }
+        var sessions: [ResumableAgentSession] = []
+
+        for case let relativePath as String in enumerator where relativePath.hasPrefix("rollout-") && relativePath.hasSuffix(".jsonl") {
+            let fullPath = (root as NSString).appendingPathComponent(relativePath)
+            guard let metadata = firstJSONLine(in: fullPath),
+                  metadata["type"] as? String == "session_meta",
+                  let payload = metadata["payload"] as? [String: Any],
+                  let id = payload["id"] as? String,
+                  let cwd = payload["cwd"] as? String,
+                  paths.contains((cwd as NSString).standardizingPath) else { continue }
+
+            sessions.append(ResumableAgentSession(
+                id: id,
+                agent: .codex,
+                cwd: cwd,
+                lastActivity: modificationDate(of: fullPath)
+            ))
+        }
+        return sessions
+    }
+
+    private static func firstJSONLine(in path: String) -> [String: Any]? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? handle.close() }
+        guard let data = try? handle.read(upToCount: 16_384),
+              let line = String(data: data, encoding: .utf8)?.split(separator: "\n", maxSplits: 1).first,
+              let json = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { return nil }
+        return json
+    }
+
+    private static func modificationDate(of path: String) -> Date {
+        (try? FileManager.default.attributesOfItem(atPath: path)[.modificationDate] as? Date) ?? .distantPast
+    }
+}

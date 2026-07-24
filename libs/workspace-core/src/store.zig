@@ -371,6 +371,11 @@ pub const Store = struct {
         errdefer allocator.free(path);
         const transport = try models.SessionTransport.fromSql(try stmt.columnTextSlice(3));
         const live_sessions = try self.sessionsForProject(allocator, project_id, .live);
+        errdefer {
+            for (live_sessions) |*session| session.deinit(allocator);
+            allocator.free(live_sessions);
+        }
+        const interrupted_sessions = try self.sessionsForProject(allocator, project_id, .interrupted);
 
         return .{
             .id = id,
@@ -378,6 +383,7 @@ pub const Store = struct {
             .path = path,
             .transport = transport,
             .live_sessions = live_sessions,
+            .interrupted_sessions = interrupted_sessions,
         };
     }
 

@@ -181,6 +181,7 @@ pub const ProjectDetail = struct {
     path: []u8,
     transport: SessionTransport,
     live_sessions: []SessionSummary,
+    interrupted_sessions: []SessionSummary,
 
     pub fn deinit(self: *ProjectDetail, allocator: std.mem.Allocator) void {
         allocator.free(self.id);
@@ -188,6 +189,8 @@ pub const ProjectDetail = struct {
         allocator.free(self.path);
         for (self.live_sessions) |*session| session.deinit(allocator);
         allocator.free(self.live_sessions);
+        for (self.interrupted_sessions) |*session| session.deinit(allocator);
+        allocator.free(self.interrupted_sessions);
         self.* = undefined;
     }
 };

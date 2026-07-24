@@ -111,6 +111,58 @@ struct MainContentView: View {
         } message: {
             Text("Sessions will be closed. You can reopen this project later.")
         }
+        .confirmationDialog(
+            "Restore workspace?",
+            isPresented: Binding(
+                get: { model.pendingWorkspaceRecoveryProjectID != nil },
+                set: { if !$0 { model.pendingWorkspaceRecoveryProjectID = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let projectID = model.pendingWorkspaceRecoveryProjectID,
+               let project = model.selectedProject,
+               project.id == projectID {
+                let interruptedCount = project.interruptedSessions.count
+                Button("Restore \(interruptedCount) tab\(interruptedCount == 1 ? "" : "s")") {
+                    Task { await model.restoreInterruptedTabs(projectID: projectID) }
+                }
+
+                Button("New Terminal") {
+                    model.pendingWorkspaceRecoveryProjectID = nil
+                    Task { await model.newSession() }
+                }
+
+                Button("New Claude session") {
+                    model.pendingWorkspaceRecoveryProjectID = nil
+                    Task { await model.newAgentSession(.claude) }
+                }
+
+                ForEach(model.resumableAgentSessions.filter { $0.agent == .claude }) { session in
+                    Button("Resume \(session.label)") {
+                        model.pendingWorkspaceRecoveryProjectID = nil
+                        Task { await model.newAgentSession(.claude, resumeID: session.id) }
+                    }
+                }
+
+                Button("New Codex session") {
+                    model.pendingWorkspaceRecoveryProjectID = nil
+                    Task { await model.newAgentSession(.codex) }
+                }
+
+                ForEach(model.resumableAgentSessions.filter { $0.agent == .codex }) { session in
+                    Button("Resume \(session.label)") {
+                        model.pendingWorkspaceRecoveryProjectID = nil
+                        Task { await model.newAgentSession(.codex, resumeID: session.id) }
+                    }
+                }
+            }
+
+            Button("Cancel", role: .cancel) {
+                model.pendingWorkspaceRecoveryProjectID = nil
+            }
+        } message: {
+            Text("Restore the previous tabs, or choose a new terminal or agent session for this workspace.")
+        }
     }
 
     private var terminalContent: some View {

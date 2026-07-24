@@ -167,13 +167,24 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
             )
         }
 
+        let interruptedSessions = (0..<Int(detail.interrupted_session_count)).map { i -> SessionSummary in
+            let s = detail.interrupted_sessions[i]
+            return SessionSummary(
+                id: String(cString: s.id),
+                title: String(cString: s.title),
+                targetLabel: String(cString: s.target_label),
+                lastCwd: s.last_cwd != nil ? String(cString: s.last_cwd) : nil
+            )
+        }
+
         let transportStr: String = detail.transport == PROJECT_SESSION_TRANSPORT_SSH ? "ssh" : "local"
         return ProjectDetailViewData(
             id: String(cString: detail.id),
             name: String(cString: detail.name),
             path: String(cString: detail.path),
             transport: transportStr,
-            liveSessions: liveSessions
+            liveSessions: liveSessions,
+            interruptedSessions: interruptedSessions
         )
     }
 

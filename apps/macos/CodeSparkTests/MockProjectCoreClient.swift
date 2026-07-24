@@ -129,7 +129,15 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
                 name: "spark3",
                 path: "/Users/jinto/projects/spark3",
                 transport: "local",
-                liveSessions: []
+                liveSessions: [],
+                interruptedSessions: [
+                    SessionSummary(
+                        id: "session-interrupted",
+                        title: "Terminal",
+                        targetLabel: "local",
+                        lastCwd: "/Users/jinto/projects/spark3"
+                    )
+                ]
             )]
         )
     }

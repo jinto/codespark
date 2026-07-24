@@ -85,8 +85,36 @@ struct CodeSparkApp: App {
 
                 Divider()
 
-                Button("New Session") {
-                    Task { await model.newSession() }
+                Menu("New Session") {
+                    Button("Terminal") {
+                        Task { await model.newSession() }
+                    }
+
+                    Divider()
+
+                    ForEach(AgentKind.allCases) { agent in
+                        Menu(agent.title) {
+                            Button("New session") {
+                                Task { await model.newAgentSession(agent) }
+                            }
+
+                            let resumable = model.resumableAgentSessions.filter { $0.agent == agent }
+                            if !resumable.isEmpty {
+                                Divider()
+                                Text("Resume")
+                                ForEach(resumable) { session in
+                                    Button(session.label) {
+                                        Task { await model.newAgentSession(agent, resumeID: session.id) }
+                                    }
+                                }
+                            }
+
+                            Divider()
+                            Button("Refresh sessions") {
+                                model.refreshAgentSessions()
+                            }
+                        }
+                    }
                 }
                 .keyboardShortcut("t", modifiers: .command)
 
@@ -213,6 +241,7 @@ struct CodeSparkApp: App {
             model.selectedProjectID = savedProjectID
         }
         await model.load()
+        model.refreshAgentSessions()
     }
 }
 

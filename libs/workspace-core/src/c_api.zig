@@ -95,6 +95,8 @@ pub const project_detail_t = extern struct {
     transport: project_session_transport_t,
     live_sessions: ?[*]project_session_summary_t,
     live_session_count: i32,
+    interrupted_sessions: ?[*]project_session_summary_t,
+    interrupted_session_count: i32,
 };
 
 pub const project_new_session_t = extern struct {
@@ -261,6 +263,19 @@ fn fillProjectDetail(out: *project_detail_t, value: models.ProjectDetail) !void 
         }
         out.live_sessions = live_sessions.ptr;
         out.live_session_count = @intCast(live_sessions.len);
+    }
+
+    if (value.interrupted_sessions.len > 0) {
+        const interrupted_sessions = try c_allocator.alloc(project_session_summary_t, value.interrupted_sessions.len);
+        errdefer c_allocator.free(interrupted_sessions);
+        for (interrupted_sessions) |*session| session.* = std.mem.zeroes(project_session_summary_t);
+        errdefer for (interrupted_sessions) |*session| freeSessionSummary(session);
+
+        for (value.interrupted_sessions, 0..) |session, index| {
+            try fillSessionSummary(&interrupted_sessions[index], session);
+        }
+        out.interrupted_sessions = interrupted_sessions.ptr;
+        out.interrupted_session_count = @intCast(interrupted_sessions.len);
     }
 }
 
@@ -567,6 +582,12 @@ pub export fn project_free_detail(detail: ?*project_detail_t) void {
 
         if (ptr.live_sessions) |live_sessions| {
             const slice = live_sessions[0..@intCast(ptr.live_session_count)];
+            for (slice) |*session| freeSessionSummary(session);
+            c_allocator.free(slice);
+        }
+
+        if (ptr.interrupted_sessions) |interrupted_sessions| {
+            const slice = interrupted_sessions[0..@intCast(ptr.interrupted_session_count)];
             for (slice) |*session| freeSessionSummary(session);
             c_allocator.free(slice);
         }
