@@ -4,11 +4,30 @@ struct GitWorktree: Identifiable, Equatable {
     let path: String
     let branch: String
     let isMainWorktree: Bool
+    /// Stable identifier encoded in CodeSpark-created worktree directory names.
+    /// Existing worktrees fall back to their path until they are recreated.
+    let worktreeID: String
 
-    var id: String { path }
+    var id: String { worktreeID }
+
+    init(path: String, branch: String, isMainWorktree: Bool, worktreeID: String? = nil) {
+        self.path = path
+        self.branch = branch
+        self.isMainWorktree = isMainWorktree
+        self.worktreeID = worktreeID ?? GitWorktreeService.worktreeID(from: path)
+    }
+}
+
+struct GitWorktreeCreation: Equatable {
+    let id: String
+    let name: String
+    let path: String
+    let branch: String
 }
 
 final class GitWorktreeService: @unchecked Sendable {
+    static let defaultWorktreeRoot = "~/worktrees"
+
     private var cache: [String: CacheEntry] = [:]
     private let normalTTL: TimeInterval = 30
     private let failureTTL: TimeInterval = 60
@@ -99,12 +118,81 @@ final class GitWorktreeService: @unchecked Sendable {
         cache.removeValue(forKey: projectPath)
     }
 
-    /// Creates a new worktree at `<projectPath>/.worktrees/<name>/` on a new branch.
-    /// Returns the worktree filesystem path on success.
-    static func addWorktree(projectPath: String, name: String, branch: String) async throws -> String {
-        let worktreePath = (projectPath as NSString).appendingPathComponent(".worktrees/\(name)")
+    /// Creates a new worktree at `~/worktrees/<repo>-<branch>-<id>` on a new branch.
+    /// The generated ID is part of the directory name, so it remains available
+    /// without a second metadata store when the app is relaunched.
+    static func addWorktree(
+        projectPath: String,
+        branch: String,
+        worktreeRoot: String? = nil,
+        id: String? = nil
+    ) async throws -> GitWorktreeCreation {
+        let rootPath = expandedWorktreeRoot(worktreeRoot ?? configuredWorktreeRoot)
+        try FileManager.default.createDirectory(
+            atPath: rootPath,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+        var worktreeID = id ?? makeWorktreeID()
+        var worktreeName = makeWorktreeName(projectPath: projectPath, branch: branch, id: worktreeID)
+        var worktreePath = (rootPath as NSString).appendingPathComponent(worktreeName)
+        while id == nil && FileManager.default.fileExists(atPath: worktreePath) {
+            worktreeID = makeWorktreeID()
+            worktreeName = makeWorktreeName(projectPath: projectPath, branch: branch, id: worktreeID)
+            worktreePath = (rootPath as NSString).appendingPathComponent(worktreeName)
+        }
         try await runGit(["-C", projectPath, "worktree", "add", "-b", branch, worktreePath])
-        return worktreePath
+        return GitWorktreeCreation(id: worktreeID, name: worktreeName, path: worktreePath, branch: branch)
+    }
+
+    static var configuredWorktreeRoot: String {
+        let configured = UserDefaults.standard.string(forKey: StorageKeys.worktreeRoot) ?? ""
+        return configured.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? defaultWorktreeRoot
+            : configured
+    }
+
+    static func expandedWorktreeRoot(_ root: String) -> String {
+        (root as NSString).expandingTildeInPath
+    }
+
+    static func makeWorktreeID() -> String {
+        String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(4)).lowercased()
+    }
+
+    static func makeWorktreeName(projectPath: String, branch: String, id: String) -> String {
+        let repo = URL(fileURLWithPath: projectPath).lastPathComponent
+        return [sanitizeComponent(repo), sanitizeComponent(branch), sanitizeComponent(id)]
+            .filter { !$0.isEmpty }
+            .joined(separator: "-")
+    }
+
+    static func previewWorktreeName(projectPath: String, branch: String) -> String {
+        [
+            sanitizeComponent(URL(fileURLWithPath: projectPath).lastPathComponent),
+            sanitizeComponent(branch),
+            "<id>",
+        ].joined(separator: "-")
+    }
+
+    static func worktreeID(from path: String) -> String {
+        let component = URL(fileURLWithPath: path).lastPathComponent
+        let pieces = component.split(separator: "-")
+        guard let suffix = pieces.last,
+              suffix.count == 4,
+              suffix.allSatisfy({ $0.isHexDigit }) else {
+            return path
+        }
+        return String(suffix).lowercased()
+    }
+
+    private static func sanitizeComponent(_ value: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_."))
+        let scalars = value.unicodeScalars.map { allowed.contains($0) ? Character(String($0)) : "-" }
+        let sanitized = String(scalars)
+            .replacingOccurrences(of: "-+", with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-_."))
+        return sanitized.isEmpty ? "worktree" : sanitized
     }
 
     static func removeWorktree(projectPath: String, worktreePath: String) async throws {

@@ -9,6 +9,7 @@ Project-based workspaces. Persistent sessions. Keyboard-driven.
 - **Ghostty-powered terminal** — GPU-accelerated rendering via GhosttyKit
 - **Project workspaces** — organize sessions by project with sidebar navigation
 - **Session persistence** — sessions survive app restarts and crashes
+- **Git worktrees** — new worktrees live under `~/worktrees` by default with flat, stable names such as `my-repo-fix-login-a1b2`
 - **SSH remotes** — first-class SSH session support with image paste over scp
 - **Claude Code hooks** — real-time integration with Claude Code via Unix socket
 - **Keyboard-driven** — Cmd+T new tab, Cmd+W close, Cmd+Shift+[ ] switch, Cmd+N new project

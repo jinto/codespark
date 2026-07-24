@@ -1,8 +1,10 @@
+import AppKit
 import SwiftUI
 
 struct SettingsView: View {
     @AppStorage(StorageKeys.terminalFontFamily) private var fontFamily = ""
     @AppStorage(StorageKeys.terminalFontSize) private var fontSize: Double = 0
+    @AppStorage(StorageKeys.worktreeRoot) private var worktreeRoot = GitWorktreeService.defaultWorktreeRoot
     @State private var saved = false
 
     private var displayFamily: String {
@@ -14,6 +16,20 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("Worktrees") {
+                HStack {
+                    TextField("~/worktrees", text: $worktreeRoot)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Choose…") {
+                        chooseWorktreeRoot()
+                    }
+                }
+
+                Text("New worktrees are created as <repo>-<branch>-<id> in this folder. Existing worktrees are not moved.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Terminal Font") {
                 TextField("Font Family", text: $fontFamily, prompt: Text("Auto-detect by language"))
                     .textFieldStyle(.roundedBorder)
@@ -60,5 +76,17 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 400)
         .padding()
+    }
+
+    private func chooseWorktreeRoot() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message = "Choose the folder for new worktrees"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        worktreeRoot = url.path
     }
 }

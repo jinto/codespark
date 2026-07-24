@@ -7,10 +7,6 @@ struct AddWorktreeSheet: View {
     let onCancel: () -> Void
     @FocusState private var isFocused: Bool
 
-    private var sanitized: String {
-        branchName.replacingOccurrences(of: "/", with: "-")
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Add Worktree")
@@ -27,7 +23,7 @@ struct AddWorktreeSheet: View {
             }
 
             if !branchName.isEmpty {
-                Text(".worktrees/\(sanitized)/")
+                Text("\(GitWorktreeService.configuredWorktreeRoot)/\(GitWorktreeService.previewWorktreeName(projectPath: projectPath, branch: branchName))")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.tertiary)
             }

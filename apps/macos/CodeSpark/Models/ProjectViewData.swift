@@ -107,9 +107,24 @@ struct WorkspaceViewData: Identifiable, Equatable {
     let path: String
     let branch: String
     let isMainWorktree: Bool
+    let worktreeID: String
     var sessions: [SessionSummary]
 
-    var id: String { path }
+    var id: String { worktreeID }
+
+    init(
+        path: String,
+        branch: String,
+        isMainWorktree: Bool,
+        sessions: [SessionSummary],
+        worktreeID: String? = nil
+    ) {
+        self.path = path
+        self.branch = branch
+        self.isMainWorktree = isMainWorktree
+        self.worktreeID = worktreeID ?? GitWorktreeService.worktreeID(from: path)
+        self.sessions = sessions
+    }
 }
 
 extension WorkspaceViewData {
@@ -128,7 +143,8 @@ extension WorkspaceViewData {
                 path: ws?.path ?? projectPath,
                 branch: ws?.branch ?? "default",
                 isMainWorktree: true,
-                sessions: sessions
+                sessions: sessions,
+                worktreeID: ws?.worktreeID
             )]
         }
 
@@ -153,7 +169,8 @@ extension WorkspaceViewData {
                 path: wt.path,
                 branch: wt.branch,
                 isMainWorktree: wt.isMainWorktree,
-                sessions: buckets[wt.path] ?? []
+                sessions: buckets[wt.path] ?? [],
+                worktreeID: wt.worktreeID
             )
         }
     }

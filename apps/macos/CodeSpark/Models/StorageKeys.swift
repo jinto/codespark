@@ -7,6 +7,7 @@ enum StorageKeys {
     static let hasCompletedOnboarding = "hasCompletedOnboarding"
     static let terminalFontFamily = "terminalFontFamily"
     static let terminalFontSize = "terminalFontSize"
+    static let worktreeRoot = "worktreeRoot"
     static let migratedToProjectNaming = "migratedToProjectNaming"
     static let isSidebarVisible = "isSidebarVisible"
 }

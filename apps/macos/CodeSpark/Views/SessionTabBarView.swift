@@ -6,6 +6,8 @@ struct SessionTabBarView: View {
     let onSelect: (String) -> Void
     let onClose: (String) -> Void
     let onNew: () -> Void
+    let onNewWorktree: () -> Void
+    let canCreateWorktree: Bool
 
     var body: some View {
         HStack(spacing: 0) {
@@ -30,6 +32,16 @@ struct SessionTabBarView: View {
             }
             .buttonStyle(.plain)
             .help("New session (\u{2318}T)")
+
+            Button(action: onNewWorktree) {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .help("New worktree")
+            .disabled(!canCreateWorktree)
 
             Spacer()
         }

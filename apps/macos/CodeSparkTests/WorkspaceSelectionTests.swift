@@ -3,6 +3,37 @@ import XCTest
 
 final class WorkspaceSelectionTests: XCTestCase {
 
+    // MARK: - Worktree naming
+
+    func test_worktree_name_is_flat_repo_branch_and_id() {
+        let name = GitWorktreeService.makeWorktreeName(
+            projectPath: "/Users/me/my-repo",
+            branch: "fix/login",
+            id: "a1b2"
+        )
+
+        XCTAssertEqual(name, "my-repo-fix-login-a1b2")
+    }
+
+    func test_worktree_id_is_recovered_from_generated_path() {
+        XCTAssertEqual(
+            GitWorktreeService.worktreeID(from: "/Users/me/worktrees/my-repo-fix-login-a1b2"),
+            "a1b2"
+        )
+    }
+
+    func test_existing_worktree_without_generated_id_uses_path_as_id() {
+        let path = "/Users/me/project/.worktrees/feature-login"
+        XCTAssertEqual(GitWorktreeService.worktreeID(from: path), path)
+    }
+
+    func test_default_worktree_root_expands_tilde() {
+        XCTAssertEqual(
+            GitWorktreeService.expandedWorktreeRoot(GitWorktreeService.defaultWorktreeRoot),
+            (GitWorktreeService.defaultWorktreeRoot as NSString).expandingTildeInPath
+        )
+    }
+
     // MARK: - Task 1: groupSessions always returns workspace (even single worktree)
 
     func test_single_worktree_returns_one_workspace() {

@@ -420,15 +420,14 @@ final class AppModel: ObservableObject {
 
     func addWorktree(branch: String) async {
         guard let project = selectedProject, !project.path.isEmpty else { return }
-        let sanitized = branch.replacingOccurrences(of: "/", with: "-")
         do {
-            let worktreePath = try await GitWorktreeService.addWorktree(
-                projectPath: project.path, name: sanitized, branch: branch
+            let creation = try await GitWorktreeService.addWorktree(
+                projectPath: project.path, branch: branch
             )
             gitWorktreeService.invalidateCache(for: project.path)
             await gitWorktreeService.refreshWorktrees(for: [project.path])
             recomputeWorkspaces()
-            await newSession(inWorkspacePath: worktreePath)
+            await newSession(inWorkspacePath: creation.path)
         } catch {
             loadErrorMessage = error.localizedDescription
         }

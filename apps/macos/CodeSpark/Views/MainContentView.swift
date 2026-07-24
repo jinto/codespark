@@ -5,6 +5,8 @@ struct MainContentView: View {
     var onToggleSidebar: (() -> Void)?
     @State private var showCloseSessionAlert = false
     @State private var showCloseProjectAlert = false
+    @State private var showAddWorktreeSheet = false
+    @State private var newWorktreeBranch = ""
 
     var body: some View {
         Group {
@@ -15,7 +17,13 @@ struct MainContentView: View {
                     activeSessionID: model.activeSessionID,
                     onSelect: { id in model.activeSessionID = id },
                     onClose: { id in model.closeSession(id: id) },
-                    onNew: { Task { await model.newSession() } }
+                    onNew: { Task { await model.newSession() } },
+                    onNewWorktree: {
+                        guard model.selectedProject?.transport == "local" else { return }
+                        newWorktreeBranch = ""
+                        showAddWorktreeSheet = true
+                    },
+                    canCreateWorktree: project.transport == "local"
                 )
                 .frame(height: 24)
 
@@ -57,6 +65,20 @@ struct MainContentView: View {
             .background(AppTheme.surfaceBackground)
         }
         } // Group
+        .sheet(isPresented: $showAddWorktreeSheet) {
+            if let project = model.selectedProject {
+                AddWorktreeSheet(
+                    branchName: $newWorktreeBranch,
+                    projectPath: project.path,
+                    onCreate: {
+                        let branch = newWorktreeBranch
+                        showAddWorktreeSheet = false
+                        Task { await model.addWorktree(branch: branch) }
+                    },
+                    onCancel: { showAddWorktreeSheet = false }
+                )
+            }
+        }
         .onChange(of: model.pendingCloseSessionID) { _, newValue in
             showCloseSessionAlert = newValue != nil
         }
