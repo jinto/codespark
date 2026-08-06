@@ -11,6 +11,7 @@
 		0453F36CBDA670D2FF405A59 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B3EF915455EE5A5AEFAE01 /* AppModelTests.swift */; };
 		05775B2732E4FEE5DF603358 /* ProjectFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CA1F37A49DC57DD259D7C23 /* ProjectFlowTests.swift */; };
 		3D0FEFA3FAB6C31107E3A49C /* WorkspaceSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */; };
+		A1B2C3D40002E5F600001002 /* AppBundleMetadataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40001E5F600001001 /* AppBundleMetadataTests.swift */; };
 		2CE4832E1EECF0838626509C /* KeyEventRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EBC0F80B881E43ADC44ABFA /* KeyEventRouter.swift */; };
 		9ED695B19FC93D927CBF1CBD /* KeyEventRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */; };
 		B4F28A6E1D93C7520EAF6D91 /* UIVerificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */; };
@@ -23,6 +24,7 @@
 		366A365CFA1EFA718DEF53C6 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13C9EBA2F1A781BC47810CD2 /* SidebarView.swift */; };
 		3F0129AAAF55357541A4D8B6 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68D431120939D317364A97A9 /* CoreGraphics.framework */; };
 		47E722B3A80D8F6EA4095FAA /* SessionTabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */; };
+		A1B2C3D40004E5F600001004 /* RestoredScreenGhost.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40003E5F600001003 /* RestoredScreenGhost.swift */; };
 		4A72F1CFFEF80585ED500C3F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E88E37B7F37CF55D219D6B /* SettingsView.swift */; };
 		4E5838C30942E3A4EAC8B3B2 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 17158E6BF62F75313B1E9B2F /* Metal.framework */; };
 		4F7109283E67CEE1A8CA7425 /* GhosttyTerminalSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF23B602753F8B2AC6D2D29 /* GhosttyTerminalSurfaceView.swift */; };
@@ -101,6 +103,7 @@
 		63111BBE479AA199E252A364 /* ProjectCoreClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCoreClient.swift; sourceTree = "<group>"; };
 		6465D8D71A356DB935A2D94C /* GhosttyTerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyTerminalHost.swift; sourceTree = "<group>"; };
 		6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTabBarView.swift; sourceTree = "<group>"; };
+		A1B2C3D40003E5F600001003 /* RestoredScreenGhost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoredScreenGhost.swift; sourceTree = "<group>"; };
 		66BAAF4E673EE8BBBAA95CF7 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
 		68D431120939D317364A97A9 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		6D4B27F8AE7CBF0B33461523 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
@@ -113,6 +116,7 @@
 		85F9E2DCA6D0CF00B744A92C /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 		8CA1F37A49DC57DD259D7C23 /* ProjectFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFlowTests.swift; sourceTree = "<group>"; };
 		1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSelectionTests.swift; sourceTree = "<group>"; };
+		A1B2C3D40001E5F600001001 /* AppBundleMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBundleMetadataTests.swift; sourceTree = "<group>"; };
 		982886C18B94884FEA504409 /* GitWorktreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitWorktreeService.swift; sourceTree = "<group>"; };
 		9FDED25D7FAF92C05A934D97 /* TerminalHostProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostProtocol.swift; sourceTree = "<group>"; };
 		A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSidebarRow.swift; sourceTree = "<group>"; };
@@ -205,6 +209,7 @@
 				1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */,
 				7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */,
 				1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */,
+				A1B2C3D40001E5F600001001 /* AppBundleMetadataTests.swift */,
 				E2F3A4B5C6D7E8F9A0B1C2D3 /* TerminalStateDetectorTests.swift */,
 			);
 			path = CodeSparkTests;
@@ -231,6 +236,7 @@
 				F3450FDDB010612C39DC6A6B /* OnboardingView.swift */,
 				A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */,
 				6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */,
+				A1B2C3D40003E5F600001003 /* RestoredScreenGhost.swift */,
 				E2E88E37B7F37CF55D219D6B /* SettingsView.swift */,
 				13C9EBA2F1A781BC47810CD2 /* SidebarView.swift */,
 			);
@@ -336,6 +342,7 @@
 				EFA6F634A150CF143B22983A /* Sources */,
 				C17E8870134F39DF9DFB380A /* Resources */,
 				34E16C43B362353B10DC387C /* Frameworks */,
+				A1B2C3D40005E5F600001005 /* Bundle Ghostty shell integration */,
 			);
 			buildRules = (
 			);
@@ -450,6 +457,25 @@
 			shellPath = /bin/sh;
 			shellScript = "export ZIG_GLOBAL_CACHE_DIR=\"$SRCROOT/../../libs/workspace-core/.zig-global-cache\"\nexport ZIG_LOCAL_CACHE_DIR=\"$SRCROOT/../../libs/workspace-core/.zig-cache\"\ncd \"$SRCROOT/../../libs/workspace-core\"\nif [ \"$CONFIGURATION\" = \"Release\" ]; then\n  zig build -Doptimize=ReleaseFast\nelse\n  zig build -Doptimize=Debug\nfi\n# Re-archive with Apple libtool to fix Zig archive alignment\nLIBPATH=\"zig-out/lib/libworkspace-core.a\"\nTMPDIR=$(mktemp -d)\ncd \"$TMPDIR\"\nar x \"$OLDPWD/$LIBPATH\"\nchmod 644 *.o\nlibtool -static -o \"$OLDPWD/$LIBPATH\" *.o\nrm -rf \"$TMPDIR\"\n";
 		};
+		A1B2C3D40005E5F600001005 /* Bundle Ghostty shell integration */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Ghostty shell integration";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Ghostty finds its shell integration (OSC 7 cwd reporting, prompt marks)\n# through GHOSTTY_RESOURCES_DIR, which GhosttyRuntime points at this copy.\nSRC=\"$SRCROOT/../../vendor/ghostty/zig-out/share/ghostty/shell-integration\"\nDEST=\"$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/Resources/ghostty\"\nif [ ! -d \"$SRC\" ]; then\n  echo \"warning: ghostty shell-integration not found at $SRC; cwd tracking will be disabled\"\n  exit 0\nfi\nmkdir -p \"$DEST\"\nrsync -a --delete \"$SRC\" \"$DEST/\"\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -468,6 +494,7 @@
 				C99241FBDBBE4B339BFDFFBC /* TerminalHostFactoryTests.swift in Sources */,
 				B4F28A6E1D93C7520EAF6D91 /* UIVerificationTests.swift in Sources */,
 				3D0FEFA3FAB6C31107E3A49C /* WorkspaceSelectionTests.swift in Sources */,
+				A1B2C3D40002E5F600001002 /* AppBundleMetadataTests.swift in Sources */,
 				B2C3D4E5F6A7B8C9D0E1F2A3 /* TerminalStateDetectorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -504,6 +531,7 @@
 				E0A153DE5FCE17D9559AC0C3 /* ProjectViewData.swift in Sources */,
 				E8CF80B13D9BFCC8278965D6 /* SessionSidebarRow.swift in Sources */,
 				47E722B3A80D8F6EA4095FAA /* SessionTabBarView.swift in Sources */,
+				A1B2C3D40004E5F600001004 /* RestoredScreenGhost.swift in Sources */,
 				4A72F1CFFEF80585ED500C3F /* SettingsView.swift in Sources */,
 				366A365CFA1EFA718DEF53C6 /* SidebarView.swift in Sources */,
 				0EEC708F84CF823A8E360EC4 /* NewSSHProjectSheet.swift in Sources */,
@@ -649,6 +677,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 1;
 				COMBINE_HIDPI_IMAGES = YES;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -659,6 +688,7 @@
 					"$(SRCROOT)/../../libs/workspace-core/include",
 				);
 				INFOPLIST_KEY_CFBundleDisplayName = CodeSpark;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 JAE KWON PARK. All rights reserved.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -666,6 +696,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(SRCROOT)/../../libs/workspace-core/zig-out/lib",
 				);
+				MARKETING_VERSION = 0.9.5;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -689,6 +720,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 1;
 				COMBINE_HIDPI_IMAGES = YES;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -699,6 +731,7 @@
 					"$(SRCROOT)/../../libs/workspace-core/include",
 				);
 				INFOPLIST_KEY_CFBundleDisplayName = CodeSpark;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright © 2026 JAE KWON PARK. All rights reserved.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -706,6 +739,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(SRCROOT)/../../libs/workspace-core/zig-out/lib",
 				);
+				MARKETING_VERSION = 0.9.5;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",

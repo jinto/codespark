@@ -46,6 +46,7 @@ pub const project_status_t = enum(c_int) {
     PROJECT_STATUS_CLOSE_SESSION_FAILED = 10,
     PROJECT_STATUS_RENAME_PROJECT_FAILED = 11,
     PROJECT_STATUS_DELETE_PROJECT_FAILED = 12,
+    PROJECT_STATUS_UPDATE_PROJECT_PATH_FAILED = 13,
 };
 
 pub const project_session_transport_t = enum(c_int) {
@@ -72,6 +73,7 @@ pub const project_session_summary_t = extern struct {
     transport: project_session_transport_t,
     target_label: ?[*:0]u8,
     last_cwd: ?[*:0]u8,
+    workspace_path: ?[*:0]u8,
     close_reason: project_close_reason_t,
 };
 
@@ -106,6 +108,14 @@ pub const project_new_session_t = extern struct {
     title: ?[*:0]const u8,
     shell: ?[*:0]const u8,
     initial_cwd: ?[*:0]const u8,
+    workspace_path: ?[*:0]const u8,
+};
+
+pub const project_snapshot_t = extern struct {
+    cols: u16,
+    rows: u16,
+    lines: ?[*]?[*:0]u8,
+    line_count: i32,
 };
 
 pub const project_new_snapshot_t = extern struct {
@@ -195,6 +205,7 @@ fn fillSessionSummary(out: *project_session_summary_t, value: models.SessionSumm
     out.transport = toTransport(value.transport);
     out.target_label = try dupCString(value.target_label);
     out.last_cwd = try dupOptionalCString(value.last_cwd);
+    out.workspace_path = try dupCString(value.workspace_path);
     out.close_reason = toCloseReason(value.close_reason);
 }
 
@@ -203,6 +214,7 @@ fn freeSessionSummary(value: *project_session_summary_t) void {
     project_free_string(value.title);
     project_free_string(value.target_label);
     project_free_string(value.last_cwd);
+    project_free_string(value.workspace_path);
     value.* = std.mem.zeroes(project_session_summary_t);
 }
 
@@ -336,6 +348,7 @@ pub export fn project_service_start_session(
         .title = title,
         .shell = shell,
         .initial_cwd = spanOrNull(raw.initial_cwd),
+        .workspace_path = spanOrNull(raw.workspace_path) orelse "",
     }) catch return .PROJECT_STATUS_START_SESSION_FAILED;
     defer c_allocator.free(session_id);
 
@@ -395,6 +408,88 @@ pub export fn project_service_close_session(
     defer ptr.mutex.unlock();
 
     ptr.store.closeSession(session, close_reason, spanOrNull(last_cwd)) catch return .PROJECT_STATUS_CLOSE_SESSION_FAILED;
+    return .PROJECT_STATUS_OK;
+}
+
+/// Fills `out_snapshot` with the session's most recent screen. `found` is set
+/// false when the session never had one; free with project_free_snapshot.
+pub export fn project_service_latest_snapshot(
+    ptr: ?*project_service,
+    session_id: ?[*:0]const u8,
+    out_snapshot: ?*project_snapshot_t,
+    out_found: ?*bool,
+) project_status_t {
+    const svc = ptr orelse return .PROJECT_STATUS_POISONED_STATE;
+    const out = out_snapshot orelse return .PROJECT_STATUS_RECORD_SNAPSHOT_FAILED;
+    const sid = spanRequired(session_id) orelse return .PROJECT_STATUS_RECORD_SNAPSHOT_FAILED;
+
+    svc.mutex.lock();
+    defer svc.mutex.unlock();
+
+    out.* = std.mem.zeroes(project_snapshot_t);
+    if (out_found) |flag| flag.* = false;
+
+    var grid = (svc.store.latestSnapshot(c_allocator, sid) catch
+        return .PROJECT_STATUS_RECORD_SNAPSHOT_FAILED) orelse return .PROJECT_STATUS_OK;
+    defer grid.deinit(c_allocator);
+
+    const lines = c_allocator.alloc(?[*:0]u8, grid.lines.len) catch
+        return .PROJECT_STATUS_RECORD_SNAPSHOT_FAILED;
+    for (lines) |*slot| slot.* = null;
+
+    for (grid.lines, 0..) |line, index| {
+        lines[index] = dupCString(line) catch {
+            for (lines) |slot| project_free_string(slot);
+            c_allocator.free(lines);
+            return .PROJECT_STATUS_RECORD_SNAPSHOT_FAILED;
+        };
+    }
+
+    out.cols = grid.cols;
+    out.rows = grid.rows;
+    out.lines = lines.ptr;
+    out.line_count = @intCast(lines.len);
+    if (out_found) |flag| flag.* = true;
+    return .PROJECT_STATUS_OK;
+}
+
+pub export fn project_free_snapshot(snapshot: ?*project_snapshot_t) void {
+    const value = snapshot orelse return;
+    if (value.lines) |ptr| {
+        const count: usize = @intCast(value.line_count);
+        const slice = ptr[0..count];
+        for (slice) |line| project_free_string(line);
+        c_allocator.free(slice);
+    }
+    value.* = std.mem.zeroes(project_snapshot_t);
+}
+
+pub export fn project_service_consume_interrupted_session(
+    ptr: ?*project_service,
+    session_id: ?[*:0]const u8,
+) project_status_t {
+    const svc = ptr orelse return .PROJECT_STATUS_POISONED_STATE;
+    svc.mutex.lock();
+    defer svc.mutex.unlock();
+
+    const sid = spanRequired(session_id) orelse return .PROJECT_STATUS_CLOSE_SESSION_FAILED;
+    svc.store.consumeInterruptedSession(sid) catch return .PROJECT_STATUS_CLOSE_SESSION_FAILED;
+    return .PROJECT_STATUS_OK;
+}
+
+pub export fn project_service_update_session_cwd(
+    ptr: ?*project_service,
+    session_id: ?[*:0]const u8,
+    cwd: ?[*:0]const u8,
+) project_status_t {
+    const svc = ptr orelse return .PROJECT_STATUS_POISONED_STATE;
+    svc.mutex.lock();
+    defer svc.mutex.unlock();
+
+    const sid = spanOrNull(session_id) orelse return .PROJECT_STATUS_CLOSE_SESSION_FAILED;
+    const dir = spanOrNull(cwd) orelse return .PROJECT_STATUS_CLOSE_SESSION_FAILED;
+
+    svc.store.updateSessionCwd(sid, dir) catch return .PROJECT_STATUS_CLOSE_SESSION_FAILED;
     return .PROJECT_STATUS_OK;
 }
 
@@ -499,6 +594,22 @@ pub export fn project_service_rename_project(
     defer ptr.mutex.unlock();
 
     ptr.store.renameProject(project, name) catch return .PROJECT_STATUS_RENAME_PROJECT_FAILED;
+    return .PROJECT_STATUS_OK;
+}
+
+pub export fn project_service_update_project_path(
+    service: ?*project_service,
+    project_id: ?[*:0]const u8,
+    new_path: ?[*:0]const u8,
+) project_status_t {
+    const ptr = service orelse return .PROJECT_STATUS_UPDATE_PROJECT_PATH_FAILED;
+    const project = spanRequired(project_id) orelse return .PROJECT_STATUS_UPDATE_PROJECT_PATH_FAILED;
+    const path = spanRequired(new_path) orelse return .PROJECT_STATUS_UPDATE_PROJECT_PATH_FAILED;
+
+    ptr.mutex.lock();
+    defer ptr.mutex.unlock();
+
+    ptr.store.updateProjectPath(project, path) catch return .PROJECT_STATUS_UPDATE_PROJECT_PATH_FAILED;
     return .PROJECT_STATUS_OK;
 }
 

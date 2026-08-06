@@ -36,6 +36,7 @@ pub const project_service_reconcile_interrupted_sessions = c_api.project_service
 pub const project_service_list_project_summaries = c_api.project_service_list_project_summaries;
 pub const project_service_create_project = c_api.project_service_create_project;
 pub const project_service_rename_project = c_api.project_service_rename_project;
+pub const project_service_update_project_path = c_api.project_service_update_project_path;
 pub const project_service_delete_project = c_api.project_service_delete_project;
 pub const project_service_project_detail = c_api.project_service_project_detail;
 pub const project_service_find_project_by_cwd = c_api.project_service_find_project_by_cwd;

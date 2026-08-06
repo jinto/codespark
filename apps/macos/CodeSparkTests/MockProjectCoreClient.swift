@@ -7,7 +7,13 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
     private let detailErrorsByID: [String: Error]
     private let detailLatencyByID: [String: UInt64]
     private(set) var closedSessionIDs: [String] = []
+    private(set) var recordedCwds: [(sessionId: String, cwd: String)] = []
+    private(set) var startedSessions: [(initialCwd: String?, workspacePath: String)] = []
+    private(set) var savedRestoreSnapshots: [String] = []
+    var snapshotsBySessionID: [String: TerminalSnapshotViewData] = [:]
+    private(set) var consumedInterruptedSessions: [String] = []
     private(set) var renamedProjects: [(id: String, newName: String)] = []
+    private(set) var updatedProjectPaths: [(id: String, newPath: String)] = []
     private(set) var deletedProjectIDs: [String] = []
     private var sessionCounter = 0
 
@@ -27,8 +33,9 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
         "mock-project-id"
     }
 
-    func startSession(projectId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String {
+    func startSession(projectId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?, workspacePath: String) async throws -> String {
         sessionCounter += 1
+        startedSessions.append((initialCwd: initialCwd, workspacePath: workspacePath))
         return "mock-session-\(sessionCounter)"
     }
 
@@ -63,10 +70,30 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
 
     func recordCheckpointSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData) async throws { }
 
+    func saveSnapshotForRestore(sessionID: String, snapshot: TerminalSnapshotViewData) throws {
+        savedRestoreSnapshots.append(sessionID)
+    }
+
+    func latestSnapshot(sessionID: String) async throws -> TerminalSnapshotViewData? {
+        snapshotsBySessionID[sessionID]
+    }
+
     func updateSessionTitle(sessionId: String, newTitle: String) async throws { }
+
+    func updateSessionCwd(sessionId: String, cwd: String) async throws {
+        recordedCwds.append((sessionId: sessionId, cwd: cwd))
+    }
+
+    func consumeInterruptedSession(sessionId: String) async throws {
+        consumedInterruptedSessions.append(sessionId)
+    }
 
     func renameProject(id: String, newName: String) async throws {
         renamedProjects.append((id: id, newName: newName))
+    }
+
+    func updateProjectPath(id: String, newPath: String) async throws {
+        updatedProjectPaths.append((id: id, newPath: newPath))
     }
 
     func deleteProject(id: String) async throws {
@@ -105,7 +132,8 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
                         targetLabel: "prod",
                         lastCwd: "/srv/app"
                     )
-                ]
+                ],
+                interruptedSessions: []
             )]
         )
     }

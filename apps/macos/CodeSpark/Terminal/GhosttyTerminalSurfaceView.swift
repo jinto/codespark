@@ -12,39 +12,83 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
     /// Set when this surface belongs to an SSH session — enables remote image paste via scp.
     var sshConnectionInfo: SSHConnectionInfo?
 
-    init(app: ghostty_app_t, workingDirectory: String?, command: String?) {
+    /// Fired on every keystroke — used to clear a restored tab's ghost screen.
+    /// The model decides whether there is anything to clear.
+    var onKeyDown: (() -> Void)?
+
+    init(
+        app: ghostty_app_t,
+        workingDirectory: String?,
+        command: String?,
+        environment: [String: String] = [:]
+    ) {
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         autoresizingMask = [.width, .height]
 
+        surface = Self.createSurface(
+            app: app,
+            view: self,
+            workingDirectory: workingDirectory,
+            command: command,
+            environment: environment
+        )
+    }
+
+    private static func createSurface(
+        app: ghostty_app_t,
+        view: NSView,
+        workingDirectory: String?,
+        command: String?,
+        environment: [String: String]
+    ) -> ghostty_surface_t? {
         var config = ghostty_surface_config_new()
         config.platform_tag = GHOSTTY_PLATFORM_MACOS
         config.platform = ghostty_platform_u(
-            macos: ghostty_platform_macos_s(nsview: Unmanaged.passUnretained(self).toOpaque())
+            macos: ghostty_platform_macos_s(nsview: Unmanaged.passUnretained(view).toOpaque())
         )
         config.scale_factor = Double(NSScreen.main?.backingScaleFactor ?? 2.0)
         config.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
 
-        switch (workingDirectory, command) {
-        case let (cwd?, cmd?):
-            cwd.withCString { cwdPtr in
-                cmd.withCString { cmdPtr in
-                    config.working_directory = cwdPtr
-                    config.command = cmdPtr
-                    self.surface = ghostty_surface_new(app, &config)
+        let keys = Array(environment.keys)
+        let values = keys.map { environment[$0] ?? "" }
+        return keys.withCStrings { keyPointers in
+            values.withCStrings { valuePointers in
+                var variables = zip(keyPointers, valuePointers).map {
+                    ghostty_env_var_s(key: $0.0, value: $0.1)
+                }
+                let variableCount = variables.count
+                return variables.withUnsafeMutableBufferPointer { buffer in
+                    config.env_vars = buffer.baseAddress
+                    config.env_var_count = variableCount
+
+                    func create() -> ghostty_surface_t? {
+                        switch (workingDirectory, command) {
+                        case let (cwd?, cmd?):
+                            return cwd.withCString { cwdPtr in
+                                cmd.withCString { cmdPtr in
+                                    config.working_directory = cwdPtr
+                                    config.command = cmdPtr
+                                    return ghostty_surface_new(app, &config)
+                                }
+                            }
+                        case let (cwd?, nil):
+                            return cwd.withCString { cwdPtr in
+                                config.working_directory = cwdPtr
+                                return ghostty_surface_new(app, &config)
+                            }
+                        case let (nil, cmd?):
+                            return cmd.withCString { cmdPtr in
+                                config.command = cmdPtr
+                                return ghostty_surface_new(app, &config)
+                            }
+                        case (nil, nil):
+                            return ghostty_surface_new(app, &config)
+                        }
+                    }
+
+                    return create()
                 }
             }
-        case let (cwd?, nil):
-            cwd.withCString { cwdPtr in
-                config.working_directory = cwdPtr
-                self.surface = ghostty_surface_new(app, &config)
-            }
-        case let (nil, cmd?):
-            cmd.withCString { cmdPtr in
-                config.command = cmdPtr
-                self.surface = ghostty_surface_new(app, &config)
-            }
-        case (nil, nil):
-            surface = ghostty_surface_new(app, &config)
         }
     }
 
@@ -110,6 +154,7 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
 
     override func keyDown(with event: NSEvent) {
         guard let surface else { return }
+        onKeyDown?()
 
         // Cmd+V: paste from system clipboard (keyCode 9 = V, IME-independent)
         if event.modifierFlags.contains(.command), event.keyCode == 9 {
@@ -401,6 +446,19 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         if flags.contains(.option) { raw |= UInt32(GHOSTTY_MODS_ALT.rawValue) }
         if flags.contains(.command) { raw |= UInt32(GHOSTTY_MODS_SUPER.rawValue) }
         return ghostty_input_mods_e(rawValue: raw)
+    }
+}
+
+private extension Array where Element == String {
+    func withCStrings<T>(_ body: ([UnsafePointer<Int8>?]) -> T) -> T {
+        func recurse(_ index: Int, _ pointers: [UnsafePointer<Int8>?]) -> T {
+            guard index < count else { return body(pointers) }
+            return self[index].withCString { pointer in
+                recurse(index + 1, pointers + [pointer])
+            }
+        }
+
+        return recurse(0, [])
     }
 }
 #endif

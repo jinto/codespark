@@ -24,6 +24,7 @@ typedef enum project_status_t {
     PROJECT_STATUS_CLOSE_SESSION_FAILED = 10,
     PROJECT_STATUS_RENAME_PROJECT_FAILED = 11,
     PROJECT_STATUS_DELETE_PROJECT_FAILED = 12,
+    PROJECT_STATUS_UPDATE_PROJECT_PATH_FAILED = 13,
 } project_status_t;
 
 typedef enum project_session_transport_t {
@@ -50,6 +51,7 @@ typedef struct project_session_summary_t {
     project_session_transport_t transport;
     char *target_label;
     char *last_cwd;
+    char *workspace_path;
     project_close_reason_t close_reason;
 } project_session_summary_t;
 
@@ -84,6 +86,7 @@ typedef struct project_new_session_t {
     const char *title;
     const char *shell;
     const char *initial_cwd;
+    const char *workspace_path;
 } project_new_session_t;
 
 typedef struct project_new_snapshot_t {
@@ -122,6 +125,32 @@ project_status_t project_service_update_session_title(
     const char *session_id,
     const char *new_title
 );
+
+project_status_t project_service_update_session_cwd(
+    project_service_t *service,
+    const char *session_id,
+    const char *cwd
+);
+
+project_status_t project_service_consume_interrupted_session(
+    project_service_t *service,
+    const char *session_id
+);
+
+typedef struct project_snapshot_t {
+    uint16_t cols;
+    uint16_t rows;
+    char **lines;
+    int32_t line_count;
+} project_snapshot_t;
+
+project_status_t project_service_latest_snapshot(
+    project_service_t *service,
+    const char *session_id,
+    project_snapshot_t *out_snapshot,
+    bool *out_found
+);
+void project_free_snapshot(project_snapshot_t *snapshot);
 project_status_t project_service_reconcile_interrupted_sessions(project_service_t *service);
 project_status_t project_service_list_project_summaries(
     project_service_t *service,
@@ -139,6 +168,11 @@ project_status_t project_service_rename_project(
     project_service_t *service,
     const char *project_id,
     const char *new_name
+);
+project_status_t project_service_update_project_path(
+    project_service_t *service,
+    const char *project_id,
+    const char *new_path
 );
 project_status_t project_service_delete_project(
     project_service_t *service,

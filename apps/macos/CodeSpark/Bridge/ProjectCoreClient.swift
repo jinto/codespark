@@ -6,8 +6,9 @@ protocol ProjectCoreClientProtocol {
     func listProjectSummaries() async throws -> [ProjectSummaryViewData]
     func projectDetail(id: String) async throws -> ProjectDetailViewData
     func renameProject(id: String, newName: String) async throws
+    func updateProjectPath(id: String, newPath: String) async throws
     func deleteProject(id: String) async throws
-    func startSession(projectId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String
+    func startSession(projectId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?, workspacePath: String) async throws -> String
 
     // MARK: - Session lifecycle
     func recordFinalSnapshotAndClose(
@@ -16,8 +17,13 @@ protocol ProjectCoreClientProtocol {
         closeReason: CloseReasonViewData
     ) async throws
     func updateSessionTitle(sessionId: String, newTitle: String) async throws
+    func updateSessionCwd(sessionId: String, cwd: String) async throws
+    func consumeInterruptedSession(sessionId: String) async throws
     func reconcileInterruptedSessions() async throws
     func recordCheckpointSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData) async throws
+    /// Synchronous so it can complete inside `applicationWillTerminate`.
+    func saveSnapshotForRestore(sessionID: String, snapshot: TerminalSnapshotViewData) throws
+    func latestSnapshot(sessionID: String) async throws -> TerminalSnapshotViewData?
 }
 
 enum ProjectCoreClient {
@@ -79,31 +85,35 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
         return String(cString: outId)
     }
 
-    func startSession(projectId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?) async throws -> String {
+    func startSession(projectId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?, workspacePath: String) async throws -> String {
         var input = project_new_session_t(
             project_id: nil,
             transport: transport == "ssh" ? PROJECT_SESSION_TRANSPORT_SSH : PROJECT_SESSION_TRANSPORT_LOCAL,
             target_label: nil,
             title: nil,
             shell: nil,
-            initial_cwd: nil
+            initial_cwd: nil,
+            workspace_path: nil
         )
         var outId: UnsafeMutablePointer<CChar>?
         let status = projectId.withCString { projPtr in
             targetLabel.withCString { tlPtr in
                 title.withCString { titlePtr in
                     shell.withCString { shellPtr in
-                        input.project_id = projPtr
-                        input.target_label = tlPtr
-                        input.title = titlePtr
-                        input.shell = shellPtr
-                        if let cwd = initialCwd {
-                            return cwd.withCString { cwdPtr in
-                                input.initial_cwd = cwdPtr
+                        workspacePath.withCString { wsPtr in
+                            input.project_id = projPtr
+                            input.target_label = tlPtr
+                            input.title = titlePtr
+                            input.shell = shellPtr
+                            input.workspace_path = wsPtr
+                            if let cwd = initialCwd {
+                                return cwd.withCString { cwdPtr in
+                                    input.initial_cwd = cwdPtr
+                                    return project_service_start_session(service, &input, &outId)
+                                }
+                            } else {
                                 return project_service_start_session(service, &input, &outId)
                             }
-                        } else {
-                            return project_service_start_session(service, &input, &outId)
                         }
                     }
                 }
@@ -131,7 +141,8 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
                         id: String(cString: d.id),
                         title: String(cString: d.title),
                         targetLabel: String(cString: d.target_label),
-                        lastCwd: d.last_cwd != nil ? String(cString: d.last_cwd) : nil
+                        lastCwd: d.last_cwd != nil ? String(cString: d.last_cwd) : nil,
+                        workspacePath: d.workspace_path != nil ? String(cString: d.workspace_path) : ""
                     )
                 }
             } else {
@@ -163,7 +174,8 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
                 id: String(cString: s.id),
                 title: String(cString: s.title),
                 targetLabel: String(cString: s.target_label),
-                lastCwd: s.last_cwd != nil ? String(cString: s.last_cwd) : nil
+                lastCwd: s.last_cwd != nil ? String(cString: s.last_cwd) : nil,
+                workspacePath: s.workspace_path != nil ? String(cString: s.workspace_path) : ""
             )
         }
 
@@ -173,7 +185,8 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
                 id: String(cString: s.id),
                 title: String(cString: s.title),
                 targetLabel: String(cString: s.target_label),
-                lastCwd: s.last_cwd != nil ? String(cString: s.last_cwd) : nil
+                lastCwd: s.last_cwd != nil ? String(cString: s.last_cwd) : nil,
+                workspacePath: s.workspace_path != nil ? String(cString: s.workspace_path) : ""
             )
         }
 
@@ -197,10 +210,35 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
         guard status == PROJECT_STATUS_OK else { throw projectError(status) }
     }
 
+    func updateSessionCwd(sessionId: String, cwd: String) async throws {
+        let status = sessionId.withCString { idPtr in
+            cwd.withCString { cwdPtr in
+                project_service_update_session_cwd(service, idPtr, cwdPtr)
+            }
+        }
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
+    }
+
+    func consumeInterruptedSession(sessionId: String) async throws {
+        let status = sessionId.withCString {
+            project_service_consume_interrupted_session(service, $0)
+        }
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
+    }
+
     func renameProject(id: String, newName: String) async throws {
         let status = id.withCString { idPtr in
             newName.withCString { namePtr in
                 project_service_rename_project(service, idPtr, namePtr)
+            }
+        }
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
+    }
+
+    func updateProjectPath(id: String, newPath: String) async throws {
+        let status = id.withCString { idPtr in
+            newPath.withCString { pathPtr in
+                project_service_update_project_path(service, idPtr, pathPtr)
             }
         }
         guard status == PROJECT_STATUS_OK else { throw projectError(status) }
@@ -232,6 +270,28 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
     func recordCheckpointSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData) async throws {
         guard !snapshot.lines.isEmpty else { return }
         try recordSnapshot(sessionID: sessionID, snapshot: snapshot, kind: PROJECT_SNAPSHOT_KIND_CHECKPOINT)
+    }
+
+    func saveSnapshotForRestore(sessionID: String, snapshot: TerminalSnapshotViewData) throws {
+        guard !snapshot.lines.isEmpty else { return }
+        try recordSnapshot(sessionID: sessionID, snapshot: snapshot, kind: PROJECT_SNAPSHOT_KIND_FINAL)
+    }
+
+    func latestSnapshot(sessionID: String) async throws -> TerminalSnapshotViewData? {
+        var snapshot = project_snapshot_t()
+        var found = false
+        let status = sessionID.withCString {
+            project_service_latest_snapshot(service, $0, &snapshot, &found)
+        }
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
+        defer { project_free_snapshot(&snapshot) }
+        guard found else { return nil }
+
+        let count = Int(snapshot.line_count)
+        let lines: [String] = (0..<count).compactMap { index in
+            snapshot.lines?[index].map { String(cString: $0) }
+        }
+        return TerminalSnapshotViewData(cols: Int(snapshot.cols), rows: Int(snapshot.rows), lines: lines)
     }
 
     private func recordSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData, kind: project_snapshot_kind_t) throws {

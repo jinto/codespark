@@ -66,6 +66,8 @@ jobs:
             -configuration Release \
             -derivedDataPath build \
             -destination "platform=macOS,arch=arm64" \
+            MARKETING_VERSION="${GITHUB_REF_NAME#v}" \
+            CURRENT_PROJECT_VERSION="${GITHUB_RUN_NUMBER}" \
             CODE_SIGN_IDENTITY="Developer ID Application: JAE KWON PARK (QN9P7KSSMU)" \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGN_STYLE=Manual \

@@ -735,6 +735,307 @@ test "findProjectByCwd via C API" {
     try std.testing.expect(no_match == null);
 }
 
+test "updateSessionCwd tracks the shell's current directory" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "/Users/me/codespark", .local);
+    defer std.testing.allocator.free(project_id);
+
+    const session_id = try store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Terminal",
+        .shell = "zsh",
+        .initial_cwd = "/Users/me",
+    });
+    defer std.testing.allocator.free(session_id);
+
+    try store.updateSessionCwd(session_id, "/Users/me/projects/codespark");
+
+    var detail = try store.projectDetail(std.testing.allocator, project_id);
+    defer detail.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), detail.live_sessions.len);
+    try std.testing.expectEqualStrings(
+        "/Users/me/projects/codespark",
+        detail.live_sessions[0].last_cwd.?,
+    );
+}
+
+test "tracked cwd survives into the interrupted session that restore reads" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "", .local);
+    defer std.testing.allocator.free(project_id);
+
+    const session_id = try store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Terminal",
+        .shell = "zsh",
+        .initial_cwd = "/Users/me",
+    });
+    defer std.testing.allocator.free(session_id);
+
+    try store.updateSessionCwd(session_id, "/Users/me/projects/codespark");
+    // App goes away without finalizing; next launch reconciles the live row.
+    try store.reconcileInterruptedSessions();
+
+    var detail = try store.projectDetail(std.testing.allocator, project_id);
+    defer detail.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), detail.interrupted_sessions.len);
+    try std.testing.expectEqualStrings(
+        "/Users/me/projects/codespark",
+        detail.interrupted_sessions[0].last_cwd.?,
+    );
+}
+
+test "updateSessionCwd ignores sessions that are no longer live" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "", .local);
+    defer std.testing.allocator.free(project_id);
+
+    const session_id = try store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Terminal",
+        .shell = "zsh",
+        .initial_cwd = "/Users/me",
+    });
+    defer std.testing.allocator.free(session_id);
+
+    try store.closeSession(session_id, .user_closed, "/Users/me");
+    // A late PWD action arriving after close must not resurrect or rewrite state.
+    try store.updateSessionCwd(session_id, "/tmp/late");
+
+    var detail = try store.projectDetail(std.testing.allocator, project_id);
+    defer detail.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), detail.live_sessions.len);
+}
+
+test "session remembers the workspace it was opened in, independent of cwd" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "/Users/me/codespark", .local);
+    defer std.testing.allocator.free(project_id);
+
+    const session_id = try store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Terminal",
+        .shell = "zsh",
+        .initial_cwd = "/Users/me/codespark",
+        .workspace_path = "/Users/me/codespark",
+    });
+    defer std.testing.allocator.free(session_id);
+
+    // User cd's clean out of the worktree; workspace membership must not follow.
+    try store.updateSessionCwd(session_id, "/Users/me");
+
+    var detail = try store.projectDetail(std.testing.allocator, project_id);
+    defer detail.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("/Users/me/codespark", detail.live_sessions[0].workspace_path);
+    try std.testing.expectEqualStrings("/Users/me", detail.live_sessions[0].last_cwd.?);
+}
+
+test "sessions created before the workspace column report an empty workspace" {
+    const path = try uniqueDbPath("workspace-migration");
+    defer std.testing.allocator.free(path);
+    defer std.fs.cwd().deleteFile(path) catch {};
+
+    var project_id: []u8 = undefined;
+    {
+        var store = try core.Store.open(path);
+        defer store.deinit();
+        project_id = try store.createProject(std.testing.allocator, "codespark", "/Users/me/codespark", .local);
+        const session_id = try store.startSession(std.testing.allocator, .{
+            .project_id = project_id,
+            .transport = .local,
+            .target_label = "local",
+            .title = "Terminal",
+            .shell = "zsh",
+            .initial_cwd = "/Users/me/codespark",
+            .workspace_path = "",
+        });
+        std.testing.allocator.free(session_id);
+    }
+    defer std.testing.allocator.free(project_id);
+
+    var reopened = try core.Store.open(path);
+    defer reopened.deinit();
+    var detail = try reopened.projectDetail(std.testing.allocator, project_id);
+    defer detail.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("", detail.live_sessions[0].workspace_path);
+}
+
+test "latestSnapshot returns the most recent screen for a session" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "", .local);
+    defer std.testing.allocator.free(project_id);
+
+    const session_id = try store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Terminal",
+        .shell = "zsh",
+        .initial_cwd = "/Users/me",
+    });
+    defer std.testing.allocator.free(session_id);
+
+    try store.recordSnapshot(.{
+        .session_id = session_id,
+        .kind = .checkpoint,
+        .cwd = "/Users/me",
+        .grid = .{ .cols = 80, .rows = 24, .lines = &.{ "stale line" } },
+    });
+    try store.recordSnapshot(.{
+        .session_id = session_id,
+        .kind = .final,
+        .cwd = "/Users/me",
+        .grid = .{ .cols = 100, .rows = 30, .lines = &.{ "jinto@m3 ~ % cd projects/codespark", "jinto@m3 codespark %" } },
+    });
+
+    var grid = (try store.latestSnapshot(std.testing.allocator, session_id)).?;
+    defer grid.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(u16, 100), grid.cols);
+    try std.testing.expectEqual(@as(u16, 30), grid.rows);
+    try std.testing.expectEqual(@as(usize, 2), grid.lines.len);
+    try std.testing.expectEqualStrings("jinto@m3 ~ % cd projects/codespark", grid.lines[0]);
+    try std.testing.expectEqualStrings("jinto@m3 codespark %", grid.lines[1]);
+}
+
+test "latestSnapshot returns null for a session that never had one" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "", .local);
+    defer std.testing.allocator.free(project_id);
+
+    const session_id = try store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Terminal",
+        .shell = "zsh",
+        .initial_cwd = "/Users/me",
+    });
+    defer std.testing.allocator.free(session_id);
+
+    try std.testing.expect(try store.latestSnapshot(std.testing.allocator, session_id) == null);
+}
+
+test "restoring an interrupted session consumes it so relaunching does not duplicate tabs" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "/tmp/proj", .local);
+    defer std.testing.allocator.free(project_id);
+
+    const original = try store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Terminal",
+        .shell = "zsh",
+        .initial_cwd = "/tmp/proj",
+    });
+    defer std.testing.allocator.free(original);
+
+    // Quit: the row stays live and next launch reconciles it to interrupted.
+    try store.reconcileInterruptedSessions();
+
+    // Restore hands the tab off to a fresh session; the old row must not linger,
+    // or the following launch restores it again on top of the new one.
+    const replacement = try store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Terminal",
+        .shell = "zsh",
+        .initial_cwd = "/tmp/proj",
+    });
+    defer std.testing.allocator.free(replacement);
+    try store.consumeInterruptedSession(original);
+
+    var detail = try store.projectDetail(std.testing.allocator, project_id);
+    defer detail.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), detail.interrupted_sessions.len);
+    try std.testing.expectEqual(@as(usize, 1), detail.live_sessions.len);
+
+    // Second launch: exactly one tab comes back, not two.
+    try store.reconcileInterruptedSessions();
+    var next = try store.projectDetail(std.testing.allocator, project_id);
+    defer next.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), next.interrupted_sessions.len);
+}
+
+test "reconcile retires interrupted rows the user never restored" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "", .local);
+    defer std.testing.allocator.free(project_id);
+
+    // Run 1 leaves a tab behind, and the user never restores it.
+    const stale = try store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Stale",
+        .shell = "zsh",
+        .initial_cwd = "/tmp",
+    });
+    defer std.testing.allocator.free(stale);
+    try store.reconcileInterruptedSessions();
+
+    // Run 2 opens one tab and quits.
+    const recent = try store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Recent",
+        .shell = "zsh",
+        .initial_cwd = "/tmp",
+    });
+    defer std.testing.allocator.free(recent);
+
+    // Run 3 must offer only what run 2 had open — otherwise every abandoned tab
+    // in the store's history piles back onto the screen.
+    try store.reconcileInterruptedSessions();
+
+    var detail = try store.projectDetail(std.testing.allocator, project_id);
+    defer detail.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), detail.interrupted_sessions.len);
+    try std.testing.expectEqualStrings("Recent", detail.interrupted_sessions[0].title);
+}
+
+test "consumeInterruptedSession leaves live sessions untouched" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "", .local);
+    defer std.testing.allocator.free(project_id);
+
+    const session_id = try store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Terminal",
+        .shell = "zsh",
+        .initial_cwd = "/tmp",
+    });
+    defer std.testing.allocator.free(session_id);
+
+    try store.consumeInterruptedSession(session_id);
+
+    var detail = try store.projectDetail(std.testing.allocator, project_id);
+    defer detail.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), detail.live_sessions.len);
+}
+
 fn freeProjectSummaries(items: []core.ProjectSummary) void {
     for (items) |*item| item.deinit(std.testing.allocator);
     std.testing.allocator.free(items);

@@ -90,6 +90,9 @@ pub const NewSession = struct {
     title: []const u8,
     shell: []const u8,
     initial_cwd: ?[]const u8,
+    /// Workspace (worktree) the tab belongs to, fixed at creation. Empty means
+    /// unknown — rows written before this column existed.
+    workspace_path: []const u8 = "",
 };
 
 pub const TerminalGrid = struct {
@@ -143,6 +146,7 @@ pub const SessionSummary = struct {
     transport: SessionTransport,
     target_label: []u8,
     last_cwd: ?[]u8,
+    workspace_path: []u8,
     close_reason: CloseReason,
 
     pub fn deinit(self: *SessionSummary, allocator: std.mem.Allocator) void {
@@ -150,6 +154,7 @@ pub const SessionSummary = struct {
         allocator.free(self.title);
         allocator.free(self.target_label);
         if (self.last_cwd) |value| allocator.free(value);
+        allocator.free(self.workspace_path);
         self.* = undefined;
     }
 };

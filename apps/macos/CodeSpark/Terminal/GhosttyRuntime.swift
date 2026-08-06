@@ -16,6 +16,11 @@ final class GhosttyRuntime {
     /// Parameters: the surface view that should close, and whether the process is still alive.
     var onSurfaceClose: ((GhosttyTerminalSurfaceView, Bool) -> Void)?
 
+    /// Called on main thread when a shell reports its working directory (OSC 7).
+    /// Identifies the tab by raw surface pointer — `ghostty_surface_userdata`
+    /// comes back nil for embedded surfaces, so the NSView is not reachable here.
+    var onSurfacePwd: ((UnsafeMutableRawPointer, String) -> Void)?
+
     /// Coalesces wakeup signals: skip dispatch if a tick is already queued.
     /// Uses os_unfair_lock for thread-safe access from Ghostty's C runtime thread.
     private let tickLock = OSAllocatedUnfairLock(initialState: false)
@@ -30,6 +35,16 @@ final class GhosttyRuntime {
         guard app == nil else { return }
         // Skip Ghostty initialization in unit test environment
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
+
+        // Ghostty injects shell integration — and with it OSC 7 cwd reporting —
+        // only when it can find its resources. It has no terminfo bundle to climb
+        // to here, so point it at the copy the build phase drops in.
+        if let resources = Bundle.main.resourceURL?.appendingPathComponent("ghostty", isDirectory: true),
+           FileManager.default.fileExists(atPath: resources.appendingPathComponent("shell-integration").path) {
+            setenv("GHOSTTY_RESOURCES_DIR", resources.path, 1)
+        } else {
+            NSLog("GhosttyRuntime: shell integration missing from bundle — cwd tracking disabled")
+        }
 
         // Must call ghostty_init before any other API
         let initResult = ghostty_init(0, nil)
@@ -72,7 +87,17 @@ final class GhosttyRuntime {
                     RunLoop.main.perform { rt.tickLock.withLock { $0 = false } }
                 }
             },
-            action_cb: { _, _, _ in false },
+            action_cb: { _, target, action in
+                guard action.tag == GHOSTTY_ACTION_PWD,
+                      target.tag == GHOSTTY_TARGET_SURFACE,
+                      let surface = target.target.surface,
+                      let pwd = action.action.pwd.pwd else { return false }
+                let path = String(cString: pwd)
+                DispatchQueue.main.async {
+                    GhosttyRuntime.shared.onSurfacePwd?(surface, path)
+                }
+                return true
+            },
             read_clipboard_cb: { _, _, _ in false },
             confirm_read_clipboard_cb: { _, _, _, _ in },
             write_clipboard_cb: { _, loc, content, len, _ in

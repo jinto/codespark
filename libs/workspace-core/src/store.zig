@@ -135,6 +135,21 @@ pub const Store = struct {
         try stmt.expectDone();
     }
 
+    pub fn updateProjectPath(self: *Store, project_id: []const u8, new_path: []const u8) StoreError!void {
+        const updated_at = now();
+        var stmt = try Statement.init(
+            self.db,
+            "update projects\n" ++
+                " set path = ?2, updated_at = ?3\n" ++
+                " where id = ?1",
+        );
+        defer stmt.deinit();
+        try stmt.bindText(1, project_id);
+        try stmt.bindText(2, new_path);
+        try stmt.bindInt64(3, updated_at);
+        try stmt.expectDone();
+    }
+
     pub fn deleteProject(self: *Store, project_id: []const u8) StoreError!void {
         var stmt = try Statement.init(
             self.db,
@@ -164,12 +179,12 @@ pub const Store = struct {
             "insert into sessions (\n" ++
                 "    id, project_id, transport, target_label, title, shell,\n" ++
                 "    initial_cwd, last_cwd, state, close_reason, exit_status,\n" ++
-                "    updated_at, created_at\n" ++
+                "    updated_at, created_at, workspace_path\n" ++
                 " )\n" ++
                 " values (\n" ++
                 "    lower(hex(randomblob(16))), ?1, ?2, ?3, ?4, ?5,\n" ++
                 "    ?6, ?6, ?7, null, null,\n" ++
-                "    ?8, ?8\n" ++
+                "    ?8, ?8, ?9\n" ++
                 " )",
         );
         defer stmt.deinit();
@@ -181,6 +196,7 @@ pub const Store = struct {
         try stmt.bindOptionalText(6, input.initial_cwd);
         try stmt.bindText(7, models.SessionState.live.asSql());
         try stmt.bindInt64(8, updated_at);
+        try stmt.bindText(9, input.workspace_path);
         try stmt.expectDone();
 
         var select_stmt = try Statement.init(
@@ -235,6 +251,50 @@ pub const Store = struct {
         }
     }
 
+    /// Most recent screen recorded for a session, used to show what a restored
+    /// tab was displaying before the app went away. Null when none was ever taken.
+    pub fn latestSnapshot(
+        self: *Store,
+        allocator: std.mem.Allocator,
+        session_id: []const u8,
+    ) StoreError!?models.TerminalGrid {
+        var stmt = try Statement.init(
+            self.db,
+            "select cols, rows, payload\n" ++
+                " from snapshots\n" ++
+                " where session_id = ?1\n" ++
+                " order by created_at desc, rowid desc\n" ++
+                " limit 1",
+        );
+        defer stmt.deinit();
+        try stmt.bindText(1, session_id);
+        if (!try stmt.step()) return null;
+
+        const cols = stmt.columnInt64(0);
+        const rows = stmt.columnInt64(1);
+        const payload = try stmt.columnBlobOwned(allocator, 2);
+        defer allocator.free(payload);
+
+        var lines: std.ArrayList([]u8) = .empty;
+        errdefer {
+            for (lines.items) |line| allocator.free(line);
+            lines.deinit(allocator);
+        }
+
+        if (payload.len > 0) {
+            var it = std.mem.splitScalar(u8, payload, '\n');
+            while (it.next()) |line| {
+                try lines.append(allocator, try allocator.dupe(u8, line));
+            }
+        }
+
+        return .{
+            .cols = if (cols < 0 or cols > std.math.maxInt(u16)) 0 else @intCast(cols),
+            .rows = if (rows < 0 or rows > std.math.maxInt(u16)) 0 else @intCast(rows),
+            .lines = try lines.toOwnedSlice(allocator),
+        };
+    }
+
     pub fn recordTimelineEvent(
         self: *Store,
         project_id: []const u8,
@@ -251,6 +311,57 @@ pub const Store = struct {
         try stmt.bindOptionalText(2, session_id);
         try stmt.bindText(3, event_type.asText());
         try stmt.bindInt64(4, now());
+        try stmt.expectDone();
+    }
+
+    /// Records where a live shell currently is. Driven by the terminal's OSC 7
+    /// reports, so it fires often — closed sessions are silently ignored rather
+    /// than treated as errors.
+    pub fn updateSessionCwd(self: *Store, session_id: []const u8, cwd: []const u8) StoreError!void {
+        var stmt = try Statement.init(
+            self.db,
+            "update sessions\n" ++
+                " set last_cwd = ?2\n" ++
+                " where id = ?1 and state = ?3",
+        );
+        defer stmt.deinit();
+        try stmt.bindText(1, session_id);
+        try stmt.bindText(2, cwd);
+        try stmt.bindText(3, models.SessionState.live.asSql());
+        try stmt.expectDone();
+    }
+
+    /// Retires an interrupted row once its tab has been handed to a fresh session.
+    /// Without this the row is restored again on every launch, and since each
+    /// launch also reconciles the replacement into `interrupted`, tab counts double.
+    pub fn consumeInterruptedSession(self: *Store, session_id: []const u8) StoreError!void {
+        var stmt = try Statement.init(
+            self.db,
+            "update sessions\n" ++
+                " set state = ?2, close_reason = ?3, updated_at = ?4\n" ++
+                " where id = ?1 and state = ?5",
+        );
+        defer stmt.deinit();
+        try stmt.bindText(1, session_id);
+        try stmt.bindText(2, models.SessionState.closed.asSql());
+        try stmt.bindText(3, models.CloseReason.host_quit.asSql());
+        try stmt.bindInt64(4, now());
+        try stmt.bindText(5, models.SessionState.interrupted.asSql());
+        try stmt.expectDone();
+    }
+
+    fn retireStaleInterruptedSessions(self: *Store) StoreError!void {
+        var stmt = try Statement.init(
+            self.db,
+            "update sessions\n" ++
+                " set state = ?1, close_reason = ?2, updated_at = ?3\n" ++
+                " where state = ?4",
+        );
+        defer stmt.deinit();
+        try stmt.bindText(1, models.SessionState.closed.asSql());
+        try stmt.bindText(2, models.CloseReason.host_quit.asSql());
+        try stmt.bindInt64(3, now());
+        try stmt.bindText(4, models.SessionState.interrupted.asSql());
         try stmt.expectDone();
     }
 
@@ -294,6 +405,12 @@ pub const Store = struct {
     }
 
     pub fn reconcileInterruptedSessions(self: *Store) StoreError!void {
+        // Anything still `interrupted` on the way in belongs to an older run that
+        // was never restored. Retiring it first means what remains after this call
+        // is exactly the previous run's tabs — otherwise every tab ever abandoned
+        // piles back onto the screen at launch.
+        try self.retireStaleInterruptedSessions();
+
         const InterruptedSession = struct {
             id: []u8,
             project_id: []u8,
@@ -443,6 +560,10 @@ pub const Store = struct {
             try self.migrateV2();
             try self.setSchemaVersion(2);
         }
+        if (version < 3) {
+            try self.migrateV3();
+            try self.setSchemaVersion(3);
+        }
     }
 
     fn schemaVersion(self: *Store) StoreError!u32 {
@@ -523,6 +644,12 @@ pub const Store = struct {
         );
     }
 
+    fn migrateV3(self: *Store) StoreError!void {
+        try self.execScript(
+            "alter table sessions add column workspace_path text not null default '';",
+        );
+    }
+
     fn sessionsForProject(
         self: *Store,
         allocator: std.mem.Allocator,
@@ -531,7 +658,7 @@ pub const Store = struct {
     ) StoreError![]models.SessionSummary {
         var stmt = try Statement.init(
             self.db,
-            "select id, title, transport, target_label, last_cwd, close_reason\n" ++
+            "select id, title, transport, target_label, last_cwd, close_reason, workspace_path\n" ++
                 " from sessions\n" ++
                 " where project_id = ?1 and state = ?2\n" ++
                 " order by updated_at desc, rowid desc",
@@ -556,6 +683,7 @@ pub const Store = struct {
                 .transport = transport,
                 .target_label = try stmt.columnOwnedText(allocator, 3),
                 .last_cwd = try stmt.columnOptionalOwnedText(allocator, 4),
+                .workspace_path = try stmt.columnOwnedText(allocator, 6),
                 .close_reason = close_reason,
             });
         }

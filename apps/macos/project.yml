@@ -31,6 +31,20 @@ targets:
           chmod 644 *.o
           libtool -static -o "$OLDPWD/$LIBPATH" *.o
           rm -rf "$TMPDIR"
+    postBuildScripts:
+      - name: Bundle Ghostty shell integration
+        basedOnDependencyAnalysis: false
+        script: |
+          # Ghostty finds its shell integration (OSC 7 cwd reporting, prompt marks)
+          # through GHOSTTY_RESOURCES_DIR, which GhosttyRuntime points at this copy.
+          SRC="$SRCROOT/../../vendor/ghostty/zig-out/share/ghostty/shell-integration"
+          DEST="$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/Resources/ghostty"
+          if [ ! -d "$SRC" ]; then
+            echo "warning: ghostty shell-integration not found at $SRC; cwd tracking will be disabled"
+            exit 0
+          fi
+          mkdir -p "$DEST"
+          rsync -a --delete "$SRC" "$DEST/"
     dependencies:
       - framework: ../../vendor/ghostty/macos/GhosttyKit.xcframework
         embed: false
@@ -45,8 +59,11 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.jinto.codespark
+        MARKETING_VERSION: 0.9.5
+        CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: CodeSpark
+        INFOPLIST_KEY_NSHumanReadableCopyright: Copyright © 2026 JAE KWON PARK. All rights reserved.
         HEADER_SEARCH_PATHS:
           - $(SRCROOT)/../../libs/workspace-core/include
         LIBRARY_SEARCH_PATHS:

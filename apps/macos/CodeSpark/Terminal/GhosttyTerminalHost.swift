@@ -33,12 +33,46 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
         let sv = GhosttyTerminalSurfaceView(
             app: app,
             workingDirectory: session.lastCwd,
-            command: command
+            command: command,
+            environment: Self.terminalEnvironment()
         )
         let afterPIDs = Set(Self.childPIDs(of: getpid()))
         _shellPID = afterPIDs.subtracting(beforePIDs).first
         sv.sshConnectionInfo = sshConnectionInfo
         surfaceView = sv
+    }
+
+    private static func terminalEnvironment() -> [String: String] {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        var paths = ProcessInfo.processInfo.environment["PATH"]?.split(separator: ":").map(String.init) ?? []
+
+        let commonPaths = [
+            "\(home)/.local/bin",
+            "\(home)/.bun/bin",
+            "\(home)/.cargo/bin",
+            "\(home)/.npm-global/bin",
+            "/opt/homebrew/bin",
+            "/usr/local/bin"
+        ]
+        paths.insert(contentsOf: commonPaths, at: 0)
+
+        let nvmRoot = URL(fileURLWithPath: home).appendingPathComponent(".nvm/versions/node")
+        if let versions = try? FileManager.default.contentsOfDirectory(
+            at: nvmRoot,
+            includingPropertiesForKeys: nil
+        ) {
+            paths.insert(
+                contentsOf: versions.map { $0.appendingPathComponent("bin").path },
+                at: commonPaths.count
+            )
+        }
+
+        var uniquePaths: [String] = []
+        var seen = Set<String>()
+        for path in paths where !path.isEmpty && seen.insert(path).inserted {
+            uniquePaths.append(path)
+        }
+        return ["PATH": uniquePaths.joined(separator: ":")]
     }
 
     /// List direct child PIDs of the given process.

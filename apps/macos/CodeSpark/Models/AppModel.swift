@@ -47,6 +47,9 @@ final class AppModel: ObservableObject {
         }
     }
     var workspaceSelectedSessions: [String: String] = [:]  // workspacePath → sessionID
+    /// Screen each restored tab was showing before the app went away, keyed by the
+    /// tab's new session ID. Cleared per-tab on first keystroke.
+    @Published private(set) var restoredScreens: [String: TerminalSnapshotViewData] = [:]
     @Published var pendingSSHReconnectProjectID: String?
     @Published var pendingWorkspaceRecoveryProjectID: String?
     @Published var showNewSSHSheet = false
@@ -106,7 +109,8 @@ final class AppModel: ObservableObject {
             }
             let allProjects = try await core.listProjectSummaries()
             let projects = allProjects.filter { !hiddenProjectIDs.contains($0.id) }
-            self.projects = projects
+            self.projects = applySavedProjectOrder(to: projects)
+            persistProjectOrder()
 
             guard !projects.isEmpty else {
                 cancelInflightWork()
@@ -124,6 +128,7 @@ final class AppModel: ObservableObject {
             }
 
             await selectProject(id: resolvedProjectID)
+            await restoreInterruptedTabs(projectID: resolvedProjectID)
         } catch {
             cancelInflightWork()
             projects = []
@@ -164,7 +169,9 @@ final class AppModel: ObservableObject {
                     recomputeWorkspaces()
                 }
                 refreshAgentSessions()
-                if promptForRecovery && !detail.interruptedSessions.isEmpty {
+                if promptForRecovery,
+                   liveSessions.isEmpty,
+                   !detail.interruptedSessions.isEmpty {
                     pendingWorkspaceRecoveryProjectID = id
                 }
                 loadErrorMessage = nil
@@ -197,7 +204,7 @@ final class AppModel: ObservableObject {
             return
         }
         let sessions = liveSessions.map { s in
-            SessionSummary(id: s.id, title: s.title, targetLabel: s.targetLabel, lastCwd: s.lastCwd)
+            SessionSummary(id: s.id, title: s.title, targetLabel: s.targetLabel, lastCwd: s.lastCwd, workspacePath: s.workspacePath)
         }
         let worktrees = gitWorktreeService.worktrees(for: project.path)
         workspaces = WorkspaceViewData.groupSessions(sessions, into: worktrees, projectPath: project.path)
@@ -232,11 +239,8 @@ final class AppModel: ObservableObject {
                 hasInterruptedSessions: false,
                 liveSessionDetails: []
             )
-            if let activeIndex = projects.firstIndex(where: { $0.id == selectedProjectID }) {
-                projects.insert(newProject, at: activeIndex + 1)
-            } else {
-                projects.append(newProject)
-            }
+            projects.append(newProject)
+            persistProjectOrder()
             await selectProject(id: newID)
             await newSession()
         } catch {
@@ -257,6 +261,30 @@ final class AppModel: ObservableObject {
             try await core.renameProject(id: id, newName: newName)
         } catch {
             NSLog("[CodeSpark] rename failed: \(error)")
+        }
+    }
+
+    func updateProjectPath(id: String, newPath: String) async {
+        if let index = projects.firstIndex(where: { $0.id == id }) {
+            projects[index].path = newPath
+        }
+        if selectedProject?.id == id {
+            selectedProject = selectedProject.map {
+                ProjectDetailViewData(id: $0.id, name: $0.name, path: newPath, transport: $0.transport, liveSessions: $0.liveSessions)
+            }
+        }
+        do {
+            try await core.updateProjectPath(id: id, newPath: newPath)
+        } catch {
+            NSLog("[CodeSpark] update path failed: \(error)")
+        }
+    }
+
+    func focusActiveTerminal() {
+        guard let id = activeSessionID,
+              let surfaceView = hosts[id]?.surfaceNSView else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            surfaceView.window?.makeFirstResponder(surfaceView)
         }
     }
 
@@ -309,6 +337,7 @@ final class AppModel: ObservableObject {
 
     func deleteProject(id: String) async {
         let nextID = teardownProject(id: id)
+        removeProjectFromSavedOrder(id: id)
 
         var deleteError: String?
         do {
@@ -338,6 +367,58 @@ final class AppModel: ObservableObject {
         resumableAgentSessions = AgentSessionDiscovery.discover(for: Array(paths))
     }
 
+    /// Presents the same session chooser used when opening an interrupted workspace.
+    func presentSessionChooser() {
+        guard selectedProjectID != nil else { return }
+        pendingWorkspaceRecoveryProjectID = selectedProjectID
+    }
+
+    /// The single project order shared by the sidebar and Cmd+1…9 shortcuts.
+    var orderedProjects: [ProjectSummaryViewData] {
+        projects
+    }
+
+    func moveProject(id: String, before targetID: String) {
+        guard id != targetID,
+              let sourceIndex = projects.firstIndex(where: { $0.id == id }),
+              let targetIndex = projects.firstIndex(where: { $0.id == targetID }) else { return }
+
+        let project = projects.remove(at: sourceIndex)
+        let adjustedTargetIndex = targetIndex > sourceIndex ? targetIndex - 1 : targetIndex
+        projects.insert(project, at: adjustedTargetIndex)
+        persistProjectOrder()
+    }
+
+    private func applySavedProjectOrder(to loadedProjects: [ProjectSummaryViewData]) -> [ProjectSummaryViewData] {
+        let savedIDs = savedProjectOrder()
+        guard !savedIDs.isEmpty else { return loadedProjects }
+
+        let projectsByID = Dictionary(uniqueKeysWithValues: loadedProjects.map { ($0.id, $0) })
+        let savedProjects = savedIDs.compactMap { projectsByID[$0] }
+        let savedIDSet = Set(savedIDs)
+        let newProjects = loadedProjects.filter { !savedIDSet.contains($0.id) }
+        return savedProjects + newProjects
+    }
+
+    private func savedProjectOrder() -> [String] {
+        UserDefaults.standard.string(forKey: StorageKeys.projectOrder)?
+            .split(separator: ",")
+            .map(String.init) ?? []
+    }
+
+    private func persistProjectOrder() {
+        let currentIDs = projects.map(\.id)
+        let savedIDs = savedProjectOrder()
+        let currentIDSet = Set(currentIDs)
+        let preservedIDs = savedIDs.filter { !currentIDSet.contains($0) }
+        UserDefaults.standard.set((currentIDs + preservedIDs).joined(separator: ","), forKey: StorageKeys.projectOrder)
+    }
+
+    private func removeProjectFromSavedOrder(id: String) {
+        let remaining = savedProjectOrder().filter { $0 != id }
+        UserDefaults.standard.set(remaining.joined(separator: ","), forKey: StorageKeys.projectOrder)
+    }
+
     @discardableResult
     private func startAndAttachSession(
         projectID: String,
@@ -346,6 +427,7 @@ final class AppModel: ObservableObject {
         title: String,
         shell: String,
         cwd: String?,
+        workspacePath: String,
         command: String? = nil,
         sshInfo: SSHConnectionInfo? = nil
     ) async throws -> String {
@@ -355,13 +437,15 @@ final class AppModel: ObservableObject {
             targetLabel: targetLabel,
             title: title,
             shell: shell,
-            initialCwd: cwd
+            initialCwd: cwd,
+            workspacePath: workspacePath
         )
         let session = SessionViewData(
             id: sessionID,
             title: title,
             targetLabel: targetLabel,
-            lastCwd: cwd
+            lastCwd: cwd,
+            workspacePath: workspacePath
         )
         var host = terminalFactory(session)
         host.delegate = self
@@ -405,6 +489,7 @@ final class AppModel: ObservableObject {
                     title: info.displayLabel,
                     shell: shell,
                     cwd: nil,
+                    workspacePath: project.path,
                     command: info.sshCommand,
                     sshInfo: info
                 )
@@ -422,7 +507,8 @@ final class AppModel: ObservableObject {
                 targetLabel: "local",
                 title: "Terminal",
                 shell: shell,
-                cwd: workspacePath
+                cwd: workspacePath,
+                workspacePath: workspacePath
             )
             // Populate map first, then set workspace path (didSet restores activeSessionID from map)
             workspaceSelectedSessions[workspacePath] = sessionID
@@ -436,6 +522,7 @@ final class AppModel: ObservableObject {
     func restoreInterruptedTabs(projectID: String) async {
         guard let project = selectedProject,
               project.id == projectID,
+              liveSessions.isEmpty,
               !project.interruptedSessions.isEmpty else {
             pendingWorkspaceRecoveryProjectID = nil
             return
@@ -448,14 +535,20 @@ final class AppModel: ObservableObject {
         for interrupted in interruptedSessions {
             do {
                 let sessionID: String
-                if project.transport == "ssh", let info = SSHConnectionInfo(uri: project.path) {
+                if project.transport == "ssh", var info = SSHConnectionInfo(uri: project.path) {
+                    // Remote shells can't be reopened with a local cwd — land the
+                    // ssh session in the directory the tab was last in instead.
+                    if let remoteCwd = interrupted.lastCwd, !remoteCwd.isEmpty {
+                        info.remotePath = remoteCwd
+                    }
                     sessionID = try await startAndAttachSession(
                         projectID: projectID,
                         transport: "ssh",
                         targetLabel: interrupted.targetLabel,
                         title: interrupted.title,
                         shell: shell,
-                        cwd: nil,
+                        cwd: interrupted.lastCwd,
+                        workspacePath: interrupted.workspacePath.isEmpty ? project.path : interrupted.workspacePath,
                         command: info.sshCommand,
                         sshInfo: info
                     )
@@ -466,13 +559,23 @@ final class AppModel: ObservableObject {
                         targetLabel: interrupted.targetLabel,
                         title: interrupted.title,
                         shell: shell,
-                        cwd: interrupted.lastCwd ?? project.path
+                        cwd: interrupted.lastCwd ?? project.path,
+                        workspacePath: interrupted.workspacePath.isEmpty ? project.path : interrupted.workspacePath
                     )
                 }
 
                 if let cwd = interrupted.lastCwd {
                     workspaceSelectedSessions[cwd] = sessionID
                 }
+                if let screen = try? await core.latestSnapshot(sessionID: interrupted.id),
+                   !screen.lines.isEmpty {
+                    restoredScreens[sessionID] = screen
+                }
+
+                // The tab now lives in `sessionID`. Retiring the row it came from
+                // is what stops the next launch restoring it alongside its own
+                // replacement — that compounds, doubling tabs every launch.
+                try? await core.consumeInterruptedSession(sessionId: interrupted.id)
             } catch {
                 loadErrorMessage = error.localizedDescription
                 break
@@ -518,6 +621,7 @@ final class AppModel: ObservableObject {
                 title: title,
                 shell: shell,
                 cwd: workspacePath,
+                workspacePath: workspacePath,
                 command: command
             )
             activeSessionID = sessionID
@@ -568,6 +672,23 @@ final class AppModel: ObservableObject {
         host.close(sessionID: id)
     }
 
+    /// The terminal reports its working directory on every prompt, so this is a
+    /// hot path — only a real directory change is written through to the store.
+    func sessionDidReportCwd(sessionID: String, cwd: String) {
+        guard let index = liveSessions.firstIndex(where: { $0.id == sessionID }),
+              liveSessions[index].lastCwd != cwd else { return }
+        liveSessions[index].lastCwd = cwd
+        recomputeWorkspaces()
+
+        Task { [core] in
+            do {
+                try await core.updateSessionCwd(sessionId: sessionID, cwd: cwd)
+            } catch {
+                NSLog("[CodeSpark] cwd update failed for session \(sessionID): \(error)")
+            }
+        }
+    }
+
     func renameSession(id: String, title: String) async {
         if let index = liveSessions.firstIndex(where: { $0.id == id }) {
             var updated = liveSessions[index]
@@ -581,6 +702,13 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// The ghost is a reminder, not scrollback — the first keystroke means the
+    /// user has picked the thread back up, so it gets out of the way.
+    func dismissRestoredScreen(sessionID: String) {
+        guard restoredScreens[sessionID] != nil else { return }
+        restoredScreens[sessionID] = nil
+    }
+
     func selectNextSession() { cycleSession(offset: 1) }
     func selectPreviousSession() { cycleSession(offset: -1) }
 
@@ -591,10 +719,20 @@ final class AppModel: ObservableObject {
         activeSessionID = liveSessions[(index + offset + liveSessions.count) % liveSessions.count].id
     }
 
-    func saveAllSessionsAndClose() {
-        let snapshot = Array(hosts)
-        for (sessionID, host) in snapshot {
-            host.close(sessionID: sessionID)
+    /// Runs while the app is terminating, so it must finish synchronously.
+    ///
+    /// Session rows are deliberately left `live`: the next launch reconciles them
+    /// to `interrupted`, which is what restore reads. Closing them here is what
+    /// used to make restore a coin flip — a closed row is not restorable, and
+    /// whether the close landed at all depended on termination timing.
+    func saveAllSessionsForRestore() {
+        for (sessionID, host) in hosts {
+            guard let snapshot = host.extractSnapshot() else { continue }
+            do {
+                try core.saveSnapshotForRestore(sessionID: sessionID, snapshot: snapshot)
+            } catch {
+                NSLog("[CodeSpark] restore snapshot failed for session \(sessionID): \(error)")
+            }
         }
     }
 
@@ -607,6 +745,13 @@ final class AppModel: ObservableObject {
     }
 
     #if GHOSTTY_FIRST
+    func handleSurfacePwd(_ surface: UnsafeMutableRawPointer, cwd: String) {
+        guard let (sessionID, _) = hosts.first(where: { _, host in
+            (host.surfaceNSView as? GhosttyTerminalSurfaceView)?.surface == surface
+        }) else { return }
+        sessionDidReportCwd(sessionID: sessionID, cwd: cwd)
+    }
+
     func handleSurfaceClose(_ surfaceView: GhosttyTerminalSurfaceView, processAlive: Bool) {
         guard let (sessionID, host) = hosts.first(where: { _, host in
             host.surfaceNSView === surfaceView
@@ -641,7 +786,7 @@ final class AppModel: ObservableObject {
         guard let projectID = selectedProjectID,
               let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
         projects[index].liveSessionDetails = liveSessions.map { session in
-            SessionSummary(id: session.id, title: session.title, targetLabel: session.targetLabel, lastCwd: session.lastCwd)
+            SessionSummary(id: session.id, title: session.title, targetLabel: session.targetLabel, lastCwd: session.lastCwd, workspacePath: session.workspacePath)
         }
         projects[index].liveSessions = liveSessions.count
     }

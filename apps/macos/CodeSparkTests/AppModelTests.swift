@@ -184,8 +184,8 @@ final class AppModelTests: XCTestCase {
         await model.selectProject(id: "ws-1")
         await model.createProject(name: "Project 3")
 
-        XCTAssertEqual(model.projects.map(\.id), ["ws-1", "mock-project-id", "ws-2"])
-        XCTAssertEqual(model.projects[1].name, "Project 3")
+        XCTAssertEqual(model.projects.map(\.id), ["ws-1", "ws-2", "mock-project-id"])
+        XCTAssertEqual(model.projects[2].name, "Project 3")
     }
 
     @MainActor
@@ -446,5 +446,69 @@ final class AppModelTests: XCTestCase {
         await model.closeProject(id: "ws-2")
 
         XCTAssertTrue(model.hiddenProjectIDs.contains("ws-2"))
+    }
+
+    @MainActor
+    private func modelWithLiveSession() async -> (AppModel, MockProjectCoreClient) {
+        let client = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "ws-1", name: "codespark", path: "/Users/me/codespark", transport: "local", liveSessions: 1, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(
+                id: "ws-1",
+                name: "codespark",
+                path: "/Users/me/codespark",
+                transport: "local",
+                liveSessions: [SessionViewData(id: "session-1", title: "Terminal", targetLabel: "local", lastCwd: "/Users/me")]
+            )]
+        )
+        let model = AppModel(core: client)
+        await model.load()
+        return (model, client)
+    }
+
+    @MainActor
+    func test_cwd_report_updates_session_in_memory() async {
+        let (model, _) = await modelWithLiveSession()
+
+        model.sessionDidReportCwd(sessionID: "session-1", cwd: "/Users/me/projects/codespark")
+
+        XCTAssertEqual(model.liveSessions.first?.lastCwd, "/Users/me/projects/codespark")
+    }
+
+    @MainActor
+    func test_cwd_report_persists_to_core() async {
+        let (model, client) = await modelWithLiveSession()
+
+        model.sessionDidReportCwd(sessionID: "session-1", cwd: "/Users/me/projects/codespark")
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(client.recordedCwds.first?.sessionId, "session-1")
+        XCTAssertEqual(client.recordedCwds.first?.cwd, "/Users/me/projects/codespark")
+    }
+
+    @MainActor
+    func test_repeated_cwd_report_with_same_value_is_not_persisted_twice() async {
+        let (model, client) = await modelWithLiveSession()
+
+        // OSC 7 fires on every prompt; only real directory changes should hit the store.
+        model.sessionDidReportCwd(sessionID: "session-1", cwd: "/Users/me/projects/codespark")
+        model.sessionDidReportCwd(sessionID: "session-1", cwd: "/Users/me/projects/codespark")
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(client.recordedCwds.count, 1)
+    }
+
+    @MainActor
+    func test_cwd_report_for_unknown_session_is_ignored() async {
+        let (model, client) = await modelWithLiveSession()
+
+        model.sessionDidReportCwd(sessionID: "ghost-session", cwd: "/tmp")
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(client.recordedCwds.isEmpty)
     }
 }

@@ -14,32 +14,8 @@ struct SidebarView: View {
     @State private var sshUser = ""
     @State private var sshPort = ""
     @State private var sshRemotePath = ""
-
-    private var sortedProjects: [ProjectSummaryViewData] {
-        let selected = model.selectedProjectID
-        let needsInput = model.projects.filter {
-            let status = model.projectStatus(for: $0)
-            return (status == .needsInput || status == .interrupted) && $0.id != selected
-        }
-        let rest = model.projects.filter {
-            let status = model.projectStatus(for: $0)
-            return (status != .needsInput && status != .interrupted) || $0.id == selected
-        }
-        let sortedRest = rest.sorted { a, b in
-            let sa = model.projectStatus(for: a)
-            let sb = model.projectStatus(for: b)
-            if sa == .running && sb == .idle { return true }
-            if sa == .idle && sb == .running { return false }
-            return false
-        }
-        if sortedRest.first?.id == selected {
-            var result = sortedRest
-            result.insert(contentsOf: needsInput, at: min(1, result.count))
-            return result
-        } else {
-            return needsInput + sortedRest
-        }
-    }
+    @State private var changeFolderProjectID: String?
+    @State private var changeFolderPath = ""
 
     private func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
         if project.transport == "ssh" {
@@ -49,11 +25,10 @@ struct SidebarView: View {
             return project.path
         }
         guard !project.path.isEmpty else { return nil }
-        let path = abbreviatePath(project.path)
         if let branch = model.gitBranches[project.path] {
-            return "\(branch) \u{2022} \(path)"
+            return branch
         }
-        return path
+        return abbreviatePath(project.path)
     }
 
     private func abbreviatePath(_ path: String) -> String {
@@ -62,7 +37,7 @@ struct SidebarView: View {
 
     private func hotkeyIndex(for project: ProjectSummaryViewData) -> Int? {
         guard showHotkeys else { return nil }
-        guard let idx = sortedProjects.firstIndex(where: { $0.id == project.id }), idx < 9 else { return nil }
+        guard let idx = model.orderedProjects.firstIndex(where: { $0.id == project.id }), idx < 9 else { return nil }
         return idx + 1
     }
 
@@ -94,7 +69,7 @@ struct SidebarView: View {
                     .frame(maxWidth: .infinity)
                 }
                 LazyVStack(alignment: .leading, spacing: 3) {
-                    ForEach(sortedProjects) { project in
+                    ForEach(model.orderedProjects) { project in
                         ProjectSidebarRow(
                             project: project,
                             isSelected: model.selectedProjectID == project.id,
@@ -103,13 +78,35 @@ struct SidebarView: View {
                             hotkeyIndex: hotkeyIndex(for: project)
                         )
                         .contentShape(Rectangle())
+                        .draggable(project.id)
+                        .dropDestination(for: String.self) { droppedIDs, _ in
+                            guard let draggedID = droppedIDs.first else { return false }
+                            model.moveProject(id: draggedID, before: project.id)
+                            return true
+                        }
                         .onTapGesture {
                             Task { await model.selectProject(id: project.id, promptForRecovery: true) }
+                        }
+                        .onTapGesture(count: 2) {
+                            Task {
+                                await model.selectProject(id: project.id)
+                                model.presentSessionChooser()
+                            }
                         }
                         .contextMenu {
                             Button("Rename") {
                                 editProjectName = project.name
                                 editingProjectID = project.id
+                            }
+                            if project.transport == "ssh" {
+                                Button("Change Remote Folder...") {
+                                    if let info = SSHConnectionInfo(uri: project.path) {
+                                        changeFolderPath = info.remotePath ?? ""
+                                    } else {
+                                        changeFolderPath = ""
+                                    }
+                                    changeFolderProjectID = project.id
+                                }
                             }
                             Button("Close Project") {
                                 Task { await model.closeProject(id: project.id) }
@@ -185,6 +182,33 @@ struct SidebarView: View {
                 },
                 onCancel: { editingProjectID = nil }
             )
+        }
+        .sheet(isPresented: .init(
+            get: { changeFolderProjectID != nil },
+            set: { if !$0 { changeFolderProjectID = nil } }
+        )) {
+            if let projectID = changeFolderProjectID,
+               let project = model.projects.first(where: { $0.id == projectID }),
+               let info = SSHConnectionInfo(uri: project.path) {
+                ChangeRemoteFolderSheet(
+                    host: info.displayLabel,
+                    remotePath: $changeFolderPath,
+                    sshInfo: info,
+                    onSave: {
+                        let updatedInfo = SSHConnectionInfo(
+                            host: info.host,
+                            user: info.user,
+                            port: info.port,
+                            remotePath: changeFolderPath.isEmpty ? nil : changeFolderPath
+                        )
+                        Task {
+                            await model.updateProjectPath(id: projectID, newPath: updatedInfo.uri)
+                        }
+                        changeFolderProjectID = nil
+                    },
+                    onCancel: { changeFolderProjectID = nil }
+                )
+            }
         }
         .sheet(isPresented: $model.showNewSSHSheet) {
             NewSSHProjectSheet(
@@ -305,6 +329,60 @@ private struct RenameProjectSheet: View {
         }
         .padding(20)
         .frame(width: 300)
+        .onAppear { isFocused = true }
+    }
+}
+
+private struct ChangeRemoteFolderSheet: View {
+    let host: String
+    @Binding var remotePath: String
+    let sshInfo: SSHConnectionInfo
+    let onSave: () -> Void
+    let onCancel: () -> Void
+    @FocusState private var isFocused: Bool
+
+    private var previewCommand: String {
+        SSHConnectionInfo(
+            host: sshInfo.host,
+            user: sshInfo.user,
+            port: sshInfo.port,
+            remotePath: remotePath.isEmpty ? nil : remotePath
+        ).sshCommand
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Change Remote Folder")
+                .font(.headline)
+
+            Text(host)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Remote Path")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                TextField("/home/user/project", text: $remotePath)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($isFocused)
+                    .onSubmit(onSave)
+            }
+
+            Text(previewCommand)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.tertiary)
+
+            HStack {
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Save", action: onSave)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 360)
         .onAppear { isFocused = true }
     }
 }

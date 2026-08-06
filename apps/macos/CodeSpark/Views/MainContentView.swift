@@ -112,7 +112,7 @@ struct MainContentView: View {
             Text("Sessions will be closed. You can reopen this project later.")
         }
         .confirmationDialog(
-            "Restore workspace?",
+            "Choose session",
             isPresented: Binding(
                 get: { model.pendingWorkspaceRecoveryProjectID != nil },
                 set: { if !$0 { model.pendingWorkspaceRecoveryProjectID = nil } }
@@ -123,8 +123,10 @@ struct MainContentView: View {
                let project = model.selectedProject,
                project.id == projectID {
                 let interruptedCount = project.interruptedSessions.count
-                Button("Restore \(interruptedCount) tab\(interruptedCount == 1 ? "" : "s")") {
-                    Task { await model.restoreInterruptedTabs(projectID: projectID) }
+                if model.liveSessions.isEmpty && interruptedCount > 0 {
+                    Button("Restore \(interruptedCount) tab\(interruptedCount == 1 ? "" : "s")") {
+                        Task { await model.restoreInterruptedTabs(projectID: projectID) }
+                    }
                 }
 
                 Button("New Terminal") {
@@ -161,7 +163,7 @@ struct MainContentView: View {
                 model.pendingWorkspaceRecoveryProjectID = nil
             }
         } message: {
-            Text("Restore the previous tabs, or choose a new terminal or agent session for this workspace.")
+            Text("Choose what to open in this workspace.")
         }
     }
 
@@ -172,11 +174,21 @@ struct MainContentView: View {
                     #if GHOSTTY_FIRST
                     if let surfaceView = model.hosts[session.id]?.surfaceNSView as? GhosttyTerminalSurfaceView {
                         TerminalSurfaceHostView(surfaceView: surfaceView, isActive: session.id == model.activeSessionID)
+                            .onAppear {
+                                surfaceView.onKeyDown = { [weak model] in
+                                    model?.dismissRestoredScreen(sessionID: session.id)
+                                }
+                            }
                     }
                     #else
                     TerminalSurfaceHostView(session: session, isActive: session.id == model.activeSessionID)
                         .opacity(session.id == model.activeSessionID ? 1 : 0)
                     #endif
+
+                    if let screen = model.restoredScreens[session.id],
+                       session.id == model.activeSessionID {
+                        RestoredScreenGhost(snapshot: screen)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -198,25 +210,29 @@ struct MainContentView: View {
                     .foregroundStyle(.tertiary)
             }
             Button("Connect") {
-                Task { await model.newSession() }
+                Task { await model.newSession(); model.focusActiveTerminal() }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .keyboardShortcut(.defaultAction)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "plus.rectangle.on.rectangle")
+        VStack(spacing: 16) {
+            Image(systemName: "terminal")
                 .font(.system(size: 36))
-                .foregroundStyle(.quaternary)
+                .foregroundStyle(.secondary)
             Text("No sessions yet")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            Text("Sessions will appear here when started")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            Button("New Terminal") {
+                Task { await model.newSession(); model.focusActiveTerminal() }
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .keyboardShortcut(.defaultAction)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

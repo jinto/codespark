@@ -85,37 +85,10 @@ struct CodeSparkApp: App {
 
                 Divider()
 
-                Menu("New Session") {
-                    Button("Terminal") {
-                        Task { await model.newSession() }
-                    }
-
-                    Divider()
-
-                    ForEach(AgentKind.allCases) { agent in
-                        Menu(agent.title) {
-                            Button("New session") {
-                                Task { await model.newAgentSession(agent) }
-                            }
-
-                            let resumable = model.resumableAgentSessions.filter { $0.agent == agent }
-                            if !resumable.isEmpty {
-                                Divider()
-                                Text("Resume")
-                                ForEach(resumable) { session in
-                                    Button(session.label) {
-                                        Task { await model.newAgentSession(agent, resumeID: session.id) }
-                                    }
-                                }
-                            }
-
-                            Divider()
-                            Button("Refresh sessions") {
-                                model.refreshAgentSessions()
-                            }
-                        }
-                    }
+                Button("New Session…") {
+                    model.presentSessionChooser()
                 }
+                .disabled(model.selectedProjectID == nil)
                 .keyboardShortcut("t", modifiers: .command)
 
                 if !model.hiddenProjectIDs.isEmpty {
@@ -160,7 +133,7 @@ struct CodeSparkApp: App {
                 Divider()
 
                 // Cmd+1~9: switch projects
-                ForEach(Array(model.projects.prefix(9).enumerated()), id: \.element.id) { index, project in
+                ForEach(Array(model.orderedProjects.prefix(9).enumerated()), id: \.element.id) { index, project in
                     Button(project.name) {
                         Task { await model.selectProject(id: project.id) }
                     }
@@ -170,7 +143,7 @@ struct CodeSparkApp: App {
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
-                model.saveAllSessionsAndClose()
+                model.saveAllSessionsForRestore()
             }
         }
 
@@ -216,6 +189,9 @@ struct CodeSparkApp: App {
         }
         GhosttyRuntime.shared.onSurfaceClose = { [weak model] surfaceView, processAlive in
             model?.handleSurfaceClose(surfaceView, processAlive: processAlive)
+        }
+        GhosttyRuntime.shared.onSurfacePwd = { [weak model] surface, cwd in
+            model?.handleSurfacePwd(surface, cwd: cwd)
         }
         #endif
         appDelegate.model = model
@@ -300,6 +276,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // scenePhase alone is not a reliable last word on quit; this one blocks
+        // termination until every tab's final screen is on disk.
+        MainActor.assumeIsolated { model?.saveAllSessionsForRestore() }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

@@ -40,12 +40,14 @@ struct SessionSummary: Identifiable, Equatable {
     var title: String
     let targetLabel: String
     let lastCwd: String?
+    /// Workspace the tab was opened in. Empty for rows predating the column.
+    var workspacePath: String = ""
 }
 
 struct ProjectSummaryViewData: Identifiable, Equatable {
     let id: String
     var name: String
-    let path: String
+    var path: String
     let transport: String
     var liveSessions: Int
     let recentlyClosedSessions: Int
@@ -85,7 +87,9 @@ struct SessionViewData: Identifiable, Equatable {
     let id: String
     var title: String
     let targetLabel: String
-    let lastCwd: String?
+    var lastCwd: String?
+    /// Workspace the tab was opened in. Empty for rows predating the column.
+    var workspacePath: String = ""
 
     static func fixture() -> SessionViewData {
         SessionViewData(
@@ -149,10 +153,12 @@ struct WorkspaceViewData: Identifiable, Equatable {
 }
 
 extension WorkspaceViewData {
-    /// Group sessions into workspaces based on their cwd matching worktree paths.
+    /// Group sessions into workspaces by the workspace each tab was opened in.
     /// - Non-git / single worktree: returns 1 workspace with all sessions
-    /// - Multi-worktree: matches session.lastCwd to longest-prefix worktree path
-    /// - Unmatched sessions: assigned to main worktree
+    /// - Multi-worktree: honours `session.workspacePath` so a `cd` never moves a tab
+    /// - Empty `workspacePath` (rows predating the column): falls back to matching
+    ///   `lastCwd` against the longest worktree path prefix
+    /// - Still unmatched (e.g. the worktree was removed): assigned to main worktree
     static func groupSessions(
         _ sessions: [SessionSummary],
         into worktrees: [GitWorktree]?,
@@ -177,7 +183,12 @@ extension WorkspaceViewData {
         let mainPath = worktrees.first(where: \.isMainWorktree)?.path ?? worktrees[0].path
 
         for session in sessions {
-            let cwd = session.lastCwd ?? ""
+            if !session.workspacePath.isEmpty,
+               worktrees.contains(where: { $0.path == session.workspacePath }) {
+                buckets[session.workspacePath, default: []].append(session)
+                continue
+            }
+            let cwd = session.workspacePath.isEmpty ? (session.lastCwd ?? "") : ""
             if let match = sorted.first(where: { cwdBelongsTo(cwd: cwd, worktreePath: $0.path) }) {
                 buckets[match.path, default: []].append(session)
             } else {
