@@ -73,7 +73,10 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - **게이트 2겹**:
   - `test_every_app_shortcut_reaches_the_menu` — 선언된 모든 조합이 `.delegateToSuper`인지 검사하고 실패 시 어느 단축키인지 이름을 찍는다. 충돌 검사도 함께.
   - pre-commit 훅이 인라인 `keyboardShortcut("…"`을 거부한다. 표를 우회하면 테스트가 볼 수 없기 때문.
-- 이 두 겹으로도 **"메뉴 아이템에 실제로 붙었는지"는 검증되지 않는다.** 그건 앱을 띄워야 하고 XCUITest는 현재 automation mode 타임아웃으로 못 쓴다. 새 단축키는 실물에서 한 번 눌러 확인할 것.
+- **3겹째 (pre-push, XCUITest)**: `test_cmd_ctrl_s_toggles_the_sidebar_with_a_terminal_open`이 실제 앱에서 조합을 눌러 동작까지 확인하고, `test_declared_commands_are_wired_to_menu_items`가 선언만 하고 Button에 안 붙인 경우를 잡는다.
+  - **터미널이 열려 있어야 재현된다.** `performKeyEquivalent`는 윈도우 뷰 트리를 훑으므로 세션이 없으면 가로챌 Ghostty surface가 없어 버그가 숨는다. 이 조건을 빼먹으면 테스트가 통과하면서 아무것도 못 잡는다.
+  - UI 테스트는 앱을 띄우고 포커스를 뺏어서 pre-commit이 아니라 **pre-push**에 있다.
+  - `testmanagerd`가 오래 떠 있으면 "Timed out while enabling automation mode"로 러너가 안 뜬다. `kill $(pgrep -x testmanagerd)`로 내리면 launchd가 다시 만든다(SIP 때문에 `launchctl kickstart`는 막힌다).
 
 ## Terminal State Detection
 
