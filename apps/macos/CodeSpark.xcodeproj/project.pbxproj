@@ -704,7 +704,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(SRCROOT)/../../libs/workspace-core/zig-out/lib",
 				);
-				MARKETING_VERSION = 0.9.5;
+				MARKETING_VERSION = 1.0.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -747,7 +747,7 @@
 				LIBRARY_SEARCH_PATHS = (
 					"$(SRCROOT)/../../libs/workspace-core/zig-out/lib",
 				);
-				MARKETING_VERSION = 0.9.5;
+				MARKETING_VERSION = 1.0.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
