@@ -740,6 +740,18 @@ final class AppModel: ObservableObject {
     func selectNextSession() { cycleSession(offset: 1) }
     func selectPreviousSession() { cycleSession(offset: -1) }
 
+    func selectNextWorktree() { cycleWorktree(offset: 1) }
+    func selectPreviousWorktree() { cycleWorktree(offset: -1) }
+
+    /// Clicking a sidebar row is otherwise the only way to reach another
+    /// worktree, which would strand its tabs whenever the sidebar is hidden.
+    private func cycleWorktree(offset: Int) {
+        guard workspaces.count > 1,
+              let current = activeWorkspacePath,
+              let index = workspaces.firstIndex(where: { $0.path == current }) else { return }
+        activeWorkspacePath = workspaces[(index + offset + workspaces.count) % workspaces.count].path
+    }
+
     private func cycleSession(offset: Int) {
         let scope = visibleSessions
         guard let current = activeSessionID,

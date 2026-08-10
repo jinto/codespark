@@ -130,6 +130,18 @@ struct CodeSparkApp: App {
                 }
                 .keyboardShortcut("[", modifiers: [.command, .shift])
 
+                Button("Select Next Worktree") {
+                    model.selectNextWorktree()
+                }
+                .keyboardShortcut("]", modifiers: [.command, .option])
+                .disabled(model.sidebarWorktrees.isEmpty)
+
+                Button("Select Previous Worktree") {
+                    model.selectPreviousWorktree()
+                }
+                .keyboardShortcut("[", modifiers: [.command, .option])
+                .disabled(model.sidebarWorktrees.isEmpty)
+
                 Divider()
 
                 // Cmd+1~9: switch projects

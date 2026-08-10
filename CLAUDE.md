@@ -61,6 +61,8 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - **스코프**: 탭바·`Cmd+[/]`·새 탭은 전부 `activeWorkspacePath` 기준(`visibleSessions`). 안 보이는 워크트리의 Ghostty surface는 계속 살아 있다 — `terminalContent`는 여전히 `allSessions`를 순회해야 한다.
 - **순서 (중요)**: `recomputeWorkspaces()`는 **선택 대입보다 먼저** 실행해야 한다. `activeWorkspacePath`의 `didSet`이 `workspaces`를 읽기 때문에, 낡은 그룹핑이면 방금 만든 탭을 못 보고 선택을 옛 탭으로 되돌린다.
 - **재귀**: `activeSessionID`와 `activeWorkspacePath`의 `didSet`이 서로를 부른다. `workspaceSelectedSessions`를 **먼저** 쓰고 부등호 가드로 끊는 순서가 종료 조건이다.
+- **전환 수단**: 사이드바 행 클릭 + `Cmd+Opt+[`/`]`. 사이드바를 숨기면 클릭 경로가 사라지므로 핫키가 없으면 다른 워크트리의 탭이 고립된다.
+  - 앱 단축키에 **Control을 쓰면 안 된다.** `KeyEventRouter.routeKeyEquivalent`가 Command보다 먼저 `.control`을 보고 `forwardToKeyDown`으로 보내서, 조합이 메뉴 대신 터미널로 샌다(그래서 `Cmd+Ctrl+S` 사이드바 토글이 죽어 있다).
 
 ## Terminal State Detection
 

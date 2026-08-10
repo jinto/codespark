@@ -744,6 +744,66 @@ final class WorkspaceSelectionTests: XCTestCase {
                           "one worktree waiting for input must not colour its sibling")
     }
 
+    // MARK: - Worktree switching without the sidebar
+
+    @MainActor
+    func test_worktree_hotkey_cycles_and_wraps() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        model.activeWorkspacePath = Self.mainWorktree
+
+        model.selectNextWorktree()
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
+
+        model.selectNextWorktree()
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree, "cycling wraps around")
+
+        model.selectPreviousWorktree()
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
+    }
+
+    @MainActor
+    func test_worktree_hotkey_does_nothing_with_a_single_worktree() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "Proj", path: Self.mainWorktree, transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "Proj", path: Self.mainWorktree,
+                                            transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        await model.newSession()
+        let only = model.activeSessionID
+
+        model.selectNextWorktree()
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree)
+        XCTAssertEqual(model.activeSessionID, only, "a no-op must not disturb the active tab")
+    }
+
+    /// The hotkey is the sidebar-less route, so it has to land you where the
+    /// sidebar would have: on the tab you were last using over there.
+    @MainActor
+    func test_worktree_hotkey_restores_that_worktrees_last_tab() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+
+        model.activeWorkspacePath = Self.featureWorktree
+        let firstFeatureTab = model.visibleSessions[0].id
+        model.activeSessionID = firstFeatureTab
+
+        model.selectNextWorktree()
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree)
+
+        model.selectNextWorktree()
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
+        XCTAssertEqual(model.activeSessionID, firstFeatureTab)
+    }
+
     @MainActor
     func test_switching_to_an_empty_worktree_clears_the_active_tab() async {
         let (model, _) = await modelWithTwoWorktrees()
