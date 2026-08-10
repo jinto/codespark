@@ -8,7 +8,11 @@ final class MockTerminalHost: TerminalHostProtocol {
     var surfaceNSView: NSView? { nil }
 
     func markOutput() {}
-    func attach(sessionID: String, command: String? = nil) {}
+    private(set) var initialInputs: [String?] = []
+
+    func attach(sessionID: String, command: String? = nil, initialInput: String? = nil) {
+        initialInputs.append(initialInput)
+    }
     func close(sessionID: String) {}
     func extractSnapshot() -> TerminalSnapshotViewData? { nil }
 

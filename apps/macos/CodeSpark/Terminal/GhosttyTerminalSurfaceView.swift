@@ -12,14 +12,11 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
     /// Set when this surface belongs to an SSH session — enables remote image paste via scp.
     var sshConnectionInfo: SSHConnectionInfo?
 
-    /// Fired on every keystroke — used to clear a restored tab's ghost screen.
-    /// The model decides whether there is anything to clear.
-    var onKeyDown: (() -> Void)?
-
     init(
         app: ghostty_app_t,
         workingDirectory: String?,
         command: String?,
+        initialInput: String? = nil,
         environment: [String: String] = [:]
     ) {
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
@@ -30,6 +27,7 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
             view: self,
             workingDirectory: workingDirectory,
             command: command,
+            initialInput: initialInput,
             environment: environment
         )
     }
@@ -39,6 +37,7 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         view: NSView,
         workingDirectory: String?,
         command: String?,
+        initialInput: String?,
         environment: [String: String]
     ) -> ghostty_surface_t? {
         var config = ghostty_surface_config_new()
@@ -86,7 +85,13 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
                         }
                     }
 
-                    return create()
+                    // Startup input replays a restored tab's previous screen. It
+                    // must outlive surface creation, hence the nested scope.
+                    guard let initialInput else { return create() }
+                    return initialInput.withCString { inputPtr in
+                        config.initial_input = inputPtr
+                        return create()
+                    }
                 }
             }
         }
@@ -154,7 +159,6 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
 
     override func keyDown(with event: NSEvent) {
         guard let surface else { return }
-        onKeyDown?()
 
         // Cmd+V: paste from system clipboard (keyCode 9 = V, IME-independent)
         if event.modifierFlags.contains(.command), event.keyCode == 9 {

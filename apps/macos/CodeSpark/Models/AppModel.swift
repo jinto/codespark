@@ -47,9 +47,6 @@ final class AppModel: ObservableObject {
         }
     }
     var workspaceSelectedSessions: [String: String] = [:]  // workspacePath → sessionID
-    /// Screen each restored tab was showing before the app went away, keyed by the
-    /// tab's new session ID. Cleared per-tab on first keystroke.
-    @Published private(set) var restoredScreens: [String: TerminalSnapshotViewData] = [:]
     @Published var pendingSSHReconnectProjectID: String?
     @Published var pendingWorkspaceRecoveryProjectID: String?
     @Published var showNewSSHSheet = false
@@ -94,7 +91,7 @@ final class AppModel: ObservableObject {
             }
             var host = terminalFactory(session)
             host.delegate = self
-            host.attach(sessionID: session.id, command: nil)
+            host.attach(sessionID: session.id, command: nil, initialInput: nil)
             hosts[session.id] = host
         }
         activeSessionID = liveSessions.first?.id
@@ -429,6 +426,7 @@ final class AppModel: ObservableObject {
         cwd: String?,
         workspacePath: String,
         command: String? = nil,
+        initialInput: String? = nil,
         sshInfo: SSHConnectionInfo? = nil
     ) async throws -> String {
         let sessionID = try await core.startSession(
@@ -454,7 +452,7 @@ final class AppModel: ObservableObject {
             ghosttyHost.sshConnectionInfo = sshInfo
         }
         #endif
-        host.attach(sessionID: sessionID, command: command)
+        host.attach(sessionID: sessionID, command: command, initialInput: initialInput)
         hosts[sessionID] = host
         liveSessions.append(session)
         if !allSessions.contains(where: { $0.id == sessionID }) {
@@ -534,6 +532,11 @@ final class AppModel: ObservableObject {
 
         for interrupted in interruptedSessions {
             do {
+                // Replays the tab's previous screen into scrollback, above the
+                // prompt the restored shell is about to print.
+                let replay = (try? await core.latestSnapshot(sessionID: interrupted.id))
+                    .flatMap { RestoredScreenReplay.prepare(snapshot: $0) }
+
                 let sessionID: String
                 if project.transport == "ssh", var info = SSHConnectionInfo(uri: project.path) {
                     // Remote shells can't be reopened with a local cwd — land the
@@ -550,6 +553,7 @@ final class AppModel: ObservableObject {
                         cwd: interrupted.lastCwd,
                         workspacePath: interrupted.workspacePath.isEmpty ? project.path : interrupted.workspacePath,
                         command: info.sshCommand,
+                        initialInput: replay,
                         sshInfo: info
                     )
                 } else {
@@ -560,18 +564,14 @@ final class AppModel: ObservableObject {
                         title: interrupted.title,
                         shell: shell,
                         cwd: interrupted.lastCwd ?? project.path,
-                        workspacePath: interrupted.workspacePath.isEmpty ? project.path : interrupted.workspacePath
+                        workspacePath: interrupted.workspacePath.isEmpty ? project.path : interrupted.workspacePath,
+                        initialInput: replay
                     )
                 }
 
                 if let cwd = interrupted.lastCwd {
                     workspaceSelectedSessions[cwd] = sessionID
                 }
-                if let screen = try? await core.latestSnapshot(sessionID: interrupted.id),
-                   !screen.lines.isEmpty {
-                    restoredScreens[sessionID] = screen
-                }
-
                 // The tab now lives in `sessionID`. Retiring the row it came from
                 // is what stops the next launch restoring it alongside its own
                 // replacement — that compounds, doubling tabs every launch.
@@ -700,13 +700,6 @@ final class AppModel: ObservableObject {
         } catch {
             NSLog("[CodeSpark] session rename failed: \(error)")
         }
-    }
-
-    /// The ghost is a reminder, not scrollback — the first keystroke means the
-    /// user has picked the thread back up, so it gets out of the way.
-    func dismissRestoredScreen(sessionID: String) {
-        guard restoredScreens[sessionID] != nil else { return }
-        restoredScreens[sessionID] = nil
     }
 
     func selectNextSession() { cycleSession(offset: 1) }
