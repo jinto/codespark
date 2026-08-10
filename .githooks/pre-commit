@@ -1,6 +1,16 @@
 #!/bin/bash
 set -e
 
+echo "🔎 Pre-commit: checking app shortcuts are declared..."
+
+# A chord written inline is invisible to the AppShortcut router test, and a
+# chord the router forwards to the terminal never fires its menu item. Sheet
+# scoped .defaultAction / .cancelAction take no literal and are unaffected.
+if grep -rn --include='*.swift' 'keyboardShortcut("' apps/macos/CodeSpark; then
+  echo "❌ Inline key equivalent above. Add a case to AppShortcuts.swift and use .keyboardShortcut(.thatCase)"
+  exit 1
+fi
+
 echo "🔨 Pre-commit: building + unit tests..."
 
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \

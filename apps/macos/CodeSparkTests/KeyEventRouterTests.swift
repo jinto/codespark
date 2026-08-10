@@ -79,4 +79,49 @@ final class KeyEventRouterTests: XCTestCase {
         let decision = routeKeyEquivalent(modifiers: [.control, .shift], hasMarkedText: false, charactersIgnoringModifiers: "a")
         XCTAssertEqual(decision, .forwardToKeyDown)
     }
+
+    // MARK: - Declared app shortcuts must survive the router
+
+    /// The gap that let `Cmd+Ctrl+S` ship broken: its action worked and its menu
+    /// item existed, so every test passed — but the router handed the chord to
+    /// the terminal and the menu item never fired. Testing the action alone
+    /// cannot see that. This asserts the chord itself reaches the menu.
+    func test_every_app_shortcut_reaches_the_menu() {
+        for shortcut in AppShortcut.allCases {
+            XCTAssertEqual(
+                routeKeyEquivalent(
+                    modifiers: shortcut.flags,
+                    hasMarkedText: false,
+                    charactersIgnoringModifiers: String(shortcut.key.character)
+                ),
+                .delegateToSuper,
+                "\(shortcut.rawValue) never reaches the menu — the terminal swallows it"
+            )
+        }
+    }
+
+    func test_app_shortcuts_do_not_collide() {
+        var seen: [String: String] = [:]
+        for shortcut in AppShortcut.allCases {
+            let chord = "\(shortcut.flags.rawValue)+\(shortcut.key.character)"
+            if let existing = seen[chord] {
+                XCTFail("\(shortcut.rawValue) uses the same chord as \(existing)")
+            }
+            seen[chord] = shortcut.rawValue
+        }
+    }
+
+    /// Cmd+1…9 share one table entry, so cover the whole digit range here.
+    func test_project_index_shortcuts_reach_the_menu_for_every_digit() {
+        for digit in 1...9 {
+            XCTAssertEqual(
+                routeKeyEquivalent(
+                    modifiers: AppShortcut.selectProjectByIndex.flags,
+                    hasMarkedText: false,
+                    charactersIgnoringModifiers: "\(digit)"
+                ),
+                .delegateToSuper
+            )
+        }
+    }
 }

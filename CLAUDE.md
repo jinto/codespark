@@ -62,7 +62,18 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - **순서 (중요)**: `recomputeWorkspaces()`는 **선택 대입보다 먼저** 실행해야 한다. `activeWorkspacePath`의 `didSet`이 `workspaces`를 읽기 때문에, 낡은 그룹핑이면 방금 만든 탭을 못 보고 선택을 옛 탭으로 되돌린다.
 - **재귀**: `activeSessionID`와 `activeWorkspacePath`의 `didSet`이 서로를 부른다. `workspaceSelectedSessions`를 **먼저** 쓰고 부등호 가드로 끊는 순서가 종료 조건이다.
 - **전환 수단**: 사이드바 행 클릭 + `Cmd+Opt+[`/`]`. 사이드바를 숨기면 클릭 경로가 사라지므로 핫키가 없으면 다른 워크트리의 탭이 고립된다.
-  - `KeyEventRouter.routeKeyEquivalent`의 분기 기준: **Ctrl 단독은 셸, Cmd+Ctrl은 메뉴.** Ctrl만 보고 `forwardToKeyDown`으로 보내면 `Cmd+Ctrl+*` 앱 단축키까지 삼켜져 메뉴 대신 터미널에 raw 이스케이프가 찍힌다(`Cmd+Ctrl+S`가 그래서 죽어 있었다).
+  - 단축키 등록 규칙은 아래 "Keyboard Shortcuts" 참고.
+
+## Keyboard Shortcuts
+
+앱 단축키는 **반드시 `AppShortcuts.swift`의 `AppShortcut`에 케이스로 선언**하고 `.keyboardShortcut(.그케이스)`로 쓴다. 시트 안의 `.defaultAction`/`.cancelAction`은 메뉴 단축키가 아니므로 예외다.
+
+- **왜**: 터미널이 메뉴보다 먼저 키를 본다. `KeyEventRouter`가 `forwardToKeyDown`으로 보내는 조합은 메뉴 아이템이 **아예 안 눌리고** 터미널에 raw 이스케이프만 찍힌다. 액션 함수 테스트로는 절대 안 보인다 — `Cmd+Ctrl+S`가 그래서 오래 죽어 있었다.
+- **라우터 기준**: Ctrl 단독은 셸, Cmd+Ctrl은 메뉴.
+- **게이트 2겹**:
+  - `test_every_app_shortcut_reaches_the_menu` — 선언된 모든 조합이 `.delegateToSuper`인지 검사하고 실패 시 어느 단축키인지 이름을 찍는다. 충돌 검사도 함께.
+  - pre-commit 훅이 인라인 `keyboardShortcut("…"`을 거부한다. 표를 우회하면 테스트가 볼 수 없기 때문.
+- 이 두 겹으로도 **"메뉴 아이템에 실제로 붙었는지"는 검증되지 않는다.** 그건 앱을 띄워야 하고 XCUITest는 현재 automation mode 타임아웃으로 못 쓴다. 새 단축키는 실물에서 한 번 눌러 확인할 것.
 
 ## Terminal State Detection
 
