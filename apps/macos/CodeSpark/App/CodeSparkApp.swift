@@ -46,7 +46,7 @@ struct CodeSparkApp: App {
                             withAnimation { isSidebarVisible.toggle() }
                         })
                         .navigationTitle("\u{1F4C2} " + (model.selectedProject?.name ?? ""))
-                        .navigationSubtitle(model.gitBranches[model.selectedProject?.path ?? ""] ?? "")
+                        .navigationSubtitle(model.activeBranchLabel)
                     }
                     .task {
                         await initializeAndLoad()

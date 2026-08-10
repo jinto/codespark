@@ -567,4 +567,192 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertNil(model.activeSessionID)
         XCTAssertEqual(model.workspaces.first?.sessions.count, 0)
     }
+
+    // MARK: - Tabs belong to a worktree
+
+    private static let mainWorktree = "/tmp/proj"
+    private static let featureWorktree = "/tmp/proj-feature"
+
+    /// A project whose repo has two worktrees. The cache is primed after `load()`
+    /// because `selectProject` invalidates it on the way in.
+    @MainActor
+    private func modelWithTwoWorktrees() async -> (AppModel, MockProjectCoreClient) {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "Proj", path: Self.mainWorktree, transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "Proj", path: Self.mainWorktree,
+                                            transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.featureWorktree, branch: "feature", isMainWorktree: false)
+        ], for: Self.mainWorktree)
+        model.recomputeWorkspaces()
+        return (model, core)
+    }
+
+    @MainActor
+    func test_tab_bar_shows_only_the_active_worktrees_tabs() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        XCTAssertEqual(model.liveSessions.count, 2, "both tabs stay alive")
+
+        model.activeWorkspacePath = Self.mainWorktree
+        XCTAssertEqual(model.visibleSessions.map(\.workspacePath), [Self.mainWorktree])
+
+        model.activeWorkspacePath = Self.featureWorktree
+        XCTAssertEqual(model.visibleSessions.map(\.workspacePath), [Self.featureWorktree])
+    }
+
+    @MainActor
+    func test_new_tab_opens_in_the_active_worktree() async {
+        let (model, core) = await modelWithTwoWorktrees()
+        model.activeWorkspacePath = Self.featureWorktree
+
+        await model.newSession()
+
+        XCTAssertEqual(core.startedSessions.last?.workspacePath, Self.featureWorktree)
+    }
+
+    @MainActor
+    func test_new_tab_falls_back_to_the_project_when_the_worktree_is_gone() async {
+        let (model, core) = await modelWithTwoWorktrees()
+        model.activeWorkspacePath = "/tmp/proj-deleted"
+
+        await model.newSession()
+
+        XCTAssertEqual(core.startedSessions.last?.workspacePath, Self.mainWorktree)
+    }
+
+    @MainActor
+    func test_cycling_tabs_stays_within_the_active_worktree() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+
+        model.activeWorkspacePath = Self.mainWorktree
+        let inMain = Set(model.visibleSessions.map(\.id))
+        XCTAssertEqual(inMain.count, 2)
+
+        model.activeSessionID = model.visibleSessions[0].id
+        for _ in 0..<3 {
+            model.selectNextSession()
+            XCTAssertTrue(inMain.contains(model.activeSessionID ?? ""),
+                          "cycling must not cross into another worktree")
+        }
+    }
+
+    @MainActor
+    func test_selecting_a_tab_activates_the_worktree_it_belongs_to() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let featureTab = model.liveSessions.first { $0.workspacePath == Self.featureWorktree }!
+
+        model.activeWorkspacePath = Self.mainWorktree
+        model.activeSessionID = featureTab.id
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
+        XCTAssertEqual(model.workspaceSelectedSessions[Self.featureWorktree], featureTab.id,
+                       "the selection must be recorded against the tab's own worktree")
+    }
+
+    // MARK: - Sidebar nests worktrees under the project
+
+    @MainActor
+    func test_single_worktree_project_stays_flat_in_the_sidebar() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "Proj", path: Self.mainWorktree, transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "Proj", path: Self.mainWorktree,
+                                            transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+
+        XCTAssertEqual(model.workspaces.count, 1)
+        XCTAssertTrue(model.sidebarWorktrees.isEmpty,
+                      "one worktree needs no child row — the project row already is it")
+    }
+
+    @MainActor
+    func test_multi_worktree_project_lists_every_worktree_including_main() async {
+        let (model, _) = await modelWithTwoWorktrees()
+
+        XCTAssertEqual(model.sidebarWorktrees.map(\.path),
+                       [Self.mainWorktree, Self.featureWorktree])
+        XCTAssertTrue(model.sidebarWorktrees.contains { $0.isMainWorktree },
+                      "main is a child row too once there is more than one worktree")
+    }
+
+    @MainActor
+    func test_window_subtitle_follows_the_active_worktree() async {
+        let (model, _) = await modelWithTwoWorktrees()
+
+        model.activeWorkspacePath = Self.featureWorktree
+        XCTAssertEqual(model.activeBranchLabel, "feature",
+                       "the header must name the worktree the tab bar is scoped to")
+
+        model.activeWorkspacePath = Self.mainWorktree
+        XCTAssertEqual(model.activeBranchLabel, "main")
+    }
+
+    @MainActor
+    func test_single_worktree_subtitle_still_comes_from_the_branch_lookup() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "Proj", path: Self.mainWorktree, transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "Proj", path: Self.mainWorktree,
+                                            transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+
+        // A non-git project groups into one "default" workspace — that placeholder
+        // must never reach the window subtitle.
+        XCTAssertEqual(model.activeBranchLabel, "")
+        model.gitBranches[Self.mainWorktree] = "trunk"
+        XCTAssertEqual(model.activeBranchLabel, "trunk")
+    }
+
+    @MainActor
+    func test_worktree_status_reflects_only_its_own_tabs() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+
+        let mainTab = model.liveSessions.first { $0.workspacePath == Self.mainWorktree }!
+        model.sessionStates[mainTab.id] = .needsInput
+
+        let main = model.workspaces.first { $0.path == Self.mainWorktree }!
+        let feature = model.workspaces.first { $0.path == Self.featureWorktree }!
+        XCTAssertEqual(model.workspaceStatus(for: main), .needsInput)
+        XCTAssertNotEqual(model.workspaceStatus(for: feature), .needsInput,
+                          "one worktree waiting for input must not colour its sibling")
+    }
+
+    @MainActor
+    func test_switching_to_an_empty_worktree_clears_the_active_tab() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+
+        model.activeWorkspacePath = Self.featureWorktree
+
+        XCTAssertTrue(model.visibleSessions.isEmpty)
+        XCTAssertNil(model.activeSessionID,
+                     "the active tab must never point outside the active worktree")
+    }
 }

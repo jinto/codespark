@@ -49,9 +49,18 @@ apps/macos/CodeSpark/
 
 Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - Sidebar icons (toggle, +) placed via `.toolbar` in sidebar column
-- Project name + branch shown via `.navigationTitle` / `.navigationSubtitle` in detail column
+- Project name via `.navigationTitle`; `.navigationSubtitle` shows `activeBranchLabel` — the **활성 워크트리의** 브랜치, 프로젝트 경로의 브랜치가 아니다
 - Sidebar hidden when no projects exist, auto-shown on first project add
 - Sidebar toggle persisted via `@AppStorage(StorageKeys.isSidebarVisible)`
+
+## Worktree Scoping
+
+탭은 워크트리 소속이다. 사이드바가 계층, 탭바가 그 안의 탭이다.
+
+- **표시**: 워크트리가 2개 이상일 때만 `sidebarWorktrees`가 자식 행을 낸다. 1개면 평면 — 프로젝트 행이 곧 그 워크트리고, 모든 프로젝트에 "main" 한 줄이 붙는 건 노이즈다. `workspaces`는 **선택된 프로젝트만** 계산되므로 자식 행도 선택된 프로젝트에만 달린다.
+- **스코프**: 탭바·`Cmd+[/]`·새 탭은 전부 `activeWorkspacePath` 기준(`visibleSessions`). 안 보이는 워크트리의 Ghostty surface는 계속 살아 있다 — `terminalContent`는 여전히 `allSessions`를 순회해야 한다.
+- **순서 (중요)**: `recomputeWorkspaces()`는 **선택 대입보다 먼저** 실행해야 한다. `activeWorkspacePath`의 `didSet`이 `workspaces`를 읽기 때문에, 낡은 그룹핑이면 방금 만든 탭을 못 보고 선택을 옛 탭으로 되돌린다.
+- **재귀**: `activeSessionID`와 `activeWorkspacePath`의 `didSet`이 서로를 부른다. `workspaceSelectedSessions`를 **먼저** 쓰고 부등호 가드로 끊는 순서가 종료 조건이다.
 
 ## Terminal State Detection
 
