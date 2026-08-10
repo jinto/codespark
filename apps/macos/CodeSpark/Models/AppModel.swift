@@ -10,10 +10,15 @@ final class AppModel: ObservableObject {
     @Published var selectedProject: ProjectDetailViewData?
     @Published var activeSessionID: String? {
         didSet {
-            // Sync per-workspace selection when activeSessionID changes
-            if let path = activeWorkspacePath, let id = activeSessionID {
-                workspaceSelectedSessions[path] = id
-            }
+            guard let id = activeSessionID else { return }
+            // A tab carries its worktree, so selecting one moves the sidebar with
+            // it rather than recording the choice against whatever was active.
+            let owner = liveSessions.first { $0.id == id }?.workspacePath
+            guard let path = (owner?.isEmpty == false) ? owner : activeWorkspacePath else { return }
+            // Record before switching: `activeWorkspacePath`'s observer reads this
+            // map, and the inequality guard is what stops the two from recursing.
+            workspaceSelectedSessions[path] = id
+            if activeWorkspacePath != path { activeWorkspacePath = path }
         }
     }
     @Published var liveSessions: [SessionViewData] = []
@@ -33,18 +38,36 @@ final class AppModel: ObservableObject {
     @Published private(set) var resumableAgentSessions: [ResumableAgentSession] = []
     @Published var activeWorkspacePath: String? {
         didSet {
-            // Restore per-workspace selected session when switching workspaces
-            if let path = activeWorkspacePath {
-                if let savedID = workspaceSelectedSessions[path],
-                   liveSessions.contains(where: { $0.id == savedID }) {
-                    activeSessionID = savedID
-                } else if let ws = workspaces.first(where: { $0.path == path }),
-                          let first = ws.sessions.first {
-                    activeSessionID = first.id
-                    workspaceSelectedSessions[path] = first.id
-                }
+            guard let path = activeWorkspacePath else { return }
+            // `workspaces` is empty until a project is applied — fall back to the
+            // flat list then, so an early selection isn't thrown away.
+            var scoped: [String] = []
+            if workspaces.isEmpty {
+                scoped = liveSessions.map(\.id)
+            } else if let workspace = workspaces.first(where: { $0.path == path }) {
+                scoped = workspace.sessions.map(\.id)
+            }
+
+            if let savedID = workspaceSelectedSessions[path], scoped.contains(savedID) {
+                activeSessionID = savedID
+            } else if let first = scoped.first {
+                activeSessionID = first
+                workspaceSelectedSessions[path] = first
+            } else {
+                // Nothing open here, so nothing may stay selected — the tab bar
+                // is empty and the active tab must not point outside it.
+                activeSessionID = nil
             }
         }
+    }
+
+    /// Tabs belong to the worktree they were opened in, so the tab bar shows only
+    /// the active worktree's. Falls back to every tab before workspaces exist.
+    var visibleSessions: [SessionViewData] {
+        guard !workspaces.isEmpty, let path = activeWorkspacePath else { return liveSessions }
+        guard let workspace = workspaces.first(where: { $0.path == path }) else { return [] }
+        let ids = Set(workspace.sessions.map(\.id))
+        return liveSessions.filter { ids.contains($0.id) }
     }
     var workspaceSelectedSessions: [String: String] = [:]  // workspacePath → sessionID
     @Published var pendingSSHReconnectProjectID: String?
@@ -94,7 +117,7 @@ final class AppModel: ObservableObject {
             host.attach(sessionID: session.id, command: nil, initialInput: nil)
             hosts[session.id] = host
         }
-        activeSessionID = liveSessions.first?.id
+        activeSessionID = visibleSessions.first?.id
         syncProjectSessionDetails()
     }
 
@@ -189,10 +212,12 @@ final class AppModel: ObservableObject {
     private func apply(detail: ProjectDetailViewData) {
         selectedProject = detail
         liveSessions = detail.liveSessions
-        activeSessionID = liveSessions.first?.id
         selectedWorkspacePath = nil
-        activeWorkspacePath = detail.path
         recomputeWorkspaces()
+        // Opening a project lands on the worktree its path points at; the observer
+        // then picks that worktree's tab. Setting the tab first would leave the
+        // selection outside the active worktree.
+        activeWorkspacePath = detail.path
     }
 
     func recomputeWorkspaces() {
@@ -469,6 +494,12 @@ final class AppModel: ObservableObject {
         let workspacePath: String
         if let explicit = inWorkspacePath {
             workspacePath = explicit
+        } else if let active = activeWorkspacePath,
+                  workspaces.contains(where: { $0.path == active }) {
+            // A new tab belongs to the worktree you are looking at. The
+            // membership check keeps a removed worktree from taking the tab
+            // somewhere that no longer exists.
+            workspacePath = active
         } else {
             workspacePath = project.path.isEmpty
                 ? FileManager.default.homeDirectoryForCurrentUser.path
@@ -491,6 +522,7 @@ final class AppModel: ObservableObject {
                     command: info.sshCommand,
                     sshInfo: info
                 )
+                recomputeWorkspaces()
                 activeSessionID = sessionID
                 pendingSSHReconnectProjectID = nil
             } catch {
@@ -508,10 +540,12 @@ final class AppModel: ObservableObject {
                 cwd: workspacePath,
                 workspacePath: workspacePath
             )
-            // Populate map first, then set workspace path (didSet restores activeSessionID from map)
+            // Regroup before selecting: `activeWorkspacePath`'s observer reads
+            // `workspaces`, so a stale grouping would not see the new tab and
+            // would bounce the selection to an older one.
+            recomputeWorkspaces()
             workspaceSelectedSessions[workspacePath] = sessionID
             activeWorkspacePath = workspacePath
-            recomputeWorkspaces()
         } catch {
             loadErrorMessage = error.localizedDescription
         }
@@ -595,8 +629,8 @@ final class AppModel: ObservableObject {
                 interruptedSessions: []
             )
         }
-        activeSessionID = liveSessions.last?.id
         recomputeWorkspaces()
+        activeSessionID = liveSessions.last?.id
     }
 
     func newAgentSession(_ agent: AgentKind, resumeID: String? = nil) async {
@@ -624,6 +658,7 @@ final class AppModel: ObservableObject {
                 workspacePath: workspacePath,
                 command: command
             )
+            recomputeWorkspaces()
             activeSessionID = sessionID
             refreshAgentSessions()
         } catch {
@@ -705,11 +740,23 @@ final class AppModel: ObservableObject {
     func selectNextSession() { cycleSession(offset: 1) }
     func selectPreviousSession() { cycleSession(offset: -1) }
 
+    func selectNextWorktree() { cycleWorktree(offset: 1) }
+    func selectPreviousWorktree() { cycleWorktree(offset: -1) }
+
+    /// Clicking a sidebar row is otherwise the only way to reach another
+    /// worktree, which would strand its tabs whenever the sidebar is hidden.
+    private func cycleWorktree(offset: Int) {
+        guard workspaces.count > 1,
+              let current = activeWorkspacePath,
+              let index = workspaces.firstIndex(where: { $0.path == current }) else { return }
+        activeWorkspacePath = workspaces[(index + offset + workspaces.count) % workspaces.count].path
+    }
+
     private func cycleSession(offset: Int) {
+        let scope = visibleSessions
         guard let current = activeSessionID,
-              let index = liveSessions.firstIndex(where: { $0.id == current }),
-              !liveSessions.isEmpty else { return }
-        activeSessionID = liveSessions[(index + offset + liveSessions.count) % liveSessions.count].id
+              let index = scope.firstIndex(where: { $0.id == current }) else { return }
+        activeSessionID = scope[(index + offset + scope.count) % scope.count].id
     }
 
     /// Runs while the app is terminating, so it must finish synchronously.
@@ -769,6 +816,35 @@ final class AppModel: ObservableObject {
         return .running
     }
 
+    /// Worktrees to draw as child rows under the selected project. A repo with a
+    /// single worktree stays flat — the project row already is that worktree, and
+    /// a lone "main" child would be noise on every project.
+    var sidebarWorktrees: [WorkspaceViewData] {
+        workspaces.count > 1 ? workspaces : []
+    }
+
+    /// Branch for the window subtitle. Once a repo has several worktrees the
+    /// header has to name the one the tab bar is scoped to, or it reads as the
+    /// wrong branch. A single-worktree project keeps the plain branch lookup —
+    /// its grouping falls back to a "default" placeholder that must not show.
+    var activeBranchLabel: String {
+        if workspaces.count > 1,
+           let path = activeWorkspacePath,
+           let workspace = workspaces.first(where: { $0.path == path }) {
+            return workspace.branch
+        }
+        return gitBranches[selectedProject?.path ?? ""] ?? ""
+    }
+
+    /// Status of one worktree, from the tabs that belong to it. Mirrors
+    /// `projectStatus(for:)` but never reads a sibling worktree's tabs.
+    func workspaceStatus(for workspace: WorkspaceViewData) -> ProjectStatus {
+        let states = workspace.sessions.compactMap { sessionStates[$0.id] }
+        if states.contains(.needsInput) { return .needsInput }
+        if states.isEmpty || states.allSatisfy({ $0 == .idle }) { return .idle }
+        return .running
+    }
+
     /// Backward-compatible computed property for views that check idle by session ID.
     var idleSessionIDs: Set<String> {
         Set(sessionStates.filter { $0.value == .idle }.map(\.key))
@@ -815,10 +891,10 @@ extension AppModel: TerminalHostDelegate {
             }()
 
             liveSessions.removeAll { $0.id == sessionID }
+            recomputeWorkspaces()
             if activeSessionID == sessionID {
                 activeSessionID = siblingIDs.first
             }
-            recomputeWorkspaces()
         }
         syncProjectSessionDetails()
 

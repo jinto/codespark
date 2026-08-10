@@ -13,7 +13,7 @@ struct MainContentView: View {
         if let project = model.selectedProject {
             VStack(spacing: 0) {
                 SessionTabBarView(
-                    sessions: model.liveSessions,
+                    sessions: model.visibleSessions,
                     activeSessionID: model.activeSessionID,
                     onSelect: { id in model.activeSessionID = id },
                     onClose: { id in model.closeSession(id: id) },

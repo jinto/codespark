@@ -46,7 +46,7 @@ struct CodeSparkApp: App {
                             withAnimation { isSidebarVisible.toggle() }
                         })
                         .navigationTitle("\u{1F4C2} " + (model.selectedProject?.name ?? ""))
-                        .navigationSubtitle(model.gitBranches[model.selectedProject?.path ?? ""] ?? "")
+                        .navigationSubtitle(model.activeBranchLabel)
                     }
                     .task {
                         await initializeAndLoad()
@@ -76,12 +76,12 @@ struct CodeSparkApp: App {
                 Button("New Project") {
                     Task { await model.createProjectFromFolder() }
                 }
-                .keyboardShortcut("n", modifiers: .command)
+                .keyboardShortcut(.newProject)
 
                 Button("New SSH Project...") {
                     model.showNewSSHSheet = true
                 }
-                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .keyboardShortcut(.newSSHProject)
 
                 Divider()
 
@@ -89,7 +89,7 @@ struct CodeSparkApp: App {
                     model.presentSessionChooser()
                 }
                 .disabled(model.selectedProjectID == nil)
-                .keyboardShortcut("t", modifiers: .command)
+                .keyboardShortcut(.newSession)
 
                 if !model.hiddenProjectIDs.isEmpty {
                     Divider()
@@ -110,25 +110,37 @@ struct CodeSparkApp: App {
                         model.pendingCloseProjectID = projID
                     }
                 }
-                .keyboardShortcut("w", modifiers: .command)
+                .keyboardShortcut(.closeSessionOrProject)
                 .disabled(model.selectedProjectID == nil)
             }
             CommandGroup(replacing: .sidebar) {
                 Button("Toggle Sidebar") {
                     withAnimation(.easeInOut(duration: 0.2)) { isSidebarVisible.toggle() }
                 }
-                .keyboardShortcut("s", modifiers: [.command, .control])
+                .keyboardShortcut(.toggleSidebar)
             }
             CommandGroup(after: .windowArrangement) {
                 Button("Select Next Tab") {
                     model.selectNextSession()
                 }
-                .keyboardShortcut("]", modifiers: [.command, .shift])
+                .keyboardShortcut(.nextTab)
 
                 Button("Select Previous Tab") {
                     model.selectPreviousSession()
                 }
-                .keyboardShortcut("[", modifiers: [.command, .shift])
+                .keyboardShortcut(.previousTab)
+
+                Button("Select Next Worktree") {
+                    model.selectNextWorktree()
+                }
+                .keyboardShortcut(.nextWorktree)
+                .disabled(model.sidebarWorktrees.isEmpty)
+
+                Button("Select Previous Worktree") {
+                    model.selectPreviousWorktree()
+                }
+                .keyboardShortcut(.previousWorktree)
+                .disabled(model.sidebarWorktrees.isEmpty)
 
                 Divider()
 
@@ -137,7 +149,7 @@ struct CodeSparkApp: App {
                     Button(project.name) {
                         Task { await model.selectProject(id: project.id) }
                     }
-                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: AppShortcut.selectProjectByIndex.modifiers)
                 }
             }
         }

@@ -73,6 +73,13 @@ final class GitWorktreeService: @unchecked Sendable {
         }
     }
 
+    /// Seeds the cache so multi-worktree behaviour can be exercised without a
+    /// real repository. Only tests call this — `refreshWorktrees` is the
+    /// production path.
+    func primeCache(_ worktrees: [GitWorktree], for projectPath: String) {
+        cache[projectPath] = CacheEntry(worktrees: worktrees, fetchedAt: Date(), ttl: normalTTL)
+    }
+
     // MARK: - Parsing
 
     static func parseWorktreeList(_ output: String) -> [GitWorktree] {

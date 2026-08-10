@@ -51,6 +51,7 @@
 		DDD0640824A174AFD49933F8 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 85F9E2DCA6D0CF00B744A92C /* IOKit.framework */; };
 		E0A153DE5FCE17D9559AC0C3 /* ProjectViewData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 372FF5235CD476B7A3D7D120 /* ProjectViewData.swift */; };
 		E1275E7403FDD3DEE3FB06A2 /* CodeSparkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CCE58232FA2D383F208923 /* CodeSparkApp.swift */; };
+		A1B2C3D40009E5F600001009 /* AppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40008E5F600001008 /* AppShortcuts.swift */; };
 		E898DEED2F56E2BA70A0166F /* StorageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32DD666C1E320049CFEF78CE /* StorageKeys.swift */; };
 		E8CF80B13D9BFCC8278965D6 /* SessionSidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */; };
 		EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */; };
@@ -86,6 +87,7 @@
 		0D1E03959DA8A839A6A0BDA5 /* CodeSparkUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSparkUITests.swift; sourceTree = "<group>"; };
 		1188AFD5C69D085D60330D02 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		11CCE58232FA2D383F208923 /* CodeSparkApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSparkApp.swift; sourceTree = "<group>"; };
+		A1B2C3D40008E5F600001008 /* AppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShortcuts.swift; sourceTree = "<group>"; };
 		13C9EBA2F1A781BC47810CD2 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		17158E6BF62F75313B1E9B2F /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		18CA500C962BD0EB2F45C89C /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
@@ -292,6 +294,7 @@
 			isa = PBXGroup;
 			children = (
 				11CCE58232FA2D383F208923 /* CodeSparkApp.swift */,
+				A1B2C3D40008E5F600001008 /* AppShortcuts.swift */,
 				2E0D94021E6A37AA34942EED /* CodeSparkWindow.swift */,
 			);
 			path = App;
@@ -521,6 +524,7 @@
 				566296EC328127177468735C /* AppModel.swift in Sources */,
 				EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */,
 					E1275E7403FDD3DEE3FB06A2 /* CodeSparkApp.swift in Sources */,
+					A1B2C3D40009E5F600001009 /* AppShortcuts.swift in Sources */,
 				5066F54CBC80078498D6B71E /* CodeSparkWindow.swift in Sources */,
 				A014AF3F565FAEE68A6AF58D /* GhosttyRuntime.swift in Sources */,
 				ADC7C90A0E6B40786204C136 /* GhosttyTerminalHost.swift in Sources */,

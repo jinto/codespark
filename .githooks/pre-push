@@ -1,7 +1,8 @@
 #!/bin/bash
 set -e
 
-echo "🔨 Pre-push: building + all tests (including integration)..."
+echo "🔨 Pre-push: building + all tests (including integration + UI)..."
+echo "   UI tests launch the app and take over focus for ~20s."
 
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 xcodebuild -project apps/macos/CodeSpark.xcodeproj \
@@ -17,7 +18,6 @@ xcodebuild -project apps/macos/CodeSpark.xcodeproj \
   -configuration Debug \
   -destination 'platform=macOS,arch=arm64' \
   -quiet \
-  test-without-building \
-  -skip-testing:CodeSparkUITests
+  test-without-building
 
-echo "✅ All tests passed (including integration)."
+echo "✅ All tests passed (including integration + UI)."

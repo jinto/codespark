@@ -55,4 +55,73 @@ final class KeyEventRouterTests: XCTestCase {
         let decision = routeKeyEquivalent(modifiers: [.shift, .command], hasMarkedText: false, charactersIgnoringModifiers: "a")
         XCTAssertEqual(decision, .delegateToSuper)
     }
+
+    // Ctrl belongs to the terminal only when Cmd is not held. Cmd+Ctrl+S is the
+    // sidebar toggle: routing it to keyDown swallowed the shortcut and printed
+    // the raw escape (`15;5u`) into the terminal instead.
+    func test_cmd_control_returns_delegateToSuper() {
+        let decision = routeKeyEquivalent(modifiers: [.command, .control], hasMarkedText: false, charactersIgnoringModifiers: "s")
+        XCTAssertEqual(decision, .delegateToSuper)
+    }
+
+    func test_cmd_control_shift_returns_delegateToSuper() {
+        let decision = routeKeyEquivalent(modifiers: [.command, .control, .shift], hasMarkedText: false, charactersIgnoringModifiers: "s")
+        XCTAssertEqual(decision, .delegateToSuper)
+    }
+
+    // …but a bare Ctrl chord still has to reach the shell.
+    func test_control_c_still_returns_forwardToKeyDown() {
+        let decision = routeKeyEquivalent(modifiers: [.control], hasMarkedText: false, charactersIgnoringModifiers: "c")
+        XCTAssertEqual(decision, .forwardToKeyDown)
+    }
+
+    func test_control_shift_still_returns_forwardToKeyDown() {
+        let decision = routeKeyEquivalent(modifiers: [.control, .shift], hasMarkedText: false, charactersIgnoringModifiers: "a")
+        XCTAssertEqual(decision, .forwardToKeyDown)
+    }
+
+    // MARK: - Declared app shortcuts must survive the router
+
+    /// The gap that let `Cmd+Ctrl+S` ship broken: its action worked and its menu
+    /// item existed, so every test passed — but the router handed the chord to
+    /// the terminal and the menu item never fired. Testing the action alone
+    /// cannot see that. This asserts the chord itself reaches the menu.
+    func test_every_app_shortcut_reaches_the_menu() {
+        for shortcut in AppShortcut.allCases {
+            XCTAssertEqual(
+                routeKeyEquivalent(
+                    modifiers: shortcut.flags,
+                    hasMarkedText: false,
+                    charactersIgnoringModifiers: String(shortcut.key.character)
+                ),
+                .delegateToSuper,
+                "\(shortcut.rawValue) never reaches the menu — the terminal swallows it"
+            )
+        }
+    }
+
+    func test_app_shortcuts_do_not_collide() {
+        var seen: [String: String] = [:]
+        for shortcut in AppShortcut.allCases {
+            let chord = "\(shortcut.flags.rawValue)+\(shortcut.key.character)"
+            if let existing = seen[chord] {
+                XCTFail("\(shortcut.rawValue) uses the same chord as \(existing)")
+            }
+            seen[chord] = shortcut.rawValue
+        }
+    }
+
+    /// Cmd+1…9 share one table entry, so cover the whole digit range here.
+    func test_project_index_shortcuts_reach_the_menu_for_every_digit() {
+        for digit in 1...9 {
+            XCTAssertEqual(
+                routeKeyEquivalent(
+                    modifiers: AppShortcut.selectProjectByIndex.flags,
+                    hasMarkedText: false,
+                    charactersIgnoringModifiers: "\(digit)"
+                ),
+                .delegateToSuper
+            )
+        }
+    }
 }

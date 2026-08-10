@@ -70,51 +70,69 @@ struct SidebarView: View {
                 }
                 LazyVStack(alignment: .leading, spacing: 3) {
                     ForEach(model.orderedProjects) { project in
-                        ProjectSidebarRow(
-                            project: project,
-                            isSelected: model.selectedProjectID == project.id,
-                            status: model.projectStatus(for: project),
-                            infoLine: projectInfoLine(for: project),
-                            hotkeyIndex: hotkeyIndex(for: project)
-                        )
-                        .contentShape(Rectangle())
-                        .draggable(project.id)
-                        .dropDestination(for: String.self) { droppedIDs, _ in
-                            guard let draggedID = droppedIDs.first else { return false }
-                            model.moveProject(id: draggedID, before: project.id)
-                            return true
-                        }
-                        .onTapGesture {
-                            Task { await model.selectProject(id: project.id, promptForRecovery: true) }
-                        }
-                        .onTapGesture(count: 2) {
-                            Task {
-                                await model.selectProject(id: project.id)
-                                model.presentSessionChooser()
+                        VStack(alignment: .leading, spacing: 3) {
+                            ProjectSidebarRow(
+                                project: project,
+                                isSelected: model.selectedProjectID == project.id,
+                                status: model.projectStatus(for: project),
+                                infoLine: projectInfoLine(for: project),
+                                hotkeyIndex: hotkeyIndex(for: project)
+                            )
+                            .contentShape(Rectangle())
+                            .draggable(project.id)
+                            .dropDestination(for: String.self) { droppedIDs, _ in
+                                guard let draggedID = droppedIDs.first else { return false }
+                                model.moveProject(id: draggedID, before: project.id)
+                                return true
                             }
-                        }
-                        .contextMenu {
-                            Button("Rename") {
-                                editProjectName = project.name
-                                editingProjectID = project.id
+                            .onTapGesture {
+                                Task { await model.selectProject(id: project.id, promptForRecovery: true) }
                             }
-                            if project.transport == "ssh" {
-                                Button("Change Remote Folder...") {
-                                    if let info = SSHConnectionInfo(uri: project.path) {
-                                        changeFolderPath = info.remotePath ?? ""
-                                    } else {
-                                        changeFolderPath = ""
-                                    }
-                                    changeFolderProjectID = project.id
+                            .onTapGesture(count: 2) {
+                                Task {
+                                    await model.selectProject(id: project.id)
+                                    model.presentSessionChooser()
                                 }
                             }
-                            Button("Close Project") {
-                                Task { await model.closeProject(id: project.id) }
+                            .contextMenu {
+                                Button("Rename") {
+                                    editProjectName = project.name
+                                    editingProjectID = project.id
+                                }
+                                if project.transport == "ssh" {
+                                    Button("Change Remote Folder...") {
+                                        if let info = SSHConnectionInfo(uri: project.path) {
+                                            changeFolderPath = info.remotePath ?? ""
+                                        } else {
+                                            changeFolderPath = ""
+                                        }
+                                        changeFolderProjectID = project.id
+                                    }
+                                }
+                                Button("Close Project") {
+                                    Task { await model.closeProject(id: project.id) }
+                                }
+                                Divider()
+                                Button("Delete", role: .destructive) {
+                                    pendingDeleteProjectID = project.id
+                                    showDeleteConfirmation = true
+                                }
                             }
-                            Divider()
-                            Button("Delete", role: .destructive) {
-                                pendingDeleteProjectID = project.id
-                                showDeleteConfirmation = true
+
+                            // Worktrees only exist for the selected project — that is
+                            // the only one whose worktree list has been fetched.
+                            if model.selectedProjectID == project.id {
+                                ForEach(model.sidebarWorktrees) { workspace in
+                                    WorktreeSidebarRow(
+                                        workspace: workspace,
+                                        isSelected: model.activeWorkspacePath == workspace.path,
+                                        status: model.workspaceStatus(for: workspace)
+                                    )
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        model.activeWorkspacePath = workspace.path
+                                    }
+                                }
                             }
                         }
                     }
@@ -301,6 +319,50 @@ struct ProjectSidebarRow: View {
                     .padding(.trailing, 6)
             }
         }
+    }
+}
+
+/// A worktree nested under its project. Only drawn when the repo has more than
+/// one — a lone worktree is the project row itself.
+struct WorktreeSidebarRow: View {
+    let workspace: WorkspaceViewData
+    let isSelected: Bool
+    let status: ProjectStatus
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(status.color)
+                .frame(width: 5, height: 5)
+
+            Text(workspace.branch)
+                .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? .white : .white.opacity(0.7))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .accessibilityIdentifier("worktreeBranch")
+
+            Spacer()
+
+            if !workspace.sessions.isEmpty {
+                Text("\(workspace.sessions.count)")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.white.opacity(0.10), in: Capsule())
+                    // Two characters that must stay readable — a long branch name
+                    // truncates instead of shaving the badge down to a sliver.
+                    .fixedSize()
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(isSelected ? AppTheme.accent.opacity(0.22) : Color.white.opacity(0.02))
+        )
+        .padding(.leading, 12)
     }
 }
 
