@@ -2,7 +2,18 @@
 set -e
 
 echo "🔨 Pre-push: building + all tests (including integration + UI)..."
-echo "   UI tests launch the app and take over focus for ~20s."
+
+# UI tests have to bring the app to the front. A locked screen makes that
+# impossible ("Failed to activate application ... Running Background"), which
+# would block an otherwise fine push — so skip them and say so rather than
+# reporting a failure that is really just the lock screen.
+SKIP_UI=""
+if ioreg -n Root -d1 -a 2>/dev/null | grep -A1 CGSSessionScreenIsLocked | grep -q true; then
+  echo "⚠️  Screen is locked — skipping UI tests. Unlock and re-push to run them."
+  SKIP_UI="-skip-testing:CodeSparkUITests"
+else
+  echo "   UI tests launch the app and take over focus for ~20s."
+fi
 
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 xcodebuild -project apps/macos/CodeSpark.xcodeproj \
@@ -18,6 +29,7 @@ xcodebuild -project apps/macos/CodeSpark.xcodeproj \
   -configuration Debug \
   -destination 'platform=macOS,arch=arm64' \
   -quiet \
-  test-without-building
+  test-without-building \
+  $SKIP_UI
 
-echo "✅ All tests passed (including integration + UI)."
+echo "✅ All tests passed."
