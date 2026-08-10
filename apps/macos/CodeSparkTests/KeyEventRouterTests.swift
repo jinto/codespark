@@ -55,4 +55,28 @@ final class KeyEventRouterTests: XCTestCase {
         let decision = routeKeyEquivalent(modifiers: [.shift, .command], hasMarkedText: false, charactersIgnoringModifiers: "a")
         XCTAssertEqual(decision, .delegateToSuper)
     }
+
+    // Ctrl belongs to the terminal only when Cmd is not held. Cmd+Ctrl+S is the
+    // sidebar toggle: routing it to keyDown swallowed the shortcut and printed
+    // the raw escape (`15;5u`) into the terminal instead.
+    func test_cmd_control_returns_delegateToSuper() {
+        let decision = routeKeyEquivalent(modifiers: [.command, .control], hasMarkedText: false, charactersIgnoringModifiers: "s")
+        XCTAssertEqual(decision, .delegateToSuper)
+    }
+
+    func test_cmd_control_shift_returns_delegateToSuper() {
+        let decision = routeKeyEquivalent(modifiers: [.command, .control, .shift], hasMarkedText: false, charactersIgnoringModifiers: "s")
+        XCTAssertEqual(decision, .delegateToSuper)
+    }
+
+    // …but a bare Ctrl chord still has to reach the shell.
+    func test_control_c_still_returns_forwardToKeyDown() {
+        let decision = routeKeyEquivalent(modifiers: [.control], hasMarkedText: false, charactersIgnoringModifiers: "c")
+        XCTAssertEqual(decision, .forwardToKeyDown)
+    }
+
+    func test_control_shift_still_returns_forwardToKeyDown() {
+        let decision = routeKeyEquivalent(modifiers: [.control, .shift], hasMarkedText: false, charactersIgnoringModifiers: "a")
+        XCTAssertEqual(decision, .forwardToKeyDown)
+    }
 }
