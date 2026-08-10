@@ -284,63 +284,43 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertTrue(core.startedSessions.isEmpty)
     }
 
-    // MARK: - Restored tabs show what was on screen before
+    // MARK: - Restored tabs replay what was on screen before
 
     @MainActor
-    func test_restored_tab_carries_its_previous_screen() async {
+    func test_restored_tab_replays_its_previous_screen_into_scrollback() async {
         let core = projectWithTwoInterruptedTabs()
         core.snapshotsBySessionID = [
-            "s1": TerminalSnapshotViewData.fixture(lines: ["jinto@m3 ~ % cd projects/codespark", "jinto@m3 codespark %"])
+            "s1": TerminalSnapshotViewData.fixture(lines: ["jinto@m3 ~ % cd projects/codespark"])
         ]
-        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        var hosts: [MockTerminalHost] = []
+        let model = AppModel(core: core, terminalFactory: { _ in
+            let host = MockTerminalHost()
+            hosts.append(host)
+            return host
+        })
 
         await model.load()
 
-        let restoredFirst = model.liveSessions[0].id
-        XCTAssertEqual(model.restoredScreens[restoredFirst]?.lines.first, "jinto@m3 ~ % cd projects/codespark")
+        // The replay is injected as shell startup input, so the previous screen
+        // is printed as real output above the prompt rather than covering it.
+        let injected = hosts.flatMap(\.initialInputs).compactMap { $0 }
+        XCTAssertEqual(injected.count, 1)
+        XCTAssertTrue(injected[0].hasPrefix("cat "))
     }
 
     @MainActor
-    func test_tab_without_a_previous_screen_has_no_ghost() async {
+    func test_tab_without_a_previous_screen_gets_no_startup_input() async {
         let core = projectWithTwoInterruptedTabs()
-        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        var hosts: [MockTerminalHost] = []
+        let model = AppModel(core: core, terminalFactory: { _ in
+            let host = MockTerminalHost()
+            hosts.append(host)
+            return host
+        })
 
         await model.load()
 
-        XCTAssertTrue(model.restoredScreens.isEmpty)
-    }
-
-    @MainActor
-    func test_ghost_clears_once_the_user_types_in_that_tab() async {
-        let core = projectWithTwoInterruptedTabs()
-        core.snapshotsBySessionID = ["s1": TerminalSnapshotViewData.fixture(lines: ["old output"])]
-        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
-        await model.load()
-
-        let restoredFirst = model.liveSessions[0].id
-        XCTAssertNotNil(model.restoredScreens[restoredFirst])
-
-        model.dismissRestoredScreen(sessionID: restoredFirst)
-
-        XCTAssertNil(model.restoredScreens[restoredFirst])
-    }
-
-    @MainActor
-    func test_typing_in_one_tab_leaves_the_other_tabs_ghost_alone() async {
-        let core = projectWithTwoInterruptedTabs()
-        core.snapshotsBySessionID = [
-            "s1": TerminalSnapshotViewData.fixture(lines: ["first"]),
-            "s2": TerminalSnapshotViewData.fixture(lines: ["second"])
-        ]
-        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
-        await model.load()
-
-        let first = model.liveSessions[0].id
-        let second = model.liveSessions[1].id
-        model.dismissRestoredScreen(sessionID: first)
-
-        XCTAssertNil(model.restoredScreens[first])
-        XCTAssertEqual(model.restoredScreens[second]?.lines.first, "second")
+        XCTAssertTrue(hosts.flatMap(\.initialInputs).compactMap { $0 }.isEmpty)
     }
 
     // MARK: - Workspace membership is fixed at tab creation

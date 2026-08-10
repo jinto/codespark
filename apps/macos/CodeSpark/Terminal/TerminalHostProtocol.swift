@@ -13,7 +13,7 @@ protocol TerminalHostProtocol: AnyObject {
     /// The underlying NSView for display — nil for NoOp hosts.
     var surfaceNSView: NSView? { get }
     func markOutput()
-    func attach(sessionID: String, command: String?)
+    func attach(sessionID: String, command: String?, initialInput: String?)
     func close(sessionID: String)
     func extractSnapshot() -> TerminalSnapshotViewData?
 }

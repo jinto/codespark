@@ -174,21 +174,11 @@ struct MainContentView: View {
                     #if GHOSTTY_FIRST
                     if let surfaceView = model.hosts[session.id]?.surfaceNSView as? GhosttyTerminalSurfaceView {
                         TerminalSurfaceHostView(surfaceView: surfaceView, isActive: session.id == model.activeSessionID)
-                            .onAppear {
-                                surfaceView.onKeyDown = { [weak model] in
-                                    model?.dismissRestoredScreen(sessionID: session.id)
-                                }
-                            }
                     }
                     #else
                     TerminalSurfaceHostView(session: session, isActive: session.id == model.activeSessionID)
                         .opacity(session.id == model.activeSessionID ? 1 : 0)
                     #endif
-
-                    if let screen = model.restoredScreens[session.id],
-                       session.id == model.activeSessionID {
-                        RestoredScreenGhost(snapshot: screen)
-                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

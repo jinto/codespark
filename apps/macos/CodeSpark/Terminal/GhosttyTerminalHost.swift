@@ -27,13 +27,14 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
         self.session = session
     }
 
-    func attach(sessionID: String, command: String? = nil) {
+    func attach(sessionID: String, command: String? = nil, initialInput: String? = nil) {
         lastOutputTime = Date()
         let beforePIDs = Set(Self.childPIDs(of: getpid()))
         let sv = GhosttyTerminalSurfaceView(
             app: app,
             workingDirectory: session.lastCwd,
             command: command,
+            initialInput: initialInput,
             environment: Self.terminalEnvironment()
         )
         let afterPIDs = Set(Self.childPIDs(of: getpid()))
