@@ -786,6 +786,81 @@ final class WorkspaceSelectionTests: XCTestCase {
                           "one worktree waiting for input must not colour its sibling")
     }
 
+    // MARK: - A tab that wandered into another worktree says so
+
+    @MainActor
+    func test_a_tab_working_outside_its_worktree_names_where_it_is() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+
+        // What an agent does when it creates a worktree and moves into it.
+        model.sessionDidReportCwd(sessionID: tab.id, cwd: Self.featureWorktree + "/src")
+
+        XCTAssertEqual(model.visitingBranch(for: model.liveSessions[0]), "feature")
+    }
+
+    @MainActor
+    func test_a_tab_in_its_own_worktree_says_nothing() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+
+        model.sessionDidReportCwd(sessionID: tab.id, cwd: Self.mainWorktree + "/apps")
+
+        XCTAssertNil(model.visitingBranch(for: model.liveSessions[0]),
+                     "a tab at home has nothing to report")
+    }
+
+    @MainActor
+    func test_a_tab_outside_every_worktree_says_nothing() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+
+        model.sessionDidReportCwd(sessionID: tab.id, cwd: "/tmp/elsewhere")
+
+        XCTAssertNil(model.visitingBranch(for: model.liveSessions[0]),
+                     "a detour out of the repo is not another worktree")
+    }
+
+    @MainActor
+    func test_a_single_worktree_project_never_reports_a_visit() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "Proj", path: Self.mainWorktree, transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "Proj", path: Self.mainWorktree,
+                                            transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        await model.newSession()
+        let tab = model.liveSessions[0]
+
+        model.sessionDidReportCwd(sessionID: tab.id, cwd: "/tmp/anywhere")
+
+        XCTAssertNil(model.visitingBranch(for: model.liveSessions[0]))
+    }
+
+    @MainActor
+    func test_the_deepest_worktree_wins_when_one_nests_in_another() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.mainWorktree + "/nested", branch: "nested", isMainWorktree: false)
+        ], for: Self.mainWorktree)
+        model.recomputeWorkspaces()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+
+        model.sessionDidReportCwd(sessionID: tab.id, cwd: Self.mainWorktree + "/nested/deep")
+
+        XCTAssertEqual(model.visitingBranch(for: model.liveSessions[0]), "nested")
+    }
+
     // MARK: - The tree stays open across project switches
 
     private static let otherProject = "/tmp/other"

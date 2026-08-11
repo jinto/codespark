@@ -883,6 +883,21 @@ final class AppModel: ObservableObject {
             .map(\.path)
     }
 
+    /// The branch a tab is currently working in, when that is not the worktree
+    /// the tab belongs to — an agent that creates a worktree and moves into it
+    /// leaves the tab where it was opened, which is right, but silent.
+    ///
+    /// nil whenever there is nothing to say: the tab is home, it stepped outside
+    /// the repo entirely, the repo has a single worktree, or it is an ssh tab
+    /// whose cwd names a directory on the other machine.
+    func visitingBranch(for session: SessionViewData) -> String? {
+        guard workspaces.count > 1, selectedProject?.transport != "ssh" else { return nil }
+        guard let cwd = session.lastCwd,
+              let current = WorkspaceViewData.containing(cwd: cwd, in: workspaces),
+              current.path != session.workspacePath else { return nil }
+        return current.branch
+    }
+
     /// Branch for the window subtitle. Once a repo has several worktrees the
     /// header has to name the one the tab bar is scoped to, or it reads as the
     /// wrong branch. A single-worktree project keeps the plain branch lookup —
