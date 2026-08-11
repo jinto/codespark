@@ -34,6 +34,7 @@ final class AppModel: ObservableObject {
     @Published var hiddenProjectNames: [String: String] = [:]
     @Published var gitBranches: [String: String] = [:]
     @Published var workspaces: [WorkspaceViewData] = []
+    @Published private(set) var expandedProjectIDs: Set<String> = AppModel.savedExpandedProjectIDs()
     @Published var selectedWorkspacePath: String?
     @Published private(set) var resumableAgentSessions: [ResumableAgentSession] = []
     @Published var activeWorkspacePath: String? {
@@ -185,7 +186,7 @@ final class AppModel: ObservableObject {
                 }
                 if !detail.path.isEmpty && detail.transport != "ssh" {
                     gitWorktreeService.invalidateCache(for: detail.path)
-                    await gitWorktreeService.refreshWorktrees(for: [detail.path])
+                    await gitWorktreeService.refreshWorktrees(for: worktreeProjectPaths)
                     recomputeWorkspaces()
                 }
                 refreshAgentSessions()
@@ -675,7 +676,7 @@ final class AppModel: ObservableObject {
                 projectPath: project.path, branch: branch
             )
             gitWorktreeService.invalidateCache(for: project.path)
-            await gitWorktreeService.refreshWorktrees(for: [project.path])
+            await gitWorktreeService.refreshWorktrees(for: worktreeProjectPaths)
             recomputeWorkspaces()
             await newSession(inWorkspacePath: creation.path)
         } catch {
@@ -694,7 +695,7 @@ final class AppModel: ObservableObject {
         do {
             try await GitWorktreeService.removeWorktree(projectPath: project.path, worktreePath: path)
             gitWorktreeService.invalidateCache(for: project.path)
-            await gitWorktreeService.refreshWorktrees(for: [project.path])
+            await gitWorktreeService.refreshWorktrees(for: worktreeProjectPaths)
             recomputeWorkspaces()
         } catch {
             loadErrorMessage = error.localizedDescription
@@ -821,6 +822,57 @@ final class AppModel: ObservableObject {
     /// a lone "main" child would be noise on every project.
     var sidebarWorktrees: [WorkspaceViewData] {
         workspaces.count > 1 ? workspaces : []
+    }
+
+    /// The same rows for any project. The selected one reads the live grouping;
+    /// the rest are grouped from their summaries, so a tree the user opened keeps
+    /// its rows when focus moves to another project.
+    func sidebarWorktrees(for project: ProjectSummaryViewData) -> [WorkspaceViewData] {
+        guard project.id != selectedProjectID else { return sidebarWorktrees }
+        let grouped = WorkspaceViewData.groupSessions(
+            project.liveSessionDetails,
+            into: gitWorktreeService.worktrees(for: project.path),
+            projectPath: project.path
+        )
+        return grouped.count > 1 ? grouped : []
+    }
+
+    /// Which projects show their worktree rows. Opening is the user's choice and
+    /// it sticks: selecting another project no longer folds the tree, and the
+    /// shape of the sidebar survives a relaunch.
+    func toggleWorktrees(projectID: String) {
+        if expandedProjectIDs.contains(projectID) {
+            expandedProjectIDs.remove(projectID)
+        } else {
+            expandedProjectIDs.insert(projectID)
+        }
+        UserDefaults.standard.set(
+            expandedProjectIDs.sorted().joined(separator: ","),
+            forKey: StorageKeys.expandedProjectIDs
+        )
+    }
+
+    static func savedExpandedProjectIDs() -> Set<String> {
+        let saved = UserDefaults.standard.string(forKey: StorageKeys.expandedProjectIDs) ?? ""
+        return Set(saved.split(separator: ",").map(String.init))
+    }
+
+    /// A worktree row can belong to a project that is not the selected one, so
+    /// picking it has to bring its project along.
+    func selectWorktree(projectID: String, path: String) async {
+        if selectedProjectID != projectID {
+            await selectProject(id: projectID, promptForRecovery: true)
+        }
+        activeWorkspacePath = path
+    }
+
+    /// Every local project the sidebar can draw worktrees for. `refreshWorktrees`
+    /// prunes whatever it is not given, so each refresh has to name them all or
+    /// the projects that are merely open lose their rows.
+    var worktreeProjectPaths: [String] {
+        projects
+            .filter { $0.transport != "ssh" && !$0.path.isEmpty }
+            .map(\.path)
     }
 
     /// Branch for the window subtitle. Once a repo has several worktrees the

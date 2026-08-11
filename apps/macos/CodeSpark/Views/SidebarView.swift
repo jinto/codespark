@@ -76,7 +76,11 @@ struct SidebarView: View {
                                 isSelected: model.selectedProjectID == project.id,
                                 status: model.projectStatus(for: project),
                                 infoLine: projectInfoLine(for: project),
-                                hotkeyIndex: hotkeyIndex(for: project)
+                                hotkeyIndex: hotkeyIndex(for: project),
+                                isExpanded: model.sidebarWorktrees(for: project).isEmpty
+                                    ? nil
+                                    : model.expandedProjectIDs.contains(project.id),
+                                onToggleExpansion: { model.toggleWorktrees(projectID: project.id) }
                             )
                             .contentShape(Rectangle())
                             .draggable(project.id)
@@ -119,18 +123,24 @@ struct SidebarView: View {
                                 }
                             }
 
-                            // Worktrees only exist for the selected project — that is
-                            // the only one whose worktree list has been fetched.
-                            if model.selectedProjectID == project.id {
-                                ForEach(model.sidebarWorktrees) { workspace in
+                            // Shown while the project is expanded, selected or not:
+                            // switching projects must not fold someone's tree.
+                            if model.expandedProjectIDs.contains(project.id) {
+                                ForEach(model.sidebarWorktrees(for: project)) { workspace in
                                     WorktreeSidebarRow(
                                         workspace: workspace,
-                                        isSelected: model.activeWorkspacePath == workspace.path,
+                                        isSelected: model.selectedProjectID == project.id
+                                            && model.activeWorkspacePath == workspace.path,
                                         status: model.workspaceStatus(for: workspace)
                                     )
                                     .contentShape(Rectangle())
                                     .onTapGesture {
-                                        model.activeWorkspacePath = workspace.path
+                                        Task {
+                                            await model.selectWorktree(
+                                                projectID: project.id,
+                                                path: workspace.path
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -262,10 +272,26 @@ struct ProjectSidebarRow: View {
     let status: ProjectStatus
     var infoLine: String? = nil
     var hotkeyIndex: Int? = nil
+    /// nil when the repo has a single worktree — there is no tree to open.
+    var isExpanded: Bool? = nil
+    var onToggleExpansion: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 5) {
+                if let isExpanded {
+                    Button(action: onToggleExpansion) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(isSelected ? .white.opacity(0.8) : .secondary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .frame(width: 8, height: 8)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("worktreeDisclosure")
+                }
+
                 Circle()
                     .fill(status.color)
                     .frame(width: 7, height: 7)

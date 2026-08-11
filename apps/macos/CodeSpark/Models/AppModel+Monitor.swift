@@ -111,10 +111,12 @@ extension AppModel {
     }
 
     func refreshGitWorktrees() {
-        // Only refresh worktrees for the selected project to avoid unnecessary git spawns
-        guard let selectedPath = selectedProject?.path, !selectedPath.isEmpty else { return }
+        // Every local project, not just the selected one — an open tree keeps its
+        // rows while another project has focus. Only stale entries respawn git.
+        let paths = worktreeProjectPaths
+        guard !paths.isEmpty else { return }
         Task {
-            await gitWorktreeService.refreshWorktrees(for: [selectedPath])
+            await gitWorktreeService.refreshWorktrees(for: paths)
             recomputeWorkspaces()
         }
     }

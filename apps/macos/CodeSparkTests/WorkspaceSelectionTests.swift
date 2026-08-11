@@ -786,6 +786,113 @@ final class WorkspaceSelectionTests: XCTestCase {
                           "one worktree waiting for input must not colour its sibling")
     }
 
+    // MARK: - The tree stays open across project switches
+
+    private static let otherProject = "/tmp/other"
+
+    /// Two projects: `p1` has two worktrees, `p2` is a plain one. The cache is
+    /// primed after `load()` because `selectProject` invalidates on the way in.
+    @MainActor
+    private func modelWithTwoProjects() async -> AppModel {
+        func summary(id: String, path: String) -> ProjectSummaryViewData {
+            ProjectSummaryViewData(id: id, name: id, path: path, transport: "local",
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: [])
+        }
+        let core = MockProjectCoreClient(
+            summaries: [summary(id: "p1", path: Self.mainWorktree),
+                        summary(id: "p2", path: Self.otherProject)],
+            details: [
+                ProjectDetailViewData(id: "p1", name: "p1", path: Self.mainWorktree,
+                                      transport: "local", liveSessions: []),
+                ProjectDetailViewData(id: "p2", name: "p2", path: Self.otherProject,
+                                      transport: "local", liveSessions: [])
+            ]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.featureWorktree, branch: "feature", isMainWorktree: false)
+        ], for: Self.mainWorktree)
+        model.recomputeWorkspaces()
+        return model
+    }
+
+    private func forgetExpandedProjects() {
+        UserDefaults.standard.removeObject(forKey: StorageKeys.expandedProjectIDs)
+    }
+
+    @MainActor
+    func test_worktree_rows_survive_switching_to_another_project() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        model.toggleWorktrees(projectID: "p1")
+
+        await model.selectProject(id: "p2")
+
+        XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
+                      "selecting elsewhere must not fold a tree the user opened")
+        let p1 = model.projects.first { $0.id == "p1" }!
+        XCTAssertEqual(model.sidebarWorktrees(for: p1).map(\.path),
+                       [Self.mainWorktree, Self.featureWorktree],
+                       "an unselected project still knows its worktrees")
+    }
+
+    @MainActor
+    func test_projects_start_collapsed() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+
+        XCTAssertTrue(model.expandedProjectIDs.isEmpty)
+    }
+
+    @MainActor
+    func test_expansion_survives_a_relaunch() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        model.toggleWorktrees(projectID: "p1")
+
+        let relaunched = AppModel(core: MockProjectCoreClient(summaries: [], details: []),
+                                  terminalFactory: { _ in MockTerminalHost() })
+
+        XCTAssertEqual(relaunched.expandedProjectIDs, ["p1"])
+    }
+
+    @MainActor
+    func test_toggling_twice_closes_the_tree_again() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+
+        model.toggleWorktrees(projectID: "p1")
+        model.toggleWorktrees(projectID: "p1")
+
+        XCTAssertTrue(model.expandedProjectIDs.isEmpty)
+    }
+
+    @MainActor
+    func test_a_single_worktree_project_has_no_rows_to_show() async {
+        let model = await modelWithTwoProjects()
+        let p2 = model.projects.first { $0.id == "p2" }!
+
+        XCTAssertTrue(model.sidebarWorktrees(for: p2).isEmpty)
+    }
+
+    @MainActor
+    func test_picking_a_worktree_of_another_project_switches_to_that_project() async {
+        let model = await modelWithTwoProjects()
+        await model.selectProject(id: "p2")
+
+        await model.selectWorktree(projectID: "p1", path: Self.featureWorktree)
+
+        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
+    }
+
     // MARK: - Worktree switching without the sidebar
 
     @MainActor
