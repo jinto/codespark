@@ -81,4 +81,70 @@ final class ProjectFlowTests: XCTestCase {
         // This must not crash with "Duplicate values for key"
         model.refreshGitBranches()
     }
+
+    // MARK: - Reordering projects by drag
+
+    @MainActor
+    private func modelWithProjects(_ ids: [String]) async -> AppModel {
+        UserDefaults.standard.removeObject(forKey: StorageKeys.projectOrder)
+        let core = MockProjectCoreClient(
+            summaries: ids.map {
+                ProjectSummaryViewData(id: $0, name: $0, path: "/tmp/\($0)", transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            },
+            details: ids.map {
+                ProjectDetailViewData(id: $0, name: $0, path: "/tmp/\($0)", transport: "local", liveSessions: [])
+            }
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        return model
+    }
+
+    @MainActor
+    func test_dropping_before_a_project_inserts_there() async {
+        let model = await modelWithProjects(["a", "b", "c"])
+
+        model.moveProject(id: "c", to: .before("b"))
+
+        XCTAssertEqual(model.orderedProjects.map(\.id), ["a", "c", "b"])
+    }
+
+    @MainActor
+    func test_dragging_downwards_lands_above_the_row_it_was_dropped_on() async {
+        let model = await modelWithProjects(["a", "b", "c"])
+
+        model.moveProject(id: "a", to: .before("c"))
+
+        XCTAssertEqual(model.orderedProjects.map(\.id), ["b", "a", "c"])
+    }
+
+    @MainActor
+    func test_dropping_past_the_last_row_moves_a_project_to_the_end() async {
+        let model = await modelWithProjects(["a", "b", "c"])
+
+        model.moveProject(id: "a", to: .end)
+
+        XCTAssertEqual(model.orderedProjects.map(\.id), ["b", "c", "a"])
+    }
+
+    @MainActor
+    func test_dropping_a_project_on_itself_changes_nothing() async {
+        let model = await modelWithProjects(["a", "b", "c"])
+
+        model.moveProject(id: "b", to: .before("b"))
+
+        XCTAssertEqual(model.orderedProjects.map(\.id), ["a", "b", "c"])
+    }
+
+    @MainActor
+    func test_a_reorder_is_remembered_for_the_next_launch() async {
+        let model = await modelWithProjects(["a", "b", "c"])
+        defer { UserDefaults.standard.removeObject(forKey: StorageKeys.projectOrder) }
+
+        model.moveProject(id: "a", to: .end)
+
+        XCTAssertEqual(UserDefaults.standard.string(forKey: StorageKeys.projectOrder), "b,c,a")
+    }
 }

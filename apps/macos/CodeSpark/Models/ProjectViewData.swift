@@ -44,6 +44,13 @@ struct SessionSummary: Identifiable, Equatable {
     var workspacePath: String = ""
 }
 
+/// Where a dragged project row will land. `end` is its own case because there is
+/// no row to sit in front of past the last one.
+enum ProjectDropTarget: Equatable {
+    case before(String)
+    case end
+}
+
 struct ProjectSummaryViewData: Identifiable, Equatable {
     let id: String
     var name: String

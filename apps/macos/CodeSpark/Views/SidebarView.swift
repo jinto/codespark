@@ -16,6 +16,8 @@ struct SidebarView: View {
     @State private var sshRemotePath = ""
     @State private var changeFolderProjectID: String?
     @State private var changeFolderPath = ""
+    /// Where a dragged row would land right now — nil when nothing is over the list.
+    @State private var dropTarget: ProjectDropTarget?
 
     private func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
         if project.transport == "ssh" {
@@ -83,11 +85,23 @@ struct SidebarView: View {
                                 onToggleExpansion: { model.toggleWorktrees(projectID: project.id) }
                             )
                             .contentShape(Rectangle())
+                            .overlay(alignment: .top) {
+                                DropInsertionLine(isShowing: dropTarget == .before(project.id))
+                            }
                             .draggable(project.id)
                             .dropDestination(for: String.self) { droppedIDs, _ in
+                                dropTarget = nil
                                 guard let draggedID = droppedIDs.first else { return false }
-                                model.moveProject(id: draggedID, before: project.id)
+                                model.moveProject(id: draggedID, to: .before(project.id))
                                 return true
+                            } isTargeted: { targeted in
+                                // Nothing else can clear it: the row that loses the
+                                // pointer is the one that reports leaving.
+                                if targeted {
+                                    dropTarget = .before(project.id)
+                                } else if dropTarget == .before(project.id) {
+                                    dropTarget = nil
+                                }
                             }
                             .onTapGesture {
                                 Task { await model.selectProject(id: project.id, promptForRecovery: true) }
@@ -145,6 +159,28 @@ struct SidebarView: View {
                                 }
                             }
                         }
+                    }
+
+                    // Past the last row there is nothing to sit in front of, so
+                    // the end of the list needs a target of its own.
+                    if !model.projects.isEmpty {
+                        Color.clear
+                            .frame(height: 24)
+                            .overlay(alignment: .top) {
+                                DropInsertionLine(isShowing: dropTarget == .end)
+                            }
+                            .dropDestination(for: String.self) { droppedIDs, _ in
+                                dropTarget = nil
+                                guard let draggedID = droppedIDs.first else { return false }
+                                model.moveProject(id: draggedID, to: .end)
+                                return true
+                            } isTargeted: { targeted in
+                                if targeted {
+                                    dropTarget = .end
+                                } else if dropTarget == .end {
+                                    dropTarget = nil
+                                }
+                            }
                     }
                 }
                 .padding(.horizontal, 8)
@@ -345,6 +381,23 @@ struct ProjectSidebarRow: View {
                     .padding(.trailing, 6)
             }
         }
+    }
+}
+
+/// Where a dragged project row would land. Drawn on top of a row rather than
+/// between rows, so the list never shifts under the pointer while you aim.
+private struct DropInsertionLine: View {
+    let isShowing: Bool
+
+    var body: some View {
+        Capsule()
+            .fill(AppTheme.accent)
+            .frame(height: 2)
+            .padding(.horizontal, 4)
+            .offset(y: -2)
+            .opacity(isShowing ? 1 : 0)
+            .animation(.easeOut(duration: 0.12), value: isShowing)
+            .allowsHitTesting(false)
     }
 }
 

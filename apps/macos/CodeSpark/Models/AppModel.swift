@@ -401,14 +401,22 @@ final class AppModel: ObservableObject {
         projects
     }
 
-    func moveProject(id: String, before targetID: String) {
-        guard id != targetID,
-              let sourceIndex = projects.firstIndex(where: { $0.id == id }),
-              let targetIndex = projects.firstIndex(where: { $0.id == targetID }) else { return }
+    func moveProject(id: String, to target: ProjectDropTarget) {
+        guard let sourceIndex = projects.firstIndex(where: { $0.id == id }) else { return }
+
+        let insertionIndex: Int
+        switch target {
+        case .before(let targetID):
+            guard id != targetID,
+                  let targetIndex = projects.firstIndex(where: { $0.id == targetID }) else { return }
+            // The row it lands above shifts up once the dragged one is lifted out.
+            insertionIndex = targetIndex > sourceIndex ? targetIndex - 1 : targetIndex
+        case .end:
+            insertionIndex = projects.count - 1
+        }
 
         let project = projects.remove(at: sourceIndex)
-        let adjustedTargetIndex = targetIndex > sourceIndex ? targetIndex - 1 : targetIndex
-        projects.insert(project, at: adjustedTargetIndex)
+        projects.insert(project, at: insertionIndex)
         persistProjectOrder()
     }
 
