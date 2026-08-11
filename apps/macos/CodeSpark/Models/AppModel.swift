@@ -519,7 +519,7 @@ final class AppModel: ObservableObject {
                     shell: shell,
                     cwd: nil,
                     workspacePath: project.path,
-                    command: info.sshCommand,
+                    command: info.sshCommand(),
                     sshInfo: info
                 )
                 recomputeWorkspaces()
@@ -568,8 +568,7 @@ final class AppModel: ObservableObject {
             do {
                 // Replays the tab's previous screen into scrollback, above the
                 // prompt the restored shell is about to print.
-                let replay = (try? await core.latestSnapshot(sessionID: interrupted.id))
-                    .flatMap { RestoredScreenReplay.prepare(snapshot: $0) }
+                let snapshot = (try? await core.latestSnapshot(sessionID: interrupted.id)) ?? nil
 
                 let sessionID: String
                 if project.transport == "ssh", var info = SSHConnectionInfo(uri: project.path) {
@@ -586,8 +585,9 @@ final class AppModel: ObservableObject {
                         shell: shell,
                         cwd: interrupted.lastCwd,
                         workspacePath: interrupted.workspacePath.isEmpty ? project.path : interrupted.workspacePath,
-                        command: info.sshCommand,
-                        initialInput: replay,
+                        command: info.sshCommand(
+                            replaying: snapshot.flatMap { RestoredScreenReplay.inlineCommand(for: $0) }
+                        ),
                         sshInfo: info
                     )
                 } else {
@@ -599,7 +599,7 @@ final class AppModel: ObservableObject {
                         shell: shell,
                         cwd: interrupted.lastCwd ?? project.path,
                         workspacePath: interrupted.workspacePath.isEmpty ? project.path : interrupted.workspacePath,
-                        initialInput: replay
+                        initialInput: snapshot.flatMap { RestoredScreenReplay.prepare(snapshot: $0) }
                     )
                 }
 

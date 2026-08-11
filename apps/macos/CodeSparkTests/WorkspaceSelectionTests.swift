@@ -309,6 +309,48 @@ final class WorkspaceSelectionTests: XCTestCase {
     }
 
     @MainActor
+    func test_restored_ssh_tab_replays_through_the_remote_shell_not_the_keyboard() async throws {
+        // Startup input is typed at the pty, which for an ssh tab means the far
+        // side reads it — and a local temp file is not there. The replay has to
+        // travel inside the ssh command instead.
+        let core = sshProjectWithOneInterruptedTab()
+        core.snapshotsBySessionID = [
+            "s1": TerminalSnapshotViewData.fixture(lines: ["jinto@m3 ~ % ls"])
+        ]
+        var hosts: [MockTerminalHost] = []
+        let model = AppModel(core: core, terminalFactory: { _ in
+            let host = MockTerminalHost()
+            hosts.append(host)
+            return host
+        })
+
+        await model.load()
+
+        XCTAssertTrue(hosts.flatMap(\.initialInputs).compactMap { $0 }.isEmpty)
+        let command = try XCTUnwrap(hosts.flatMap(\.commands).compactMap { $0 }.first)
+        XCTAssertTrue(command.contains("jinto@m3 ~ % ls"), "replay missing from: \(command)")
+        XCTAssertFalse(command.contains(NSTemporaryDirectory()), "local path sent to the remote shell")
+    }
+
+    private func sshProjectWithOneInterruptedTab() -> MockProjectCoreClient {
+        MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "emac", path: "ssh://emac", transport: "ssh",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: true, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(
+                id: "p1", name: "emac", path: "ssh://emac", transport: "ssh",
+                liveSessions: [],
+                interruptedSessions: [
+                    SessionSummary(id: "s1", title: "emac", targetLabel: "emac",
+                                   lastCwd: "/Users/jinto/projects/codespark", workspacePath: "ssh://emac")
+                ]
+            )]
+        )
+    }
+
+    @MainActor
     func test_tab_without_a_previous_screen_gets_no_startup_input() async {
         let core = projectWithTwoInterruptedTabs()
         var hosts: [MockTerminalHost] = []
