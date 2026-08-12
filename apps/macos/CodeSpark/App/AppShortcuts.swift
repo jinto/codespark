@@ -21,9 +21,9 @@ enum AppShortcut: String, CaseIterable {
     case previousTab
     case nextWorktree
     case previousWorktree
-    /// Cmd+1…9 pick a project. The digit varies, the chord does not, so one
+    /// Cmd+1…9 pick a workspace with tabs. The digit varies, the chord does not, so one
     /// entry stands for all nine.
-    case selectProjectByIndex
+    case selectWorkspaceByIndex
 
     var key: KeyEquivalent {
         switch self {
@@ -33,14 +33,14 @@ enum AppShortcut: String, CaseIterable {
         case .toggleSidebar: "s"
         case .nextTab, .nextWorktree: "]"
         case .previousTab, .previousWorktree: "["
-        case .selectProjectByIndex: "1"
+        case .selectWorkspaceByIndex: "1"
         }
     }
 
     /// AppKit flags are the source of truth because the router speaks AppKit.
     var flags: NSEvent.ModifierFlags {
         switch self {
-        case .newProject, .newSession, .closeSessionOrProject, .selectProjectByIndex:
+        case .newProject, .newSession, .closeSessionOrProject, .selectWorkspaceByIndex:
             [.command]
         case .newSSHProject, .nextTab, .previousTab:
             [.command, .shift]

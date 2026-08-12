@@ -47,10 +47,17 @@ struct SidebarView: View {
         (path as NSString).abbreviatingWithTildeInPath
     }
 
+    /// A project carries the digit only when it is the whole workspace — once a
+    /// repo has several worktrees the digits belong to the worktree rows.
     private func hotkeyIndex(for project: ProjectSummaryViewData) -> Int? {
+        guard showHotkeys, model.sidebarWorktrees(for: project).isEmpty,
+              let only = model.workspaces(for: project).first else { return nil }
+        return model.numberedIndex(projectID: project.id, path: only.path)
+    }
+
+    private func hotkeyIndex(for workspace: WorkspaceViewData, in project: ProjectSummaryViewData) -> Int? {
         guard showHotkeys else { return nil }
-        guard let idx = model.orderedProjects.firstIndex(where: { $0.id == project.id }), idx < 9 else { return nil }
-        return idx + 1
+        return model.numberedIndex(projectID: project.id, path: workspace.path)
     }
 
     var body: some View {
@@ -155,7 +162,8 @@ struct SidebarView: View {
                                         workspace: workspace,
                                         isSelected: model.selectedProjectID == project.id
                                             && model.activeWorkspacePath == workspace.path,
-                                        status: model.workspaceStatus(for: workspace)
+                                        status: model.workspaceStatus(for: workspace),
+                                        hotkeyIndex: hotkeyIndex(for: workspace, in: project)
                                     )
                                     .contentShape(Rectangle())
                                     .onTapGesture {
@@ -455,6 +463,7 @@ struct WorktreeSidebarRow: View {
     let workspace: WorkspaceViewData
     let isSelected: Bool
     let status: ProjectStatus
+    var hotkeyIndex: Int? = nil
 
     var body: some View {
         HStack(spacing: 5) {
@@ -489,6 +498,17 @@ struct WorktreeSidebarRow: View {
             RoundedRectangle(cornerRadius: 4)
                 .fill(isSelected ? AppTheme.accent.opacity(0.22) : Color.white.opacity(0.02))
         )
+        .overlay(alignment: .trailing) {
+            if let hotkeyIndex {
+                Text("\u{2318}\(hotkeyIndex)")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(AppTheme.accent.opacity(0.85), in: RoundedRectangle(cornerRadius: 4))
+                    .padding(.trailing, 6)
+            }
+        }
         .padding(.leading, 12)
     }
 }

@@ -144,12 +144,12 @@ struct CodeSparkApp: App {
 
                 Divider()
 
-                // Cmd+1~9: switch projects
-                ForEach(Array(model.orderedProjects.prefix(9).enumerated()), id: \.element.id) { index, project in
-                    Button(project.name) {
-                        Task { await model.selectProject(id: project.id) }
+                // Cmd+1~9: jump to a workspace that has tabs
+                ForEach(Array(model.numberedWorkspaces.enumerated()), id: \.element.path) { index, workspace in
+                    Button(model.numberedWorkspaceLabel(workspace)) {
+                        Task { await model.selectNumberedWorkspace(index + 1) }
                     }
-                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: AppShortcut.selectProjectByIndex.modifiers)
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: AppShortcut.selectWorkspaceByIndex.modifiers)
                 }
             }
         }

@@ -116,7 +116,7 @@ final class KeyEventRouterTests: XCTestCase {
         for digit in 1...9 {
             XCTAssertEqual(
                 routeKeyEquivalent(
-                    modifiers: AppShortcut.selectProjectByIndex.flags,
+                    modifiers: AppShortcut.selectWorkspaceByIndex.flags,
                     hasMarkedText: false,
                     charactersIgnoringModifiers: "\(digit)"
                 ),

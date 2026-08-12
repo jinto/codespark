@@ -832,17 +832,62 @@ final class AppModel: ObservableObject {
         workspaces.count > 1 ? workspaces : []
     }
 
-    /// The same rows for any project. The selected one reads the live grouping;
-    /// the rest are grouped from their summaries, so a tree the user opened keeps
-    /// its rows when focus moves to another project.
-    func sidebarWorktrees(for project: ProjectSummaryViewData) -> [WorkspaceViewData] {
-        guard project.id != selectedProjectID else { return sidebarWorktrees }
-        let grouped = WorkspaceViewData.groupSessions(
+    /// Every workspace of a project, whether it is the selected one or not. The
+    /// selected project reads the live grouping; the rest are grouped from their
+    /// summaries, so their tabs stay accounted for while focus is elsewhere.
+    func workspaces(for project: ProjectSummaryViewData) -> [WorkspaceViewData] {
+        guard project.id != selectedProjectID else { return workspaces }
+        return WorkspaceViewData.groupSessions(
             project.liveSessionDetails,
             into: gitWorktreeService.worktrees(for: project.path),
             projectPath: project.path
         )
+    }
+
+    /// The same, filtered down to what the sidebar draws as child rows: a repo
+    /// with one worktree stays flat, because the project row already is it.
+    func sidebarWorktrees(for project: ProjectSummaryViewData) -> [WorkspaceViewData] {
+        let grouped = workspaces(for: project)
         return grouped.count > 1 ? grouped : []
+    }
+
+    /// Where Cmd+1…9 go: every workspace that has a tab, in sidebar order. A
+    /// worktree standing empty is not somewhere to jump to, and a repo with one
+    /// worktree is addressed as the project itself.
+    ///
+    /// Deliberately blind to whether a tree is expanded — folding a project must
+    /// not shuffle the digits out from under the user's fingers.
+    var numberedWorkspaces: [NumberedWorkspace] {
+        orderedProjects
+            .flatMap { project in
+                workspaces(for: project)
+                    .filter { !$0.sessions.isEmpty }
+                    .map { NumberedWorkspace(projectID: project.id, path: $0.path) }
+            }
+            .prefix(9)
+            .map { $0 }
+    }
+
+    /// 1-based position of a workspace in that list, for the Cmd-held overlay.
+    func numberedIndex(projectID: String, path: String) -> Int? {
+        numberedWorkspaces
+            .firstIndex(of: NumberedWorkspace(projectID: projectID, path: path))
+            .map { $0 + 1 }
+    }
+
+    /// Menu wording: the project on its own when it is the whole workspace,
+    /// "project — branch" once a repo has several worktrees to tell apart.
+    func numberedWorkspaceLabel(_ workspace: NumberedWorkspace) -> String {
+        guard let project = projects.first(where: { $0.id == workspace.projectID }) else { return "" }
+        guard let branch = sidebarWorktrees(for: project)
+            .first(where: { $0.path == workspace.path })?.branch else { return project.name }
+        return "\(project.name) — \(branch)"
+    }
+
+    func selectNumberedWorkspace(_ index: Int) async {
+        guard index >= 1, index <= numberedWorkspaces.count else { return }
+        let target = numberedWorkspaces[index - 1]
+        await selectWorktree(projectID: target.projectID, path: target.path)
     }
 
     /// Which projects show their worktree rows. Opening is the user's choice and

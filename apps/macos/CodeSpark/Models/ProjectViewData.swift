@@ -44,6 +44,13 @@ struct SessionSummary: Identifiable, Equatable {
     var workspacePath: String = ""
 }
 
+/// A workspace reachable by Cmd+1…9. Identified by its project as well as its
+/// path, since the digit has to bring the right project along.
+struct NumberedWorkspace: Equatable {
+    let projectID: String
+    let path: String
+}
+
 /// Where a dragged project row will land. `end` is its own case because there is
 /// no row to sit in front of past the last one.
 enum ProjectDropTarget: Equatable {

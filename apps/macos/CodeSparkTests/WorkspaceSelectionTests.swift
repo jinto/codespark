@@ -786,6 +786,95 @@ final class WorkspaceSelectionTests: XCTestCase {
                           "one worktree waiting for input must not colour its sibling")
     }
 
+    // MARK: - Cmd+1…9 addresses the places work is happening
+
+    @MainActor
+    func test_a_worktree_without_tabs_gets_no_number() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+
+        XCTAssertEqual(model.numberedWorkspaces.map(\.path), [Self.featureWorktree],
+                       "an empty worktree is not somewhere to jump to")
+    }
+
+    @MainActor
+    func test_numbers_follow_the_sidebar_order_across_projects() async {
+        let model = await modelWithTwoProjects()
+        // p1 has two worktrees, p2 is flat. Tabs in both.
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        await model.selectProject(id: "p2")
+        await model.newSession()
+
+        XCTAssertEqual(model.numberedWorkspaces.map(\.projectID), ["p1", "p2"])
+        XCTAssertEqual(model.numberedWorkspaces.map(\.path), [Self.featureWorktree, Self.otherProject])
+    }
+
+    @MainActor
+    func test_a_flat_project_is_numbered_as_itself() async {
+        let model = await modelWithTwoProjects()
+        await model.selectProject(id: "p2")
+        await model.newSession()
+
+        XCTAssertEqual(model.numberedWorkspaces.map(\.path), [Self.otherProject],
+                       "one worktree means the project row is that workspace")
+    }
+
+    @MainActor
+    func test_collapsing_a_tree_does_not_renumber_anything() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let before = model.numberedWorkspaces
+
+        model.toggleWorktrees(projectID: "p1")
+
+        XCTAssertEqual(model.numberedWorkspaces, before,
+                       "numbers must not move when a tree is opened or closed")
+    }
+
+    @MainActor
+    func test_pressing_a_number_selects_that_project_and_worktree() async {
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        await model.selectProject(id: "p2")
+        await model.newSession()
+
+        await model.selectNumberedWorkspace(1)
+
+        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
+    }
+
+    @MainActor
+    func test_an_index_with_nothing_behind_it_does_nothing() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let selected = model.selectedProjectID
+
+        await model.selectNumberedWorkspace(7)
+
+        XCTAssertEqual(model.selectedProjectID, selected)
+    }
+
+    @MainActor
+    func test_only_nine_places_can_be_numbered() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        let many = (0..<12).map { "/tmp/proj-w\($0)" }
+        model.gitWorktreeService.primeCache(
+            [GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true)]
+                + many.enumerated().map {
+                    GitWorktree(path: $0.element, branch: "w\($0.offset)", isMainWorktree: false)
+                },
+            for: Self.mainWorktree
+        )
+        model.recomputeWorkspaces()
+        for path in many {
+            await model.newSession(inWorkspacePath: path)
+        }
+
+        XCTAssertEqual(model.numberedWorkspaces.count, 9, "there are only nine digits")
+        XCTAssertEqual(model.numberedWorkspaces.map(\.path), Array(many.prefix(9)))
+    }
+
     // MARK: - Removing a worktree
 
     @MainActor
