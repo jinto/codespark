@@ -10,6 +10,7 @@ struct SidebarView: View {
     @State private var showDeleteConfirmation = false
     @State private var showHotkeys = false
     @State private var hotkeyMonitor: Any?
+    @State private var returnKeyMonitor: Any?
     @State private var sshHost = ""
     @State private var sshUser = ""
     @State private var sshPort = ""
@@ -174,6 +175,15 @@ struct SidebarView: View {
                                             )
                                         }
                                     }
+                                    .onTapGesture(count: 2) {
+                                        Task {
+                                            await model.selectWorktree(
+                                                projectID: project.id,
+                                                path: workspace.path
+                                            )
+                                            model.presentSessionChooser()
+                                        }
+                                    }
                                     .contextMenu {
                                         // Main is the repository itself — removing
                                         // it is not a worktree operation.
@@ -222,12 +232,29 @@ struct SidebarView: View {
                     showHotkeys = event.modifierFlags.contains(.command)
                     return event
                 }
+                // Not a menu shortcut: a bare Return in the table would take the
+                // key from every terminal and text field in the app. The monitor
+                // hands it back untouched unless the sidebar is the only thing
+                // that could be listening.
+                returnKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                    guard sidebarReturnOpensSessionChooser(
+                        keyCode: event.keyCode,
+                        modifiers: event.modifierFlags,
+                        hasActiveSession: model.activeSessionID != nil,
+                        hasSheet: NSApp.keyWindow?.attachedSheet != nil
+                            || model.pendingWorkspaceRecoveryProjectID != nil,
+                        hasSelectedProject: model.selectedProjectID != nil
+                    ) else { return event }
+                    model.presentSessionChooser()
+                    return nil
+                }
             }
             .onDisappear {
-                if let monitor = hotkeyMonitor {
+                for monitor in [hotkeyMonitor, returnKeyMonitor].compactMap({ $0 }) {
                     NSEvent.removeMonitor(monitor)
-                    hotkeyMonitor = nil
                 }
+                hotkeyMonitor = nil
+                returnKeyMonitor = nil
             }
 
             Spacer()

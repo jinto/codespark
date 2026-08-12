@@ -1,6 +1,59 @@
 import XCTest
 @testable import CodeSpark
 
+/// Return over the sidebar opens the session chooser — but only when no other
+/// part of the app could want the key. A pure decision so every case that must
+/// let Return through is checkable without a running window.
+final class SidebarReturnKeyTests: XCTestCase {
+    private let returnKey: UInt16 = 36
+    private let keypadEnter: UInt16 = 76
+
+    private func opens(
+        keyCode: UInt16,
+        modifiers: NSEvent.ModifierFlags = [],
+        hasActiveSession: Bool = false,
+        hasSheet: Bool = false,
+        hasSelectedProject: Bool = true
+    ) -> Bool {
+        sidebarReturnOpensSessionChooser(
+            keyCode: keyCode,
+            modifiers: modifiers,
+            hasActiveSession: hasActiveSession,
+            hasSheet: hasSheet,
+            hasSelectedProject: hasSelectedProject
+        )
+    }
+
+    func test_return_on_an_empty_workspace_opens_the_chooser() {
+        XCTAssertTrue(opens(keyCode: returnKey))
+        XCTAssertTrue(opens(keyCode: keypadEnter))
+    }
+
+    func test_a_terminal_keeps_its_return_key() {
+        XCTAssertFalse(opens(keyCode: returnKey, hasActiveSession: true),
+                       "stealing Return from a shell would break typing entirely")
+    }
+
+    func test_a_sheet_keeps_its_return_key() {
+        XCTAssertFalse(opens(keyCode: returnKey, hasSheet: true),
+                       "Return belongs to the sheet's default button")
+    }
+
+    func test_modified_returns_are_left_alone() {
+        for modifier: NSEvent.ModifierFlags in [.command, .option, .control, .shift] {
+            XCTAssertFalse(opens(keyCode: returnKey, modifiers: modifier))
+        }
+    }
+
+    func test_other_keys_do_nothing() {
+        XCTAssertFalse(opens(keyCode: 0))
+    }
+
+    func test_nothing_to_open_without_a_project() {
+        XCTAssertFalse(opens(keyCode: returnKey, hasSelectedProject: false))
+    }
+}
+
 final class KeyEventRouterTests: XCTestCase {
 
     // Issue 1: Shift+letter must flow to keyDown normally
