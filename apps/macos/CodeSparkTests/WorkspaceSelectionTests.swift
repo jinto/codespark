@@ -786,6 +786,25 @@ final class WorkspaceSelectionTests: XCTestCase {
                           "one worktree waiting for input must not colour its sibling")
     }
 
+    // MARK: - Removing a worktree
+
+    @MainActor
+    func test_removing_a_worktree_closes_only_the_tabs_that_were_in_it() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let inMain = model.liveSessions.first { $0.workspacePath == Self.mainWorktree }!
+        let inFeature = model.liveSessions.first { $0.workspacePath == Self.featureWorktree }!
+
+        // The git call fails here — /tmp/proj is no repo — but the tabs living in
+        // the worktree have to be let go before the directory disappears.
+        await model.removeWorktree(path: Self.featureWorktree)
+
+        XCTAssertTrue(model.closingSessionIDs.contains(inFeature.id))
+        XCTAssertFalse(model.closingSessionIDs.contains(inMain.id),
+                       "a sibling worktree's tab must survive")
+    }
+
     // MARK: - A tab that wandered into another worktree says so
 
     @MainActor

@@ -18,6 +18,16 @@ struct SidebarView: View {
     @State private var changeFolderPath = ""
     /// Where a dragged row would land right now — nil when nothing is over the list.
     @State private var dropTarget: ProjectDropTarget?
+    @State private var pendingRemoveWorktree: WorktreeRemoval?
+
+    /// A worktree the user asked to remove, held until they confirm. Carries its
+    /// project because the row may belong to one that is not selected.
+    private struct WorktreeRemoval: Identifiable {
+        let projectID: String
+        let path: String
+        let branch: String
+        var id: String { path }
+    }
 
     private func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
         if project.transport == "ssh" {
@@ -156,6 +166,19 @@ struct SidebarView: View {
                                             )
                                         }
                                     }
+                                    .contextMenu {
+                                        // Main is the repository itself — removing
+                                        // it is not a worktree operation.
+                                        if !workspace.isMainWorktree {
+                                            Button("Remove Worktree...", role: .destructive) {
+                                                pendingRemoveWorktree = WorktreeRemoval(
+                                                    projectID: project.id,
+                                                    path: workspace.path,
+                                                    branch: workspace.branch
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -212,6 +235,31 @@ struct SidebarView: View {
             .padding(.vertical, 8)
         }
         .background(AppTheme.sidebarBackground)
+        .confirmationDialog(
+            "Remove worktree \(pendingRemoveWorktree?.branch ?? "")?",
+            isPresented: Binding(
+                get: { pendingRemoveWorktree != nil },
+                set: { if !$0 { pendingRemoveWorktree = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                if let removal = pendingRemoveWorktree {
+                    Task {
+                        // The removal reads the selected project, and the row may
+                        // belong to another one.
+                        await model.selectWorktree(projectID: removal.projectID, path: removal.path)
+                        await model.removeWorktree(path: removal.path)
+                    }
+                }
+                pendingRemoveWorktree = nil
+            }
+            Button("Cancel", role: .cancel) { pendingRemoveWorktree = nil }
+        } message: {
+            if let removal = pendingRemoveWorktree {
+                Text("Its tabs will close and \(abbreviatePath(removal.path)) will be deleted. The branch itself stays.")
+            }
+        }
         .confirmationDialog(
             "Delete project?",
             isPresented: $showDeleteConfirmation,
