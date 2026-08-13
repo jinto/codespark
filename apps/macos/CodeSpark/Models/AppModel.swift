@@ -14,7 +14,11 @@ final class AppModel: ObservableObject {
             // A tab carries its worktree, so selecting one moves the sidebar with
             // it rather than recording the choice against whatever was active.
             let owner = liveSessions.first { $0.id == id }?.workspacePath
-            guard let path = (owner?.isEmpty == false) ? owner : activeWorkspacePath else { return }
+            // A worktree that no longer exists is not somewhere to move the
+            // sidebar to — such a tab is regrouped under main and stays put.
+            let ownerIsReal = workspaces.isEmpty || workspaces.contains { $0.path == owner }
+            guard let path = (owner?.isEmpty == false && ownerIsReal) ? owner : activeWorkspacePath
+            else { return }
             // Record before switching: `activeWorkspacePath`'s observer reads this
             // map, and the inequality guard is what stops the two from recursing.
             workspaceSelectedSessions[path] = id
@@ -40,25 +44,33 @@ final class AppModel: ObservableObject {
     @Published var activeWorkspacePath: String? {
         didSet {
             guard let path = activeWorkspacePath else { return }
-            // `workspaces` is empty until a project is applied — fall back to the
-            // flat list then, so an early selection isn't thrown away.
-            var scoped: [String] = []
-            if workspaces.isEmpty {
-                scoped = liveSessions.map(\.id)
-            } else if let workspace = workspaces.first(where: { $0.path == path }) {
-                scoped = workspace.sessions.map(\.id)
-            }
+            // The project remembers where you were, so coming back to it does not
+            // drop you at the repo root.
+            if let projectID = selectedProjectID { projectSelectedWorkspaces[projectID] = path }
+            selectRememberedSession(in: path)
+        }
+    }
 
-            if let savedID = workspaceSelectedSessions[path], scoped.contains(savedID) {
-                activeSessionID = savedID
-            } else if let first = scoped.first {
-                activeSessionID = first
-                workspaceSelectedSessions[path] = first
-            } else {
-                // Nothing open here, so nothing may stay selected — the tab bar
-                // is empty and the active tab must not point outside it.
-                activeSessionID = nil
-            }
+    /// Picks the tab this workspace was last on, falling back to its first.
+    private func selectRememberedSession(in path: String) {
+        // `workspaces` is empty until a project is applied — fall back to the
+        // flat list then, so an early selection isn't thrown away.
+        var scoped: [String] = []
+        if workspaces.isEmpty {
+            scoped = liveSessions.map(\.id)
+        } else if let workspace = workspaces.first(where: { $0.path == path }) {
+            scoped = workspace.sessions.map(\.id)
+        }
+
+        if let savedID = workspaceSelectedSessions[path], scoped.contains(savedID) {
+            activeSessionID = savedID
+        } else if let first = scoped.first {
+            activeSessionID = first
+            workspaceSelectedSessions[path] = first
+        } else {
+            // Nothing open here, so nothing may stay selected — the tab bar
+            // is empty and the active tab must not point outside it.
+            activeSessionID = nil
         }
     }
 
@@ -71,6 +83,7 @@ final class AppModel: ObservableObject {
         return liveSessions.filter { ids.contains($0.id) }
     }
     var workspaceSelectedSessions: [String: String] = [:]  // workspacePath → sessionID
+    var projectSelectedWorkspaces: [String: String] = [:]  // projectID → workspacePath
     @Published var pendingSSHReconnectProjectID: String?
     @Published var pendingWorkspaceRecoveryProjectID: String?
     @Published var showNewSSHSheet = false
@@ -101,7 +114,7 @@ final class AppModel: ObservableObject {
             let existingSSH = project.liveSessions.filter { hosts[$0.id] != nil }
             if !existingSSH.isEmpty {
                 liveSessions = existingSSH
-                activeSessionID = existingSSH.first?.id
+                activeSessionID = rememberedSession() ?? existingSSH.first?.id
             } else {
                 liveSessions = []
                 activeSessionID = nil
@@ -118,8 +131,18 @@ final class AppModel: ObservableObject {
             host.attach(sessionID: session.id, command: nil, initialInput: nil)
             hosts[session.id] = host
         }
-        activeSessionID = visibleSessions.first?.id
+        // Reopening a project must not throw away which tab its active worktree
+        // was on — the first one is only the fallback.
+        activeSessionID = rememberedSession() ?? visibleSessions.first?.id
         syncProjectSessionDetails()
+    }
+
+    /// The tab the active workspace was last on, if it is still open here.
+    private func rememberedSession() -> String? {
+        guard let path = activeWorkspacePath,
+              let saved = workspaceSelectedSessions[path],
+              visibleSessions.contains(where: { $0.id == saved }) else { return nil }
+        return saved
     }
 
     func load() async {
@@ -215,10 +238,12 @@ final class AppModel: ObservableObject {
         liveSessions = detail.liveSessions
         selectedWorkspacePath = nil
         recomputeWorkspaces()
-        // Opening a project lands on the worktree its path points at; the observer
-        // then picks that worktree's tab. Setting the tab first would leave the
-        // selection outside the active worktree.
-        activeWorkspacePath = detail.path
+        // Reopening a project lands on the worktree it was left in — its path is
+        // only the starting point, and the fallback when that worktree is gone.
+        // The observer then picks that worktree's tab. Setting the tab first
+        // would leave the selection outside the active worktree.
+        let remembered = projectSelectedWorkspaces[detail.id]
+        activeWorkspacePath = workspaces.contains { $0.path == remembered } ? remembered : detail.path
     }
 
     func recomputeWorkspaces() {

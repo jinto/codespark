@@ -12,9 +12,15 @@ final class WorkspaceSelectionTests: XCTestCase {
 
     @MainActor
     func test_launch_restores_while_sidebar_reselect_still_offers_the_choice_menu() async {
+        var hosts: [MockTerminalHost] = []
+        let core = MockProjectCoreClient.projectWithInterruptedSession()
         let model = AppModel(
-            core: MockProjectCoreClient.projectWithInterruptedSession(),
-            terminalFactory: { _ in MockTerminalHost() }
+            core: core,
+            terminalFactory: { _ in
+                let host = MockTerminalHost()
+                hosts.append(host)
+                return host
+            }
         )
 
         // Launch restores the tabs rather than asking about them.
@@ -24,6 +30,15 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         // Re-opening a project with no tabs from the sidebar still offers the menu,
         // which is also how you reach "New Claude session" / "Resume …".
+        let restored = model.liveSessions[0].id
+        hosts[0].finishClose(
+            sessionID: restored,
+            snapshot: .fixture(lines: []),
+            closeReason: .userClosed
+        )
+        // The store write is a detached task; the reselect below must see it.
+        while !core.closedSessionIDs.contains(restored) { await Task.yield() }
+
         await model.selectProject(id: "ws-spark3", promptForRecovery: true)
         XCTAssertEqual(model.pendingWorkspaceRecoveryProjectID, "ws-spark3")
     }
@@ -784,6 +799,56 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(model.workspaceStatus(for: main), .needsInput)
         XCTAssertNotEqual(model.workspaceStatus(for: feature), .needsInput,
                           "one worktree waiting for input must not colour its sibling")
+    }
+
+    // MARK: - Every workspace remembers the tab you were on
+
+    @MainActor
+    func test_returning_to_a_worktree_restores_the_tab_you_were_on() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let second = model.liveSessions.filter { $0.workspacePath == Self.mainWorktree }[1].id
+
+        await model.selectWorktree(projectID: "p1", path: Self.mainWorktree)
+        model.activeSessionID = second
+        await model.selectWorktree(projectID: "p1", path: Self.featureWorktree)
+        await model.selectWorktree(projectID: "p1", path: Self.mainWorktree)
+
+        XCTAssertEqual(model.activeSessionID, second)
+    }
+
+    @MainActor
+    func test_returning_to_a_project_lands_on_the_worktree_you_left() async {
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let second = model.liveSessions.filter { $0.workspacePath == Self.featureWorktree }[1].id
+        model.activeSessionID = second
+
+        await model.selectProject(id: "p2")
+        await model.selectProject(id: "p1")
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree,
+                       "coming back must not drop you at the repo root")
+        XCTAssertEqual(model.activeSessionID, second,
+                       "nor on the first tab of a worktree you had left")
+    }
+
+    @MainActor
+    func test_a_project_whose_remembered_worktree_is_gone_falls_back_to_its_root() async {
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+
+        await model.selectProject(id: "p2")
+        // The worktree disappears while another project holds focus.
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true)
+        ], for: Self.mainWorktree)
+        await model.selectProject(id: "p1")
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree)
     }
 
     // MARK: - Cmd+1…9 addresses the places work is happening
