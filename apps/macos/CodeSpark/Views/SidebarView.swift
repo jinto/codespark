@@ -63,6 +63,10 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // The list has to know how tall its viewport is: the drop target for
+            // "move to the end" is the empty space under the last row, and empty
+            // space only exists once the content is stretched to fill.
+            GeometryReader { proxy in
             ScrollView {
                 if model.projects.isEmpty {
                     VStack(spacing: 12) {
@@ -203,10 +207,11 @@ struct SidebarView: View {
                     }
 
                     // Past the last row there is nothing to sit in front of, so
-                    // the end of the list needs a target of its own.
+                    // the end of the list needs a target of its own — all of the
+                    // empty space under the list, not a strip you have to aim at.
                     if !model.projects.isEmpty {
                         Color.clear
-                            .frame(height: 24)
+                            .frame(minHeight: 24, maxHeight: .infinity)
                             .overlay(alignment: .top) {
                                 DropInsertionLine(isShowing: dropTarget == .end)
                             }
@@ -226,6 +231,9 @@ struct SidebarView: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.top, 8)
+                // Fills the viewport when the list is shorter, so the space under
+                // the last row belongs to the list — and is a drop target.
+                .frame(minHeight: proxy.size.height, alignment: .top)
             }
             .onAppear {
                 hotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
@@ -256,8 +264,7 @@ struct SidebarView: View {
                 hotkeyMonitor = nil
                 returnKeyMonitor = nil
             }
-
-            Spacer()
+            } // GeometryReader
 
             Divider().background(AppTheme.divider)
             HStack {
