@@ -33,7 +33,12 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
         "mock-project-id"
     }
 
+    /// Fires as a session is created, so a test can move the selection the way a
+    /// user does while a restore is still running.
+    var onStartSession: (() -> Void)?
+
     func startSession(projectId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?, workspacePath: String) async throws -> String {
+        onStartSession?()
         sessionCounter += 1
         startedSessions.append((initialCwd: initialCwd, workspacePath: workspacePath))
         let id = "mock-session-\(sessionCounter)"

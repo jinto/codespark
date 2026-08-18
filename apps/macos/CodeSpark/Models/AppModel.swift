@@ -513,10 +513,16 @@ final class AppModel: ObservableObject {
         #endif
         host.attach(sessionID: sessionID, command: command, initialInput: initialInput)
         hosts[sessionID] = host
-        liveSessions.append(session)
         if !allSessions.contains(where: { $0.id == sessionID }) {
             allSessions.append(session)
         }
+        // `liveSessions` is the selected project's tab bar, and this can land
+        // after the selection moved: restoring a project's tabs takes a round
+        // trip each, and clicking another project mid-restore used to pour them
+        // into whatever was on screen. The surface stays alive either way — its
+        // own project picks it up from the store when it is opened again.
+        guard selectedProjectID == projectID else { return sessionID }
+        liveSessions.append(session)
         syncProjectSessionDetails()
         return sessionID
     }
@@ -574,6 +580,9 @@ final class AppModel: ObservableObject {
                 cwd: workspacePath,
                 workspacePath: workspacePath
             )
+            // The selection may have moved while the session was starting; the
+            // tab belongs to the project that asked for it, not to this screen.
+            guard selectedProjectID == projectID else { return }
             // Regroup before selecting: `activeWorkspacePath`'s observer reads
             // `workspaces`, so a stale grouping would not see the new tab and
             // would bounce the selection to an older one.
@@ -692,6 +701,9 @@ final class AppModel: ObservableObject {
                 workspacePath: workspacePath,
                 command: command
             )
+            // The selection may have moved while the session was starting; the
+            // tab belongs to the project that asked for it, not to this screen.
+            guard selectedProjectID == projectID else { return }
             recomputeWorkspaces()
             activeSessionID = sessionID
             refreshAgentSessions()

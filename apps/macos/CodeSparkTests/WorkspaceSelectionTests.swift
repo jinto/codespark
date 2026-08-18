@@ -801,6 +801,53 @@ final class WorkspaceSelectionTests: XCTestCase {
                           "one worktree waiting for input must not colour its sibling")
     }
 
+    // MARK: - A restore in flight belongs to the project that started it
+
+    @MainActor
+    func test_restoring_tabs_does_not_pour_them_into_another_project() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "p1", path: "/tmp/p1", transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: true, liveSessionDetails: []),
+                ProjectSummaryViewData(id: "p2", name: "p2", path: "/tmp/p2", transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [
+                ProjectDetailViewData(
+                    id: "p1", name: "p1", path: "/tmp/p1", transport: "local",
+                    liveSessions: [],
+                    interruptedSessions: [
+                        SessionSummary(id: "old-1", title: "Terminal", targetLabel: "local",
+                                       lastCwd: "/tmp/p1", workspacePath: "/tmp/p1"),
+                        SessionSummary(id: "old-2", title: "Terminal", targetLabel: "local",
+                                       lastCwd: "/tmp/p1", workspacePath: "/tmp/p1"),
+                        SessionSummary(id: "old-3", title: "Terminal", targetLabel: "local",
+                                       lastCwd: "/tmp/p1", workspacePath: "/tmp/p1")
+                    ]
+                ),
+                ProjectDetailViewData(id: "p2", name: "p2", path: "/tmp/p2",
+                                      transport: "local", liveSessions: [])
+            ]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+
+        // Restoring p1's tabs takes a round trip each; the user gets bored and
+        // clicks another project halfway through.
+        var started = 0
+        core.onStartSession = { [weak model] in
+            started += 1
+            if started == 1 { model?.selectedProjectID = "p2" }
+        }
+        await model.load()
+
+        XCTAssertTrue(
+            model.liveSessions.allSatisfy { $0.workspacePath == "/tmp/p2" },
+            "p1's restored tabs landed in another project's tab bar: \(model.liveSessions.map(\.workspacePath))"
+        )
+    }
+
     // MARK: - Every workspace remembers the tab you were on
 
     @MainActor
