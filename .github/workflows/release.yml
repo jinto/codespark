@@ -85,11 +85,14 @@ jobs:
         run: |
           APP_PATH="build/Build/Products/Release/CodeSpark.app"
           ditto -c -k --keepParent "$APP_PATH" /tmp/CodeSpark.zip
+          set +e
           SUBMIT_OUT=$(xcrun notarytool submit /tmp/CodeSpark.zip \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_PASSWORD" \
             --team-id "$TEAM_ID" \
-            --wait 2>&1) || true
+            --wait 2>&1)
+          SUBMIT_STATUS=$?
+          set -e
           echo "$SUBMIT_OUT"
           SUBMISSION_ID=$(echo "$SUBMIT_OUT" | grep "id:" | head -1 | awk '{print $2}')
           if echo "$SUBMIT_OUT" | grep -q "Invalid"; then
@@ -98,6 +101,15 @@ jobs:
               --apple-id "$APPLE_ID" \
               --password "$APPLE_PASSWORD" \
               --team-id "$TEAM_ID" || true
+            exit 1
+          fi
+          # Everything else that can go wrong here — an expired Apple agreement,
+          # bad credentials, the notary service being unreachable — used to fall
+          # straight through to `stapler`, which then failed with "Record not
+          # found". That names the missing ticket instead of the reason there is
+          # no ticket, and sends whoever reads the log looking in the wrong place.
+          if [ "$SUBMIT_STATUS" -ne 0 ] || ! echo "$SUBMIT_OUT" | grep -q "Accepted"; then
+            echo "::error::notarytool did not accept the build — see its output above"
             exit 1
           fi
           xcrun stapler staple "$APP_PATH"
