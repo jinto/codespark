@@ -142,6 +142,17 @@ struct ProjectDetailViewData: Equatable {
 
 // MARK: - Workspace
 
+extension SessionViewData {
+    /// Whether this tab belongs to a workspace. Membership is fixed at creation
+    /// in `workspacePath`; only rows written before that column existed fall
+    /// back to their cwd, matching how `groupSessions` places them.
+    func belongs(to workspacePath: String) -> Bool {
+        guard self.workspacePath.isEmpty else { return self.workspacePath == workspacePath }
+        let cwd = lastCwd ?? ""
+        return cwd == workspacePath || cwd.hasPrefix(workspacePath + "/")
+    }
+}
+
 struct WorkspaceViewData: Identifiable, Equatable {
     let path: String
     let branch: String

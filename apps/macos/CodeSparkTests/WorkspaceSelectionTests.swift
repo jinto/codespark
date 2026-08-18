@@ -1373,4 +1373,74 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertFalse(model.visibleSessions.isEmpty,
                        "and land somewhere the tabs are actually visible")
     }
+
+    // MARK: - A tab belongs to its worktree, wherever it wandered
+
+    /// Removal closed tabs by where they were standing, not by where they
+    /// belong. A tab that had `cd`-ed out survived a `git worktree remove` and
+    /// came back regrouped under main; a visitor from another worktree was shut
+    /// down in its place. Both contradict the dialog and the ownership rule.
+    @MainActor
+    func test_removing_a_worktree_closes_the_tabs_that_belong_to_it() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let ofFeature = model.liveSessions.first { $0.workspacePath == Self.featureWorktree }!
+        let ofMain = model.liveSessions.first { $0.workspacePath == Self.mainWorktree }!
+
+        // The one that belongs here steps out; the one that does not steps in.
+        model.sessionDidReportCwd(sessionID: ofFeature.id, cwd: "/tmp/somewhere-else")
+        model.sessionDidReportCwd(sessionID: ofMain.id, cwd: Self.featureWorktree + "/src")
+
+        await model.removeWorktree(path: Self.featureWorktree)
+
+        XCTAssertTrue(model.closingSessionIDs.contains(ofFeature.id),
+                      "a tab belongs to the worktree it was opened in, wherever it wandered")
+        XCTAssertFalse(model.closingSessionIDs.contains(ofMain.id),
+                       "and a visitor from elsewhere is not this removal's to close")
+    }
+
+    // MARK: - Off-screen tabs still report where they went
+
+    /// `liveSessions` is only the selected project's tabs, so an agent working
+    /// in another open project's tab had its OSC 7 reports dropped — the store
+    /// kept the old directory and restore brought the tab back to it.
+    @MainActor
+    func test_a_tab_in_a_background_project_still_records_where_it_moved() async {
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+        let moved = Self.mainWorktree + "/deep"
+
+        await model.selectProject(id: "p2")
+        XCTAssertFalse(model.liveSessions.contains { $0.id == tab.id },
+                       "the tab is off screen now, but its shell is still running")
+
+        model.sessionDidReportCwd(sessionID: tab.id, cwd: moved)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(model.allSessions.first { $0.id == tab.id }?.lastCwd, moved,
+                       "an off-screen tab still knows where it went")
+        let client = model.core as! MockProjectCoreClient
+        XCTAssertTrue(client.recordedCwds.contains { $0.sessionId == tab.id && $0.cwd == moved },
+                      "and the store has to hear it, or the next restore is stale")
+    }
+
+    /// Rows written before the `workspace_path` column exist in the wild with an
+    /// empty one. `groupSessions` places them by cwd, so removal has to let them
+    /// go the same way or they outlive the directory they were living in.
+    @MainActor
+    func test_removing_a_worktree_closes_a_legacy_tab_that_has_no_workspace() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let legacy = model.liveSessions[0]
+        model.liveSessions[0].workspacePath = ""
+        model.sessionDidReportCwd(sessionID: legacy.id, cwd: Self.featureWorktree + "/src")
+
+        await model.removeWorktree(path: Self.featureWorktree)
+
+        XCTAssertTrue(model.closingSessionIDs.contains(legacy.id),
+                      "a row with no workspace is placed by its cwd, and let go the same way")
+    }
 }

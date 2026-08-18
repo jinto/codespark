@@ -644,6 +644,17 @@ final class AppModel: ObservableObject {
                     if let remoteCwd = interrupted.lastCwd, !remoteCwd.isEmpty {
                         info.remotePath = remoteCwd
                     }
+                    // `cwd` below is a *remote* path, and it stays that way on
+                    // purpose. It is not only Ghostty's working directory — it is
+                    // also what `startSession` files as this tab's cwd, and a
+                    // remote shell has no Ghostty shell integration to report OSC
+                    // 7 and refill it. Passing nil to keep the local surface
+                    // honest would cost the tab its place on every later restore.
+                    // Ghostty already tolerates the mismatch: a working directory
+                    // it cannot open is logged and skipped (`embedded.zig`), and
+                    // the remote side is positioned by `info.remotePath` anyway.
+                    // The real fix is to stop conflating "where the surface
+                    // starts" with "where the tab is", at the Ghostty boundary.
                     sessionID = try await startAndAttachSession(
                         projectID: projectID,
                         transport: "ssh",
@@ -753,11 +764,12 @@ final class AppModel: ObservableObject {
 
     func removeWorktree(path: String) async {
         guard let project = selectedProject, !project.path.isEmpty else { return }
-        for session in liveSessions {
-            let cwd = session.lastCwd ?? ""
-            if cwd == path || cwd.hasPrefix(path + "/") {
-                closeSession(id: session.id)
-            }
+        // By ownership, not by where the tab is standing: a tab belongs to the
+        // worktree it was opened in and keeps belonging to it after a `cd`. The
+        // old cwd test let a tab that had wandered out survive the directory it
+        // lived in, and shut down visitors from other worktrees in its place.
+        for session in liveSessions where session.belongs(to: path) {
+            closeSession(id: session.id)
         }
         do {
             try await GitWorktreeService.removeWorktree(projectPath: project.path, worktreePath: path)
@@ -778,10 +790,17 @@ final class AppModel: ObservableObject {
     /// The terminal reports its working directory on every prompt, so this is a
     /// hot path — only a real directory change is written through to the store.
     func sessionDidReportCwd(sessionID: String, cwd: String) {
-        guard let index = liveSessions.firstIndex(where: { $0.id == sessionID }),
-              liveSessions[index].lastCwd != cwd else { return }
-        liveSessions[index].lastCwd = cwd
-        recomputeWorkspaces()
+        // `allSessions`, not `liveSessions`: a tab whose project is not on screen
+        // still has a running shell that can `cd`. Reading the narrower list
+        // dropped those reports and left the store pointing at the old
+        // directory, which is where the next restore would bring the tab back.
+        guard let index = allSessions.firstIndex(where: { $0.id == sessionID }),
+              allSessions[index].lastCwd != cwd else { return }
+        allSessions[index].lastCwd = cwd
+        if let visible = liveSessions.firstIndex(where: { $0.id == sessionID }) {
+            liveSessions[visible].lastCwd = cwd
+            recomputeWorkspaces()
+        }
 
         Task { [core] in
             do {
