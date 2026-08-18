@@ -1305,4 +1305,72 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertNil(model.activeSessionID,
                      "the active tab must never point outside the active worktree")
     }
+
+    // MARK: - A workspace key is a workspace path, never a cwd
+
+    /// `workspaceSelectedSessions` is keyed by workspace path everywhere except
+    /// the restore path, which used the tab's last cwd. A tab left one directory
+    /// deep inside its worktree then filed its memory under a key no workspace
+    /// answers to, and the worktree came back with no idea which tab it was on.
+    @MainActor
+    func test_a_restored_tab_is_remembered_by_its_workspace_not_its_cwd() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "Proj", path: Self.mainWorktree,
+                                       transport: "local", liveSessions: 0,
+                                       recentlyClosedSessions: 0, hasInterruptedSessions: true,
+                                       liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(
+                id: "p1", name: "Proj", path: Self.mainWorktree, transport: "local",
+                liveSessions: [],
+                interruptedSessions: [
+                    SessionSummary(id: "was-in-feature", title: "Terminal", targetLabel: "local",
+                                   lastCwd: Self.featureWorktree + "/src",
+                                   workspacePath: Self.featureWorktree)
+                ]
+            )]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        await model.selectProject(id: "p1", promptForRecovery: true)
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.featureWorktree, branch: "feature", isMainWorktree: false)
+        ], for: Self.mainWorktree)
+        model.recomputeWorkspaces()
+
+        await model.restoreInterruptedTabs(projectID: "p1")
+
+        let restored = model.liveSessions.first { $0.workspacePath == Self.featureWorktree }
+        XCTAssertNotNil(restored, "the tab came back into the worktree it belonged to")
+        XCTAssertEqual(model.workspaceSelectedSessions[Self.featureWorktree], restored?.id,
+                       "the worktree must remember the tab that came back to it")
+        XCTAssertNil(model.workspaceSelectedSessions[Self.featureWorktree + "/src"],
+                     "a cwd is not a workspace — nothing may be filed under one")
+    }
+
+    // MARK: - The selection may not stand on a worktree that is gone
+
+    /// Removing the worktree you were looking at left `activeWorkspacePath`
+    /// pointing at it, so `visibleSessions` matched nothing and the main area
+    /// went blank while sibling worktrees still had tabs running.
+    @MainActor
+    func test_removing_the_active_worktree_moves_the_selection_home() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        model.activeWorkspacePath = Self.featureWorktree
+
+        // What is left after `git worktree remove` — or after someone deletes the
+        // directory behind the app's back.
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true)
+        ], for: Self.mainWorktree)
+        model.recomputeWorkspaces()
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree,
+                       "the selection has to step off a worktree that no longer exists")
+        XCTAssertFalse(model.visibleSessions.isEmpty,
+                       "and land somewhere the tabs are actually visible")
+    }
 }

@@ -532,6 +532,7 @@ struct WorktreeSidebarRow: View {
                         // Two characters that must stay readable — a long branch name
                         // truncates instead of shaving the badge down to a sliver.
                         .fixedSize()
+                        .accessibilityIdentifier("worktreeSessionCount")
                 }
             }
 

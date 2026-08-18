@@ -134,7 +134,10 @@ final class CodeSparkUITests: XCTestCase {
         let disclosure = disclosures.allElementsBoundByIndex.last!
         let branchRows = app.staticTexts.matching(identifier: "worktreeBranch")
 
-        disclosure.click()
+        // Expansion is remembered across launches, so the tree may already be
+        // open — from a neighbouring test, or from the last time this one ran.
+        // Clicking blind would close it and test the opposite of the point.
+        if branchRows.count == 0 { disclosure.click() }
         XCTAssertTrue(wait { branchRows.count > 0 }, "the tree did not open")
         let opened = branchRows.count
 
@@ -178,5 +181,58 @@ final class CodeSparkUITests: XCTestCase {
                 ? "the expanded project row kept a path its main worktree row now shows"
                 : "the collapsed project row never took its path back"
         )
+    }
+
+    // MARK: - The main area follows the tab bar, not the project
+
+    /// A worktree with no tabs of its own left the pane blank whenever a sibling
+    /// worktree still had one: the empty state keyed off the project's tabs, so
+    /// the button that would have made a tab here vanished exactly when it was
+    /// needed. The unit suite proves the model empties `visibleSessions`
+    /// (`test_switching_to_an_empty_worktree_clears_the_active_tab`); which view
+    /// that picks needs the running app.
+    func test_a_worktree_with_no_tabs_offers_to_make_one() throws {
+        let disclosures = app.buttons.matching(identifier: "worktreeDisclosure")
+        try XCTSkipUnless(
+            disclosures.firstMatch.waitForExistence(timeout: 10),
+            "no multi-worktree project in this store"
+        )
+        let disclosure = disclosures.allElementsBoundByIndex.last!
+        let branchRows = app.staticTexts.matching(identifier: "worktreeBranch")
+        let treeWasOpen = branchRows.count > 0
+        if !treeWasOpen { disclosure.click() }
+        XCTAssertTrue(wait { branchRows.count >= 2 }, "the tree did not open")
+
+        let newTerminal = app.buttons["New Terminal"]
+        let rows = branchRows.allElementsBoundByIndex
+        rows[0].click()
+        if newTerminal.waitForExistence(timeout: 3) {
+            newTerminal.click()
+            XCTAssertTrue(wait { !newTerminal.exists }, "the first worktree never got a tab")
+        }
+
+        // The badge counts a worktree's tabs, and it is the only signal here that
+        // does not come from the empty state itself — asking the empty state
+        // whether the worktree is empty would answer "no" from the very bug this
+        // is trying to catch. One badge means the tab just made is the only one,
+        // so the row about to be clicked is genuinely standing empty.
+        let badges = app.staticTexts.matching(identifier: "worktreeSessionCount")
+        try XCTSkipUnless(wait { badges.count == 1 },
+                          "every worktree here already has tabs — nothing empty to select")
+
+        rows[1].click()
+
+        XCTAssertTrue(
+            newTerminal.waitForExistence(timeout: 5),
+            "a worktree with no tabs showed a blank pane instead of offering one"
+        )
+
+        // Hand the sidebar back exactly as it was found. Tests after this one
+        // open a terminal into whatever is selected — parking on the empty
+        // worktree would hand them the very state this test needs to find — and
+        // one of them toggles this same disclosure, which a tree left open turns
+        // into a collapse.
+        rows[0].click()
+        if !treeWasOpen { disclosure.click() }
     }
 }

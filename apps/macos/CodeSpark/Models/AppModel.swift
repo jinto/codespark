@@ -237,6 +237,10 @@ final class AppModel: ObservableObject {
         selectedProject = detail
         liveSessions = detail.liveSessions
         selectedWorkspacePath = nil
+        // The selection still names the *previous* project's worktree. Let it go
+        // before recomputing, or the missing-worktree guard below reads it as a
+        // worktree that vanished and overwrites what this project remembers.
+        activeWorkspacePath = nil
         recomputeWorkspaces()
         // Reopening a project lands on the worktree it was left in — its path is
         // only the starting point, and the fallback when that worktree is gone.
@@ -256,6 +260,21 @@ final class AppModel: ObservableObject {
         }
         let worktrees = gitWorktreeService.worktrees(for: project.path)
         workspaces = WorkspaceViewData.groupSessions(sessions, into: worktrees, projectPath: project.path)
+
+        // A worktree can go out from under the selection — removed here, or
+        // deleted behind the app's back. Standing on one that no longer exists
+        // matches no workspace, so `visibleSessions` empties and the main area
+        // goes blank while sibling worktrees still have tabs running.
+        //
+        // Only when git actually named the worktrees: an empty answer means the
+        // lookup failed or has not landed yet, which is no reason to move
+        // someone off the worktree they are working in.
+        if worktrees?.isEmpty == false, let active = activeWorkspacePath,
+           !workspaces.contains(where: { $0.path == active }) {
+            activeWorkspacePath = workspaces.contains(where: { $0.path == project.path })
+                ? project.path
+                : workspaces[0].path
+        }
     }
 
     // MARK: - Project lifecycle
@@ -614,6 +633,11 @@ final class AppModel: ObservableObject {
                 let snapshot = (try? await core.latestSnapshot(sessionID: interrupted.id)) ?? nil
 
                 let sessionID: String
+                // Where the tab belongs, which is not where it happened to be
+                // standing: a cwd may be any directory inside the worktree.
+                let workspacePath = interrupted.workspacePath.isEmpty
+                    ? project.path
+                    : interrupted.workspacePath
                 if project.transport == "ssh", var info = SSHConnectionInfo(uri: project.path) {
                     // Remote shells can't be reopened with a local cwd — land the
                     // ssh session in the directory the tab was last in instead.
@@ -627,7 +651,7 @@ final class AppModel: ObservableObject {
                         title: interrupted.title,
                         shell: shell,
                         cwd: interrupted.lastCwd,
-                        workspacePath: interrupted.workspacePath.isEmpty ? project.path : interrupted.workspacePath,
+                        workspacePath: workspacePath,
                         command: info.sshCommand(
                             replaying: snapshot.flatMap { RestoredScreenReplay.inlineCommand(for: $0) }
                         ),
@@ -641,14 +665,12 @@ final class AppModel: ObservableObject {
                         title: interrupted.title,
                         shell: shell,
                         cwd: interrupted.lastCwd ?? project.path,
-                        workspacePath: interrupted.workspacePath.isEmpty ? project.path : interrupted.workspacePath,
+                        workspacePath: workspacePath,
                         initialInput: snapshot.flatMap { RestoredScreenReplay.prepare(snapshot: $0) }
                     )
                 }
 
-                if let cwd = interrupted.lastCwd {
-                    workspaceSelectedSessions[cwd] = sessionID
-                }
+                workspaceSelectedSessions[workspacePath] = sessionID
                 // The tab now lives in `sessionID`. Retiring the row it came from
                 // is what stops the next launch restoring it alongside its own
                 // replacement — that compounds, doubling tabs every launch.

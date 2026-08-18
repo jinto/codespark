@@ -34,7 +34,10 @@ struct MainContentView: View {
                     VStack(spacing: 0) {
                         if model.pendingSSHReconnectProjectID != nil && model.liveSessions.isEmpty {
                             sshReconnectState
-                        } else if model.liveSessions.isEmpty {
+                        } else if model.visibleSessions.isEmpty {
+                            // The tab bar's worktree, not the project: a worktree
+                            // with no tabs has to offer to make one even while a
+                            // sibling still has terminals running.
                             emptyState
                         } else {
                             terminalContent
