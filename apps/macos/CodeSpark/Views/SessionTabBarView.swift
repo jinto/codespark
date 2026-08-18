@@ -8,6 +8,8 @@ struct SessionTabBarView: View {
     let onNew: () -> Void
     let onNewWorktree: () -> Void
     let canCreateWorktree: Bool
+    /// Branch a tab is working in when that is not the worktree it belongs to.
+    var visitingBranch: (SessionViewData) -> String? = { _ in nil }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -16,6 +18,7 @@ struct SessionTabBarView: View {
                     ForEach(sessions) { session in
                         SessionTab(
                             title: session.title,
+                            visitingBranch: visitingBranch(session),
                             isActive: session.id == activeSessionID,
                             onSelect: { onSelect(session.id) },
                             onClose: { onClose(session.id) }
@@ -51,6 +54,7 @@ struct SessionTabBarView: View {
 
 private struct SessionTab: View {
     let title: String
+    var visitingBranch: String? = nil
     let isActive: Bool
     let onSelect: () -> Void
     let onClose: () -> Void
@@ -64,6 +68,21 @@ private struct SessionTab: View {
                 .lineLimit(1)
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onSelect)
+
+            if let visitingBranch {
+                Text(visitingBranch)
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 110)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color.white.opacity(0.10), in: Capsule())
+                    .help("Working in \(visitingBranch)")
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onSelect)
+            }
 
             Button(action: onClose) {
                 Image(systemName: "xmark")

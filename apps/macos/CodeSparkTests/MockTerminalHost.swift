@@ -9,9 +9,11 @@ final class MockTerminalHost: TerminalHostProtocol {
 
     func markOutput() {}
     private(set) var initialInputs: [String?] = []
+    private(set) var commands: [String?] = []
 
     func attach(sessionID: String, command: String? = nil, initialInput: String? = nil) {
         initialInputs.append(initialInput)
+        commands.append(command)
     }
     func close(sessionID: String) {}
     func extractSnapshot() -> TerminalSnapshotViewData? { nil }

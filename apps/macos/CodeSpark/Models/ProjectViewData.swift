@@ -44,6 +44,20 @@ struct SessionSummary: Identifiable, Equatable {
     var workspacePath: String = ""
 }
 
+/// A workspace reachable by Cmd+1…9. Identified by its project as well as its
+/// path, since the digit has to bring the right project along.
+struct NumberedWorkspace: Equatable {
+    let projectID: String
+    let path: String
+}
+
+/// Where a dragged project row will land. `end` is its own case because there is
+/// no row to sit in front of past the last one.
+enum ProjectDropTarget: Equatable {
+    case before(String)
+    case end
+}
+
 struct ProjectSummaryViewData: Identifiable, Equatable {
     let id: String
     var name: String
@@ -209,6 +223,15 @@ extension WorkspaceViewData {
 
     /// Check that cwd is exactly the worktree path or a subdirectory of it.
     /// Prevents "/projects/codespark-other" matching "/projects/codespark".
+    /// The workspace whose worktree holds `cwd`. Deepest path first, so a
+    /// worktree nested inside another wins over its container.
+    static func containing(cwd: String, in workspaces: [WorkspaceViewData]) -> WorkspaceViewData? {
+        guard !cwd.isEmpty else { return nil }
+        return workspaces
+            .sorted { $0.path.count > $1.path.count }
+            .first { cwdBelongsTo(cwd: cwd, worktreePath: $0.path) }
+    }
+
     private static func cwdBelongsTo(cwd: String, worktreePath: String) -> Bool {
         cwd == worktreePath || cwd.hasPrefix(worktreePath + "/")
     }

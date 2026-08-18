@@ -23,7 +23,8 @@ struct MainContentView: View {
                         newWorktreeBranch = ""
                         showAddWorktreeSheet = true
                     },
-                    canCreateWorktree: project.transport == "local"
+                    canCreateWorktree: project.transport == "local",
+                    visitingBranch: { model.visitingBranch(for: $0) }
                 )
                 .frame(height: 24)
 

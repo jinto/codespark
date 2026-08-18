@@ -10,12 +10,25 @@ struct SidebarView: View {
     @State private var showDeleteConfirmation = false
     @State private var showHotkeys = false
     @State private var hotkeyMonitor: Any?
+    @State private var returnKeyMonitor: Any?
     @State private var sshHost = ""
     @State private var sshUser = ""
     @State private var sshPort = ""
     @State private var sshRemotePath = ""
     @State private var changeFolderProjectID: String?
     @State private var changeFolderPath = ""
+    /// Where a dragged row would land right now — nil when nothing is over the list.
+    @State private var dropTarget: ProjectDropTarget?
+    @State private var pendingRemoveWorktree: WorktreeRemoval?
+
+    /// A worktree the user asked to remove, held until they confirm. Carries its
+    /// project because the row may belong to one that is not selected.
+    private struct WorktreeRemoval: Identifiable {
+        let projectID: String
+        let path: String
+        let branch: String
+        var id: String { path }
+    }
 
     private func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
         if project.transport == "ssh" {
@@ -35,14 +48,25 @@ struct SidebarView: View {
         (path as NSString).abbreviatingWithTildeInPath
     }
 
+    /// A project carries the digit only when it is the whole workspace — once a
+    /// repo has several worktrees the digits belong to the worktree rows.
     private func hotkeyIndex(for project: ProjectSummaryViewData) -> Int? {
+        guard showHotkeys, model.sidebarWorktrees(for: project).isEmpty,
+              let only = model.workspaces(for: project).first else { return nil }
+        return model.numberedIndex(projectID: project.id, path: only.path)
+    }
+
+    private func hotkeyIndex(for workspace: WorkspaceViewData, in project: ProjectSummaryViewData) -> Int? {
         guard showHotkeys else { return nil }
-        guard let idx = model.orderedProjects.firstIndex(where: { $0.id == project.id }), idx < 9 else { return nil }
-        return idx + 1
+        return model.numberedIndex(projectID: project.id, path: workspace.path)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // The list has to know how tall its viewport is: the drop target for
+            // "move to the end" is the empty space under the last row, and empty
+            // space only exists once the content is stretched to fill.
+            GeometryReader { proxy in
             ScrollView {
                 if model.projects.isEmpty {
                     VStack(spacing: 12) {
@@ -76,14 +100,30 @@ struct SidebarView: View {
                                 isSelected: model.selectedProjectID == project.id,
                                 status: model.projectStatus(for: project),
                                 infoLine: projectInfoLine(for: project),
-                                hotkeyIndex: hotkeyIndex(for: project)
+                                hotkeyIndex: hotkeyIndex(for: project),
+                                isExpanded: model.sidebarWorktrees(for: project).isEmpty
+                                    ? nil
+                                    : model.expandedProjectIDs.contains(project.id),
+                                onToggleExpansion: { model.toggleWorktrees(projectID: project.id) }
                             )
                             .contentShape(Rectangle())
+                            .overlay(alignment: .top) {
+                                DropInsertionLine(isShowing: dropTarget == .before(project.id))
+                            }
                             .draggable(project.id)
                             .dropDestination(for: String.self) { droppedIDs, _ in
+                                dropTarget = nil
                                 guard let draggedID = droppedIDs.first else { return false }
-                                model.moveProject(id: draggedID, before: project.id)
+                                model.moveProject(id: draggedID, to: .before(project.id))
                                 return true
+                            } isTargeted: { targeted in
+                                // Nothing else can clear it: the row that loses the
+                                // pointer is the one that reports leaving.
+                                if targeted {
+                                    dropTarget = .before(project.id)
+                                } else if dropTarget == .before(project.id) {
+                                    dropTarget = nil
+                                }
                             }
                             .onTapGesture {
                                 Task { await model.selectProject(id: project.id, promptForRecovery: true) }
@@ -119,41 +159,112 @@ struct SidebarView: View {
                                 }
                             }
 
-                            // Worktrees only exist for the selected project — that is
-                            // the only one whose worktree list has been fetched.
-                            if model.selectedProjectID == project.id {
-                                ForEach(model.sidebarWorktrees) { workspace in
+                            // Shown while the project is expanded, selected or not:
+                            // switching projects must not fold someone's tree.
+                            if model.expandedProjectIDs.contains(project.id) {
+                                ForEach(model.sidebarWorktrees(for: project)) { workspace in
                                     WorktreeSidebarRow(
                                         workspace: workspace,
-                                        isSelected: model.activeWorkspacePath == workspace.path,
-                                        status: model.workspaceStatus(for: workspace)
+                                        isSelected: model.selectedProjectID == project.id
+                                            && model.activeWorkspacePath == workspace.path,
+                                        status: model.workspaceStatus(for: workspace),
+                                        hotkeyIndex: hotkeyIndex(for: workspace, in: project)
                                     )
                                     .contentShape(Rectangle())
                                     .onTapGesture {
-                                        model.activeWorkspacePath = workspace.path
+                                        Task {
+                                            await model.selectWorktree(
+                                                projectID: project.id,
+                                                path: workspace.path
+                                            )
+                                        }
+                                    }
+                                    .onTapGesture(count: 2) {
+                                        Task {
+                                            await model.selectWorktree(
+                                                projectID: project.id,
+                                                path: workspace.path
+                                            )
+                                            model.presentSessionChooser()
+                                        }
+                                    }
+                                    .contextMenu {
+                                        // Main is the repository itself — removing
+                                        // it is not a worktree operation.
+                                        if !workspace.isMainWorktree {
+                                            Button("Remove Worktree...", role: .destructive) {
+                                                pendingRemoveWorktree = WorktreeRemoval(
+                                                    projectID: project.id,
+                                                    path: workspace.path,
+                                                    branch: workspace.branch
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+
+                    // Past the last row there is nothing to sit in front of, so
+                    // the end of the list needs a target of its own — all of the
+                    // empty space under the list, not a strip you have to aim at.
+                    if !model.projects.isEmpty {
+                        Color.clear
+                            .frame(minHeight: 24, maxHeight: .infinity)
+                            .overlay(alignment: .top) {
+                                DropInsertionLine(isShowing: dropTarget == .end)
+                            }
+                            .dropDestination(for: String.self) { droppedIDs, _ in
+                                dropTarget = nil
+                                guard let draggedID = droppedIDs.first else { return false }
+                                model.moveProject(id: draggedID, to: .end)
+                                return true
+                            } isTargeted: { targeted in
+                                if targeted {
+                                    dropTarget = .end
+                                } else if dropTarget == .end {
+                                    dropTarget = nil
+                                }
+                            }
+                    }
                 }
                 .padding(.horizontal, 8)
                 .padding(.top, 8)
+                // Fills the viewport when the list is shorter, so the space under
+                // the last row belongs to the list — and is a drop target.
+                .frame(minHeight: proxy.size.height, alignment: .top)
             }
             .onAppear {
                 hotkeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
                     showHotkeys = event.modifierFlags.contains(.command)
                     return event
                 }
-            }
-            .onDisappear {
-                if let monitor = hotkeyMonitor {
-                    NSEvent.removeMonitor(monitor)
-                    hotkeyMonitor = nil
+                // Not a menu shortcut: a bare Return in the table would take the
+                // key from every terminal and text field in the app. The monitor
+                // hands it back untouched unless the sidebar is the only thing
+                // that could be listening.
+                returnKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                    guard sidebarReturnOpensSessionChooser(
+                        keyCode: event.keyCode,
+                        modifiers: event.modifierFlags,
+                        hasActiveSession: model.activeSessionID != nil,
+                        hasSheet: NSApp.keyWindow?.attachedSheet != nil
+                            || model.pendingWorkspaceRecoveryProjectID != nil,
+                        hasSelectedProject: model.selectedProjectID != nil
+                    ) else { return event }
+                    model.presentSessionChooser()
+                    return nil
                 }
             }
-
-            Spacer()
+            .onDisappear {
+                for monitor in [hotkeyMonitor, returnKeyMonitor].compactMap({ $0 }) {
+                    NSEvent.removeMonitor(monitor)
+                }
+                hotkeyMonitor = nil
+                returnKeyMonitor = nil
+            }
+            } // GeometryReader
 
             Divider().background(AppTheme.divider)
             HStack {
@@ -166,6 +277,31 @@ struct SidebarView: View {
             .padding(.vertical, 8)
         }
         .background(AppTheme.sidebarBackground)
+        .confirmationDialog(
+            "Remove worktree \(pendingRemoveWorktree?.branch ?? "")?",
+            isPresented: Binding(
+                get: { pendingRemoveWorktree != nil },
+                set: { if !$0 { pendingRemoveWorktree = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                if let removal = pendingRemoveWorktree {
+                    Task {
+                        // The removal reads the selected project, and the row may
+                        // belong to another one.
+                        await model.selectWorktree(projectID: removal.projectID, path: removal.path)
+                        await model.removeWorktree(path: removal.path)
+                    }
+                }
+                pendingRemoveWorktree = nil
+            }
+            Button("Cancel", role: .cancel) { pendingRemoveWorktree = nil }
+        } message: {
+            if let removal = pendingRemoveWorktree {
+                Text("Its tabs will close and \(abbreviatePath(removal.path)) will be deleted. The branch itself stays.")
+            }
+        }
         .confirmationDialog(
             "Delete project?",
             isPresented: $showDeleteConfirmation,
@@ -262,10 +398,26 @@ struct ProjectSidebarRow: View {
     let status: ProjectStatus
     var infoLine: String? = nil
     var hotkeyIndex: Int? = nil
+    /// nil when the repo has a single worktree — there is no tree to open.
+    var isExpanded: Bool? = nil
+    var onToggleExpansion: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 5) {
+                if let isExpanded {
+                    Button(action: onToggleExpansion) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(isSelected ? .white.opacity(0.8) : .secondary)
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .frame(width: 8, height: 8)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("worktreeDisclosure")
+                }
+
                 Circle()
                     .fill(status.color)
                     .frame(width: 7, height: 7)
@@ -322,12 +474,30 @@ struct ProjectSidebarRow: View {
     }
 }
 
+/// Where a dragged project row would land. Drawn on top of a row rather than
+/// between rows, so the list never shifts under the pointer while you aim.
+private struct DropInsertionLine: View {
+    let isShowing: Bool
+
+    var body: some View {
+        Capsule()
+            .fill(AppTheme.accent)
+            .frame(height: 2)
+            .padding(.horizontal, 4)
+            .offset(y: -2)
+            .opacity(isShowing ? 1 : 0)
+            .animation(.easeOut(duration: 0.12), value: isShowing)
+            .allowsHitTesting(false)
+    }
+}
+
 /// A worktree nested under its project. Only drawn when the repo has more than
 /// one — a lone worktree is the project row itself.
 struct WorktreeSidebarRow: View {
     let workspace: WorkspaceViewData
     let isSelected: Bool
     let status: ProjectStatus
+    var hotkeyIndex: Int? = nil
 
     var body: some View {
         HStack(spacing: 5) {
@@ -362,6 +532,17 @@ struct WorktreeSidebarRow: View {
             RoundedRectangle(cornerRadius: 4)
                 .fill(isSelected ? AppTheme.accent.opacity(0.22) : Color.white.opacity(0.02))
         )
+        .overlay(alignment: .trailing) {
+            if let hotkeyIndex {
+                Text("\u{2318}\(hotkeyIndex)")
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(AppTheme.accent.opacity(0.85), in: RoundedRectangle(cornerRadius: 4))
+                    .padding(.trailing, 6)
+            }
+        }
         .padding(.leading, 12)
     }
 }
@@ -409,7 +590,7 @@ private struct ChangeRemoteFolderSheet: View {
             user: sshInfo.user,
             port: sshInfo.port,
             remotePath: remotePath.isEmpty ? nil : remotePath
-        ).sshCommand
+        ).sshCommand()
     }
 
     var body: some View {

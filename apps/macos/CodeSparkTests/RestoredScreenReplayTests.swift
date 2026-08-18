@@ -67,4 +67,40 @@ final class RestoredScreenReplayTests: XCTestCase {
     func test_prepare_returns_nil_for_an_empty_screen() {
         XCTAssertNil(RestoredScreenReplay.prepare(snapshot: .fixture(lines: [])))
     }
+
+    // MARK: - Replay for a tab that reopens over ssh
+
+    func test_inline_command_reproduces_the_payload_byte_for_byte() throws {
+        // Screen text is data, not code: quotes, backslashes and percent signs
+        // have to come out the far side unchanged.
+        let snapshot = TerminalSnapshotViewData.fixture(
+            lines: ["jinto@m3 % grep 'a\\b' *.txt", "100% done", "it's fine"]
+        )
+        let command = try XCTUnwrap(RestoredScreenReplay.inlineCommand(for: snapshot))
+
+        XCTAssertEqual(try shellOutput(of: command), RestoredScreenReplay.payload(for: snapshot))
+    }
+
+    func test_inline_command_carries_no_local_file_the_remote_cannot_read() throws {
+        let command = try XCTUnwrap(
+            RestoredScreenReplay.inlineCommand(for: .fixture(lines: ["restored"]))
+        )
+        XCTAssertFalse(command.contains(NSTemporaryDirectory()))
+    }
+
+    func test_inline_command_returns_nil_for_an_empty_screen() {
+        XCTAssertNil(RestoredScreenReplay.inlineCommand(for: .fixture(lines: [])))
+    }
+
+    private func shellOutput(of command: String) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", command]
+        let output = Pipe()
+        process.standardOutput = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return String(decoding: data, as: UTF8.self)
+    }
 }

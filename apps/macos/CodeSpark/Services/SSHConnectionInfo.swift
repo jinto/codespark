@@ -70,7 +70,10 @@ struct SSHConnectionInfo: Equatable {
         return s
     }
 
-    var sshCommand: String {
+    /// The command Ghostty runs for an ssh tab. `replay` is a shell command the
+    /// remote side runs before the shell takes over — a restored tab's previous
+    /// screen, which cannot be handed over as a local file.
+    func sshCommand(replaying replay: String? = nil) -> String {
         var parts = ["ssh"]
         if let port { parts.append(contentsOf: ["-p", "\(port)"]) }
         if let user {
@@ -78,11 +81,26 @@ struct SSHConnectionInfo: Equatable {
         } else {
             parts.append(host)
         }
-        if let remotePath {
-            let quoted = remotePath.replacingOccurrences(of: "'", with: "'\\''")
-            parts.append(contentsOf: ["-t", "cd '\(quoted)' && exec $SHELL"])
+        if let remote = remoteCommand(replaying: replay) {
+            // Ghostty runs this whole string through `/bin/sh -c`, so the remote
+            // command has to survive as one word. Unquoted, the local shell eats
+            // the `&&` and expands `$SHELL` here — ssh then runs a bare `cd`,
+            // exits, and the tab lands in a local shell instead of the remote.
+            parts.append(contentsOf: ["-t", Self.shellQuoted(remote)])
         }
         return parts.joined(separator: " ")
+    }
+
+    private func remoteCommand(replaying replay: String?) -> String? {
+        var steps: [String] = []
+        if let replay, !replay.isEmpty { steps.append("\(replay); ") }
+        if let remotePath { steps.append("cd \(Self.shellQuoted(remotePath)) && ") }
+        guard !steps.isEmpty else { return nil }
+        return steps.joined() + "exec $SHELL"
+    }
+
+    private static func shellQuoted(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     var displayLabel: String {

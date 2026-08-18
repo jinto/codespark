@@ -12,9 +12,15 @@ final class WorkspaceSelectionTests: XCTestCase {
 
     @MainActor
     func test_launch_restores_while_sidebar_reselect_still_offers_the_choice_menu() async {
+        var hosts: [MockTerminalHost] = []
+        let core = MockProjectCoreClient.projectWithInterruptedSession()
         let model = AppModel(
-            core: MockProjectCoreClient.projectWithInterruptedSession(),
-            terminalFactory: { _ in MockTerminalHost() }
+            core: core,
+            terminalFactory: { _ in
+                let host = MockTerminalHost()
+                hosts.append(host)
+                return host
+            }
         )
 
         // Launch restores the tabs rather than asking about them.
@@ -24,6 +30,15 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         // Re-opening a project with no tabs from the sidebar still offers the menu,
         // which is also how you reach "New Claude session" / "Resume …".
+        let restored = model.liveSessions[0].id
+        hosts[0].finishClose(
+            sessionID: restored,
+            snapshot: .fixture(lines: []),
+            closeReason: .userClosed
+        )
+        // The store write is a detached task; the reselect below must see it.
+        while !core.closedSessionIDs.contains(restored) { await Task.yield() }
+
         await model.selectProject(id: "ws-spark3", promptForRecovery: true)
         XCTAssertEqual(model.pendingWorkspaceRecoveryProjectID, "ws-spark3")
     }
@@ -306,6 +321,48 @@ final class WorkspaceSelectionTests: XCTestCase {
         let injected = hosts.flatMap(\.initialInputs).compactMap { $0 }
         XCTAssertEqual(injected.count, 1)
         XCTAssertTrue(injected[0].hasPrefix("cat "))
+    }
+
+    @MainActor
+    func test_restored_ssh_tab_replays_through_the_remote_shell_not_the_keyboard() async throws {
+        // Startup input is typed at the pty, which for an ssh tab means the far
+        // side reads it — and a local temp file is not there. The replay has to
+        // travel inside the ssh command instead.
+        let core = sshProjectWithOneInterruptedTab()
+        core.snapshotsBySessionID = [
+            "s1": TerminalSnapshotViewData.fixture(lines: ["jinto@m3 ~ % ls"])
+        ]
+        var hosts: [MockTerminalHost] = []
+        let model = AppModel(core: core, terminalFactory: { _ in
+            let host = MockTerminalHost()
+            hosts.append(host)
+            return host
+        })
+
+        await model.load()
+
+        XCTAssertTrue(hosts.flatMap(\.initialInputs).compactMap { $0 }.isEmpty)
+        let command = try XCTUnwrap(hosts.flatMap(\.commands).compactMap { $0 }.first)
+        XCTAssertTrue(command.contains("jinto@m3 ~ % ls"), "replay missing from: \(command)")
+        XCTAssertFalse(command.contains(NSTemporaryDirectory()), "local path sent to the remote shell")
+    }
+
+    private func sshProjectWithOneInterruptedTab() -> MockProjectCoreClient {
+        MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "emac", path: "ssh://emac", transport: "ssh",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: true, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(
+                id: "p1", name: "emac", path: "ssh://emac", transport: "ssh",
+                liveSessions: [],
+                interruptedSessions: [
+                    SessionSummary(id: "s1", title: "emac", targetLabel: "emac",
+                                   lastCwd: "/Users/jinto/projects/codespark", workspacePath: "ssh://emac")
+                ]
+            )]
+        )
     }
 
     @MainActor
@@ -742,6 +799,393 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(model.workspaceStatus(for: main), .needsInput)
         XCTAssertNotEqual(model.workspaceStatus(for: feature), .needsInput,
                           "one worktree waiting for input must not colour its sibling")
+    }
+
+    // MARK: - A restore in flight belongs to the project that started it
+
+    @MainActor
+    func test_restoring_tabs_does_not_pour_them_into_another_project() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "p1", path: "/tmp/p1", transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: true, liveSessionDetails: []),
+                ProjectSummaryViewData(id: "p2", name: "p2", path: "/tmp/p2", transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [
+                ProjectDetailViewData(
+                    id: "p1", name: "p1", path: "/tmp/p1", transport: "local",
+                    liveSessions: [],
+                    interruptedSessions: [
+                        SessionSummary(id: "old-1", title: "Terminal", targetLabel: "local",
+                                       lastCwd: "/tmp/p1", workspacePath: "/tmp/p1"),
+                        SessionSummary(id: "old-2", title: "Terminal", targetLabel: "local",
+                                       lastCwd: "/tmp/p1", workspacePath: "/tmp/p1"),
+                        SessionSummary(id: "old-3", title: "Terminal", targetLabel: "local",
+                                       lastCwd: "/tmp/p1", workspacePath: "/tmp/p1")
+                    ]
+                ),
+                ProjectDetailViewData(id: "p2", name: "p2", path: "/tmp/p2",
+                                      transport: "local", liveSessions: [])
+            ]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+
+        // Restoring p1's tabs takes a round trip each; the user gets bored and
+        // clicks another project halfway through.
+        var started = 0
+        core.onStartSession = { [weak model] in
+            started += 1
+            if started == 1 { model?.selectedProjectID = "p2" }
+        }
+        await model.load()
+
+        XCTAssertTrue(
+            model.liveSessions.allSatisfy { $0.workspacePath == "/tmp/p2" },
+            "p1's restored tabs landed in another project's tab bar: \(model.liveSessions.map(\.workspacePath))"
+        )
+    }
+
+    // MARK: - Every workspace remembers the tab you were on
+
+    @MainActor
+    func test_returning_to_a_worktree_restores_the_tab_you_were_on() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let second = model.liveSessions.filter { $0.workspacePath == Self.mainWorktree }[1].id
+
+        await model.selectWorktree(projectID: "p1", path: Self.mainWorktree)
+        model.activeSessionID = second
+        await model.selectWorktree(projectID: "p1", path: Self.featureWorktree)
+        await model.selectWorktree(projectID: "p1", path: Self.mainWorktree)
+
+        XCTAssertEqual(model.activeSessionID, second)
+    }
+
+    @MainActor
+    func test_returning_to_a_project_lands_on_the_worktree_you_left() async {
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let second = model.liveSessions.filter { $0.workspacePath == Self.featureWorktree }[1].id
+        model.activeSessionID = second
+
+        await model.selectProject(id: "p2")
+        await model.selectProject(id: "p1")
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree,
+                       "coming back must not drop you at the repo root")
+        XCTAssertEqual(model.activeSessionID, second,
+                       "nor on the first tab of a worktree you had left")
+    }
+
+    @MainActor
+    func test_a_project_whose_remembered_worktree_is_gone_falls_back_to_its_root() async {
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+
+        await model.selectProject(id: "p2")
+        // The worktree disappears while another project holds focus.
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true)
+        ], for: Self.mainWorktree)
+        await model.selectProject(id: "p1")
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree)
+    }
+
+    // MARK: - Cmd+1…9 addresses the places work is happening
+
+    @MainActor
+    func test_a_worktree_without_tabs_gets_no_number() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+
+        XCTAssertEqual(model.numberedWorkspaces.map(\.path), [Self.featureWorktree],
+                       "an empty worktree is not somewhere to jump to")
+    }
+
+    @MainActor
+    func test_numbers_follow_the_sidebar_order_across_projects() async {
+        let model = await modelWithTwoProjects()
+        // p1 has two worktrees, p2 is flat. Tabs in both.
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        await model.selectProject(id: "p2")
+        await model.newSession()
+
+        XCTAssertEqual(model.numberedWorkspaces.map(\.projectID), ["p1", "p2"])
+        XCTAssertEqual(model.numberedWorkspaces.map(\.path), [Self.featureWorktree, Self.otherProject])
+    }
+
+    @MainActor
+    func test_a_flat_project_is_numbered_as_itself() async {
+        let model = await modelWithTwoProjects()
+        await model.selectProject(id: "p2")
+        await model.newSession()
+
+        XCTAssertEqual(model.numberedWorkspaces.map(\.path), [Self.otherProject],
+                       "one worktree means the project row is that workspace")
+    }
+
+    @MainActor
+    func test_collapsing_a_tree_does_not_renumber_anything() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let before = model.numberedWorkspaces
+
+        model.toggleWorktrees(projectID: "p1")
+
+        XCTAssertEqual(model.numberedWorkspaces, before,
+                       "numbers must not move when a tree is opened or closed")
+    }
+
+    @MainActor
+    func test_pressing_a_number_selects_that_project_and_worktree() async {
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        await model.selectProject(id: "p2")
+        await model.newSession()
+
+        await model.selectNumberedWorkspace(1)
+
+        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
+    }
+
+    @MainActor
+    func test_an_index_with_nothing_behind_it_does_nothing() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let selected = model.selectedProjectID
+
+        await model.selectNumberedWorkspace(7)
+
+        XCTAssertEqual(model.selectedProjectID, selected)
+    }
+
+    @MainActor
+    func test_only_nine_places_can_be_numbered() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        let many = (0..<12).map { "/tmp/proj-w\($0)" }
+        model.gitWorktreeService.primeCache(
+            [GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true)]
+                + many.enumerated().map {
+                    GitWorktree(path: $0.element, branch: "w\($0.offset)", isMainWorktree: false)
+                },
+            for: Self.mainWorktree
+        )
+        model.recomputeWorkspaces()
+        for path in many {
+            await model.newSession(inWorkspacePath: path)
+        }
+
+        XCTAssertEqual(model.numberedWorkspaces.count, 9, "there are only nine digits")
+        XCTAssertEqual(model.numberedWorkspaces.map(\.path), Array(many.prefix(9)))
+    }
+
+    // MARK: - Removing a worktree
+
+    @MainActor
+    func test_removing_a_worktree_closes_only_the_tabs_that_were_in_it() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let inMain = model.liveSessions.first { $0.workspacePath == Self.mainWorktree }!
+        let inFeature = model.liveSessions.first { $0.workspacePath == Self.featureWorktree }!
+
+        // The git call fails here — /tmp/proj is no repo — but the tabs living in
+        // the worktree have to be let go before the directory disappears.
+        await model.removeWorktree(path: Self.featureWorktree)
+
+        XCTAssertTrue(model.closingSessionIDs.contains(inFeature.id))
+        XCTAssertFalse(model.closingSessionIDs.contains(inMain.id),
+                       "a sibling worktree's tab must survive")
+    }
+
+    // MARK: - A tab that wandered into another worktree says so
+
+    @MainActor
+    func test_a_tab_working_outside_its_worktree_names_where_it_is() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+
+        // What an agent does when it creates a worktree and moves into it.
+        model.sessionDidReportCwd(sessionID: tab.id, cwd: Self.featureWorktree + "/src")
+
+        XCTAssertEqual(model.visitingBranch(for: model.liveSessions[0]), "feature")
+    }
+
+    @MainActor
+    func test_a_tab_in_its_own_worktree_says_nothing() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+
+        model.sessionDidReportCwd(sessionID: tab.id, cwd: Self.mainWorktree + "/apps")
+
+        XCTAssertNil(model.visitingBranch(for: model.liveSessions[0]),
+                     "a tab at home has nothing to report")
+    }
+
+    @MainActor
+    func test_a_tab_outside_every_worktree_says_nothing() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+
+        model.sessionDidReportCwd(sessionID: tab.id, cwd: "/tmp/elsewhere")
+
+        XCTAssertNil(model.visitingBranch(for: model.liveSessions[0]),
+                     "a detour out of the repo is not another worktree")
+    }
+
+    @MainActor
+    func test_a_single_worktree_project_never_reports_a_visit() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "Proj", path: Self.mainWorktree, transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "Proj", path: Self.mainWorktree,
+                                            transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        await model.newSession()
+        let tab = model.liveSessions[0]
+
+        model.sessionDidReportCwd(sessionID: tab.id, cwd: "/tmp/anywhere")
+
+        XCTAssertNil(model.visitingBranch(for: model.liveSessions[0]))
+    }
+
+    @MainActor
+    func test_the_deepest_worktree_wins_when_one_nests_in_another() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.mainWorktree + "/nested", branch: "nested", isMainWorktree: false)
+        ], for: Self.mainWorktree)
+        model.recomputeWorkspaces()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+
+        model.sessionDidReportCwd(sessionID: tab.id, cwd: Self.mainWorktree + "/nested/deep")
+
+        XCTAssertEqual(model.visitingBranch(for: model.liveSessions[0]), "nested")
+    }
+
+    // MARK: - The tree stays open across project switches
+
+    private static let otherProject = "/tmp/other"
+
+    /// Two projects: `p1` has two worktrees, `p2` is a plain one. The cache is
+    /// primed after `load()` because `selectProject` invalidates on the way in.
+    @MainActor
+    private func modelWithTwoProjects() async -> AppModel {
+        func summary(id: String, path: String) -> ProjectSummaryViewData {
+            ProjectSummaryViewData(id: id, name: id, path: path, transport: "local",
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: [])
+        }
+        let core = MockProjectCoreClient(
+            summaries: [summary(id: "p1", path: Self.mainWorktree),
+                        summary(id: "p2", path: Self.otherProject)],
+            details: [
+                ProjectDetailViewData(id: "p1", name: "p1", path: Self.mainWorktree,
+                                      transport: "local", liveSessions: []),
+                ProjectDetailViewData(id: "p2", name: "p2", path: Self.otherProject,
+                                      transport: "local", liveSessions: [])
+            ]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.featureWorktree, branch: "feature", isMainWorktree: false)
+        ], for: Self.mainWorktree)
+        model.recomputeWorkspaces()
+        return model
+    }
+
+    private func forgetExpandedProjects() {
+        UserDefaults.standard.removeObject(forKey: StorageKeys.expandedProjectIDs)
+    }
+
+    @MainActor
+    func test_worktree_rows_survive_switching_to_another_project() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        model.toggleWorktrees(projectID: "p1")
+
+        await model.selectProject(id: "p2")
+
+        XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
+                      "selecting elsewhere must not fold a tree the user opened")
+        let p1 = model.projects.first { $0.id == "p1" }!
+        XCTAssertEqual(model.sidebarWorktrees(for: p1).map(\.path),
+                       [Self.mainWorktree, Self.featureWorktree],
+                       "an unselected project still knows its worktrees")
+    }
+
+    @MainActor
+    func test_projects_start_collapsed() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+
+        XCTAssertTrue(model.expandedProjectIDs.isEmpty)
+    }
+
+    @MainActor
+    func test_expansion_survives_a_relaunch() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        model.toggleWorktrees(projectID: "p1")
+
+        let relaunched = AppModel(core: MockProjectCoreClient(summaries: [], details: []),
+                                  terminalFactory: { _ in MockTerminalHost() })
+
+        XCTAssertEqual(relaunched.expandedProjectIDs, ["p1"])
+    }
+
+    @MainActor
+    func test_toggling_twice_closes_the_tree_again() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+
+        model.toggleWorktrees(projectID: "p1")
+        model.toggleWorktrees(projectID: "p1")
+
+        XCTAssertTrue(model.expandedProjectIDs.isEmpty)
+    }
+
+    @MainActor
+    func test_a_single_worktree_project_has_no_rows_to_show() async {
+        let model = await modelWithTwoProjects()
+        let p2 = model.projects.first { $0.id == "p2" }!
+
+        XCTAssertTrue(model.sidebarWorktrees(for: p2).isEmpty)
+    }
+
+    @MainActor
+    func test_picking_a_worktree_of_another_project_switches_to_that_project() async {
+        let model = await modelWithTwoProjects()
+        await model.selectProject(id: "p2")
+
+        await model.selectWorktree(projectID: "p1", path: Self.featureWorktree)
+
+        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
     }
 
     // MARK: - Worktree switching without the sidebar

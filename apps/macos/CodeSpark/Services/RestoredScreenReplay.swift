@@ -34,6 +34,28 @@ enum RestoredScreenReplay {
         return "\(clear)\(dim)──── before restart ────\(reset)\n\(body)\n"
     }
 
+    /// The same replay for a tab that reopens over ssh. Startup input is typed
+    /// at the pty, so the far side would be asked to read a file that only
+    /// exists on this machine; instead the payload rides along inside the ssh
+    /// command as a `printf` argument the remote shell prints for us.
+    static func inlineCommand(for snapshot: TerminalSnapshotViewData) -> String? {
+        let text = payload(for: snapshot)
+        guard !text.isEmpty else { return nil }
+        return "printf '%b' \(shellQuoted(printfEscaped(text)))"
+    }
+
+    /// Screen text is an argument, never a format string, so `%` needs no care —
+    /// only what `%b` itself reads: backslashes, plus the bytes a command line
+    /// cannot carry raw. Quotes go out as `\047` so the text stays quote-free:
+    /// this string is quoted twice on its way to the far side, and each nesting
+    /// would otherwise multiply every quote it finds.
+    private static func printfEscaped(_ text: String) -> String {
+        text.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\047")
+            .replacingOccurrences(of: "\u{1B}", with: "\\033")
+            .replacingOccurrences(of: "\n", with: "\\n")
+    }
+
     /// Writes the payload somewhere the shell can read it once. Returns nil when
     /// there is nothing worth replaying or the write fails — the tab then just
     /// opens normally.

@@ -33,10 +33,37 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
         "mock-project-id"
     }
 
+    /// Fires as a session is created, so a test can move the selection the way a
+    /// user does while a restore is still running.
+    var onStartSession: (() -> Void)?
+
     func startSession(projectId: String, transport: String, targetLabel: String, title: String, shell: String, initialCwd: String?, workspacePath: String) async throws -> String {
+        onStartSession?()
         sessionCounter += 1
         startedSessions.append((initialCwd: initialCwd, workspacePath: workspacePath))
-        return "mock-session-\(sessionCounter)"
+        let id = "mock-session-\(sessionCounter)"
+        // The store keeps the session, so a project reopened later comes back
+        // with its tabs. Without this the mock forgets them and any test about
+        // returning to a project passes for the wrong reason.
+        if let detail = detailsByID[projectId] {
+            detailsByID[projectId] = ProjectDetailViewData(
+                id: detail.id,
+                name: detail.name,
+                path: detail.path,
+                transport: detail.transport,
+                liveSessions: detail.liveSessions + [
+                    SessionViewData(
+                        id: id,
+                        title: title,
+                        targetLabel: targetLabel,
+                        lastCwd: initialCwd,
+                        workspacePath: workspacePath
+                    )
+                ],
+                interruptedSessions: detail.interruptedSessions
+            )
+        }
+        return id
     }
 
     func listProjectSummaries() async throws -> [ProjectSummaryViewData] {
@@ -64,6 +91,16 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
         closeReason: CloseReasonViewData
     ) async throws {
         closedSessionIDs.append(sessionID)
+        for (projectID, detail) in detailsByID where detail.liveSessions.contains(where: { $0.id == sessionID }) {
+            detailsByID[projectID] = ProjectDetailViewData(
+                id: detail.id,
+                name: detail.name,
+                path: detail.path,
+                transport: detail.transport,
+                liveSessions: detail.liveSessions.filter { $0.id != sessionID },
+                interruptedSessions: detail.interruptedSessions
+            )
+        }
     }
 
     func reconcileInterruptedSessions() async throws { }
