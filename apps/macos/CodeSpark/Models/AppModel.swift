@@ -888,6 +888,20 @@ final class AppModel: ObservableObject {
         return grouped.count > 1 ? grouped : []
     }
 
+    /// Two halves of one rule: a path belongs to the row that *is* that worktree.
+    /// While a tree is open the project row is only a heading, so it lets go of
+    /// its path and the main worktree row picks it up — otherwise the same
+    /// directory is spelled out twice, one line apart.
+    func showsWorktreeRows(for project: ProjectSummaryViewData) -> Bool {
+        expandedProjectIDs.contains(project.id) && !sidebarWorktrees(for: project).isEmpty
+    }
+
+    /// A linked worktree's directory is named after its branch, which the row
+    /// already says. Only the main one carries a path worth reading.
+    func worktreePathLine(for workspace: WorkspaceViewData) -> String? {
+        workspace.isMainWorktree ? workspace.path : nil
+    }
+
     /// Where Cmd+1…9 go: every workspace that has a tab, in sidebar order. A
     /// worktree standing empty is not somewhere to jump to, and a repo with one
     /// worktree is addressed as the project itself.

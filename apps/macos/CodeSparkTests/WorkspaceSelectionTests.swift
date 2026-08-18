@@ -1177,6 +1177,52 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertTrue(model.sidebarWorktrees(for: p2).isEmpty)
     }
 
+    // MARK: - The path belongs to the row that is that worktree
+
+    /// A project row showing its path while a "main" child sits right under it
+    /// describes the same worktree twice. Expanding hands the path down.
+    @MainActor
+    func test_an_expanded_project_row_hands_its_path_down() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        let p1 = model.projects.first { $0.id == "p1" }!
+
+        XCTAssertFalse(model.showsWorktreeRows(for: p1),
+                       "collapsed, the row still stands for the whole repo")
+
+        model.toggleWorktrees(projectID: "p1")
+
+        XCTAssertTrue(model.showsWorktreeRows(for: p1),
+                      "expanded, the children speak for the worktrees — the heading keeps only the name")
+    }
+
+    @MainActor
+    func test_a_single_worktree_project_keeps_its_path_however_it_is_toggled() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        model.toggleWorktrees(projectID: "p2")
+        let p2 = model.projects.first { $0.id == "p2" }!
+
+        XCTAssertFalse(model.showsWorktreeRows(for: p2),
+                       "there is nobody to hand the path to — that row is the worktree")
+    }
+
+    @MainActor
+    func test_only_the_main_worktree_row_carries_a_path() async {
+        let model = await modelWithTwoProjects()
+        let p1 = model.projects.first { $0.id == "p1" }!
+        let rows = model.sidebarWorktrees(for: p1)
+        let main = rows.first { $0.isMainWorktree }!
+        let feature = rows.first { !$0.isMainWorktree }!
+
+        XCTAssertEqual(model.worktreePathLine(for: main), Self.mainWorktree,
+                       "the path lands on the row that is that worktree")
+        XCTAssertNil(model.worktreePathLine(for: feature),
+                     "a linked worktree's directory is named after its branch — the path would repeat the title")
+    }
+
     @MainActor
     func test_picking_a_worktree_of_another_project_switches_to_that_project() async {
         let model = await modelWithTwoProjects()

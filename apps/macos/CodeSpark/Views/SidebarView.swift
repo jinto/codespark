@@ -31,6 +31,9 @@ struct SidebarView: View {
     }
 
     private func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
+        // Expanded, this row is only a heading — its path has moved down to the
+        // main worktree row.
+        if model.showsWorktreeRows(for: project) { return nil }
         if project.transport == "ssh" {
             if let info = SSHConnectionInfo(uri: project.path) {
                 return info.displayLabel
@@ -161,14 +164,15 @@ struct SidebarView: View {
 
                             // Shown while the project is expanded, selected or not:
                             // switching projects must not fold someone's tree.
-                            if model.expandedProjectIDs.contains(project.id) {
+                            if model.showsWorktreeRows(for: project) {
                                 ForEach(model.sidebarWorktrees(for: project)) { workspace in
                                     WorktreeSidebarRow(
                                         workspace: workspace,
                                         isSelected: model.selectedProjectID == project.id
                                             && model.activeWorkspacePath == workspace.path,
                                         status: model.workspaceStatus(for: workspace),
-                                        hotkeyIndex: hotkeyIndex(for: workspace, in: project)
+                                        hotkeyIndex: hotkeyIndex(for: workspace, in: project),
+                                        pathLine: model.worktreePathLine(for: workspace).map(abbreviatePath)
                                     )
                                     .contentShape(Rectangle())
                                     .onTapGesture {
@@ -452,6 +456,7 @@ struct ProjectSidebarRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .padding(.leading, 12)
+                    .accessibilityIdentifier("projectInfoLine")
             }
         }
         .padding(.horizontal, 8)
@@ -498,32 +503,46 @@ struct WorktreeSidebarRow: View {
     let isSelected: Bool
     let status: ProjectStatus
     var hotkeyIndex: Int? = nil
+    /// Only the main worktree gets one — see `AppModel.worktreePathLine(for:)`.
+    var pathLine: String? = nil
 
     var body: some View {
-        HStack(spacing: 5) {
-            Circle()
-                .fill(status.color)
-                .frame(width: 5, height: 5)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(status.color)
+                    .frame(width: 5, height: 5)
 
-            Text(workspace.branch)
-                .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
-                .foregroundStyle(isSelected ? .white : .white.opacity(0.7))
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .accessibilityIdentifier("worktreeBranch")
+                Text(workspace.branch)
+                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? .white : .white.opacity(0.7))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .accessibilityIdentifier("worktreeBranch")
 
-            Spacer()
+                Spacer()
 
-            if !workspace.sessions.isEmpty {
-                Text("\(workspace.sessions.count)")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1)
-                    .background(Color.white.opacity(0.10), in: Capsule())
-                    // Two characters that must stay readable — a long branch name
-                    // truncates instead of shaving the badge down to a sliver.
-                    .fixedSize()
+                if !workspace.sessions.isEmpty {
+                    Text("\(workspace.sessions.count)")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.white.opacity(0.10), in: Capsule())
+                        // Two characters that must stay readable — a long branch name
+                        // truncates instead of shaving the badge down to a sliver.
+                        .fixedSize()
+                }
+            }
+
+            if let pathLine {
+                Text(pathLine)
+                    .font(.system(size: 10))
+                    .foregroundStyle(isSelected ? .white.opacity(0.6) : .white.opacity(0.4))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .padding(.leading, 10)
+                    .accessibilityIdentifier("worktreePath")
             }
         }
         .padding(.horizontal, 8)

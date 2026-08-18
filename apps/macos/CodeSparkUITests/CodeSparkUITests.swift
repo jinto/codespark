@@ -145,4 +145,38 @@ final class CodeSparkUITests: XCTestCase {
             "selecting another project folded a tree the user had opened"
         )
     }
+
+    // MARK: - The path belongs to the row that is that worktree
+
+    /// A collapsed project row shows its path; opening the tree puts a "main"
+    /// row right under it, and the two would then name the same directory one
+    /// line apart. The handoff is decided in the sidebar's view body, so only a
+    /// running app can prove the path actually moved.
+    func test_opening_a_tree_moves_the_path_onto_the_main_worktree_row() throws {
+        let disclosures = app.buttons.matching(identifier: "worktreeDisclosure")
+        try XCTSkipUnless(
+            disclosures.firstMatch.waitForExistence(timeout: 10),
+            "no multi-worktree project in this store"
+        )
+        let disclosure = disclosures.allElementsBoundByIndex.last!
+        let infoLines = app.staticTexts.matching(identifier: "projectInfoLine")
+        let worktreePaths = app.staticTexts.matching(identifier: "worktreePath")
+
+        // The tree may already be open from a previous run — this asserts the
+        // handoff in whichever direction the click takes it.
+        let infoLinesBefore = infoLines.count
+        let pathsBefore = worktreePaths.count
+
+        disclosure.click()
+
+        XCTAssertTrue(wait { worktreePaths.count != pathsBefore },
+                      "clicking the disclosure moved no path at all")
+        let opened = worktreePaths.count > pathsBefore
+        XCTAssertTrue(
+            wait { infoLines.count == infoLinesBefore + (opened ? -1 : 1) },
+            opened
+                ? "the expanded project row kept a path its main worktree row now shows"
+                : "the collapsed project row never took its path back"
+        )
+    }
 }
