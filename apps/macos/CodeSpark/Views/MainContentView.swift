@@ -226,6 +226,20 @@ struct MainContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// A bar that is simply as long as the fraction says. `ProgressView(value:)`
+    /// animates towards its value and gets rebuilt on every count, so it sat at
+    /// empty through a whole restore while the label beside it read "5 of 6".
+    private func progressBar(_ fraction: Double, width: CGFloat, height: CGFloat) -> some View {
+        ZStack(alignment: .leading) {
+            Capsule()
+                .fill(Color.white.opacity(0.12))
+            Capsule()
+                .fill(AppTheme.accent)
+                .frame(width: max(0, min(1, fraction)) * width)
+        }
+        .frame(width: width, height: height)
+    }
+
     /// The whole area, while there is not yet a terminal to put in it.
     private func restoringState(_ progress: AppModel.RestoreProgress) -> some View {
         VStack(spacing: 14) {
@@ -235,10 +249,7 @@ struct MainContentView: View {
             Text("Restoring terminals")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            ProgressView(value: progress.fraction)
-                .progressViewStyle(.linear)
-                .tint(AppTheme.accent)
-                .frame(width: 220)
+            progressBar(progress.fraction, width: 220, height: 5)
             Text("\(progress.completed) of \(progress.total)")
                 .font(.subheadline)
                 .foregroundStyle(.tertiary)
@@ -261,10 +272,7 @@ struct MainContentView: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .accessibilityIdentifier("restoreProgressCount")
-            ProgressView(value: progress.fraction)
-                .progressViewStyle(.linear)
-                .tint(AppTheme.accent)
-                .frame(maxWidth: 160)
+            progressBar(progress.fraction, width: 120, height: 4)
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)
