@@ -1764,4 +1764,82 @@ final class WorkspaceSelectionTests: XCTestCase {
         ], for: projectPath)
         return model
     }
+
+    // MARK: - Restoring says how far along it is
+
+    /// Restoring takes a round trip per tab, and an ssh tab waits on a remote
+    /// host on top of that. With nothing on screen the main area said "No
+    /// sessions yet" for the whole wait — wrong, and an invitation to open a
+    /// stray tab on top of the ones already on their way back.
+    @MainActor
+    func test_restore_counts_the_tabs_as_they_come_back() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "p1", path: "/tmp/p1", transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: true, liveSessionDetails: [])
+            ],
+            details: [
+                ProjectDetailViewData(
+                    id: "p1", name: "p1", path: "/tmp/p1", transport: "local",
+                    liveSessions: [],
+                    interruptedSessions: [
+                        SessionSummary(id: "old-1", title: "Terminal", targetLabel: "local",
+                                       lastCwd: "/tmp/p1", workspacePath: "/tmp/p1"),
+                        SessionSummary(id: "old-2", title: "Terminal", targetLabel: "local",
+                                       lastCwd: "/tmp/p1", workspacePath: "/tmp/p1"),
+                        SessionSummary(id: "old-3", title: "Terminal", targetLabel: "local",
+                                       lastCwd: "/tmp/p1", workspacePath: "/tmp/p1")
+                    ]
+                )
+            ]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        var seen: [String] = []
+        var areas: [String] = []
+        core.onStartSession = { [weak model] in
+            guard let model else { return }
+            areas.append("\(model.mainAreaContent)")
+            guard let progress = model.restoreProgress else { seen.append("nothing"); return }
+            seen.append("\(progress.completed)/\(progress.total)")
+        }
+
+        await model.load()
+
+        XCTAssertEqual(seen, ["0/3", "1/3", "2/3"],
+                       "the count has to move as each tab lands, and know how many are coming")
+        XCTAssertNil(model.restoreProgress,
+                     "and it has to go away when the work does")
+        XCTAssertEqual(areas.first, "restoring(CodeSpark.AppModel.RestoreProgress(completed: 0, total: 3))",
+                       "with nothing back yet the area says so instead of \"No sessions yet\"")
+        XCTAssertEqual(Array(areas.dropFirst()), ["terminals", "terminals"],
+                       "once a tab is back it gets the room — the rest is a strip, not a cover")
+    }
+
+    @MainActor
+    func test_a_terminal_that_is_back_is_not_covered_by_the_rest_coming() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+
+        XCTAssertEqual(model.mainAreaContent, .terminals)
+        XCTAssertNil(model.restoreBannerProgress,
+                     "no restore is running, so no strip")
+    }
+
+    @MainActor
+    func test_an_empty_worktree_still_offers_a_terminal_when_nothing_is_restoring() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        model.activeWorkspacePath = Self.featureWorktree
+
+        XCTAssertEqual(model.mainAreaContent, .empty)
+    }
+
+    @MainActor
+    func test_a_launch_with_nothing_to_restore_shows_no_progress() async {
+        let model = await modelWithTwoProjects()
+
+        XCTAssertNil(model.restoreProgress,
+                     "an ordinary launch must not flash a bar at nobody")
+    }
 }

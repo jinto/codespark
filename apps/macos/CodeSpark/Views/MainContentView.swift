@@ -30,16 +30,29 @@ struct MainContentView: View {
 
                 Divider().background(AppTheme.divider)
 
+                // Once the first tab is back the terminal takes the room, so what
+                // is still coming is said in a strip above it.
+                if let progress = model.restoreBannerProgress {
+                    restoreBanner(progress)
+                    Divider().background(AppTheme.divider)
+                }
+
                 HStack(spacing: 0) {
                     VStack(spacing: 0) {
-                        if model.pendingSSHReconnectProjectID != nil && model.liveSessions.isEmpty {
+                        switch model.mainAreaContent {
+                        case .sshReconnect:
                             sshReconnectState
-                        } else if model.visibleSessions.isEmpty {
+                        case .restoring(let progress):
+                            // Nothing to show yet, but tabs are on their way —
+                            // "No sessions yet" would be a lie, and an invitation
+                            // to open one on top of them.
+                            restoringState(progress)
+                        case .empty:
                             // The tab bar's worktree, not the project: a worktree
                             // with no tabs has to offer to make one even while a
                             // sibling still has terminals running.
                             emptyState
-                        } else {
+                        case .terminals:
                             terminalContent
                         }
                     }
@@ -211,6 +224,52 @@ struct MainContentView: View {
             .keyboardShortcut(.defaultAction)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// The whole area, while there is not yet a terminal to put in it.
+    private func restoringState(_ progress: AppModel.RestoreProgress) -> some View {
+        VStack(spacing: 14) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.system(size: 36))
+                .foregroundStyle(.secondary)
+            Text("Restoring terminals")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            ProgressView(value: progress.fraction)
+                .progressViewStyle(.linear)
+                .tint(AppTheme.accent)
+                .frame(width: 220)
+            Text("\(progress.completed) of \(progress.total)")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+                .accessibilityIdentifier("restoreProgressCount")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// A strip above a terminal that is already back, for the ones that are not.
+    private func restoreBanner(_ progress: AppModel.RestoreProgress) -> some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .progressViewStyle(.circular)
+                .controlSize(.small)
+                .scaleEffect(0.6)
+                .frame(width: 12, height: 12)
+            Text("Restoring terminals — \(progress.completed) of \(progress.total)")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+                .accessibilityIdentifier("restoreProgressCount")
+            ProgressView(value: progress.fraction)
+                .progressViewStyle(.linear)
+                .tint(AppTheme.accent)
+                .frame(maxWidth: 160)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(AppTheme.surfaceBackground)
     }
 
     private var emptyState: some View {

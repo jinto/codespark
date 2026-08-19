@@ -88,6 +88,40 @@ final class AppModel: ObservableObject {
     @Published var pendingWorkspaceRecoveryProjectID: String?
     @Published var showNewSSHSheet = false
 
+    /// How far a restore has got. Each tab costs a round trip, and an ssh tab
+    /// waits on a remote host after that, so the wait is long enough to need
+    /// saying out loud. nil whenever nothing is being restored.
+    struct RestoreProgress: Equatable {
+        var completed: Int
+        var total: Int
+
+        var fraction: Double { total > 0 ? Double(completed) / Double(total) : 0 }
+    }
+    @Published private(set) var restoreProgress: RestoreProgress?
+
+    /// What the main area shows. Kept here as one decision so the view does not
+    /// restate it in a chain of conditions only a running app can check.
+    enum MainAreaContent: Equatable {
+        case sshReconnect
+        case restoring(RestoreProgress)
+        case empty
+        case terminals
+    }
+
+    var mainAreaContent: MainAreaContent {
+        if pendingSSHReconnectProjectID != nil && liveSessions.isEmpty { return .sshReconnect }
+        // A tab that is already back gets the room. Restoring the rest is said in
+        // a strip above it, not by covering the terminal the user can use now.
+        guard visibleSessions.isEmpty else { return .terminals }
+        if let restoreProgress { return .restoring(restoreProgress) }
+        return .empty
+    }
+
+    /// The strip above a terminal, for the tabs still on their way back.
+    var restoreBannerProgress: RestoreProgress? {
+        mainAreaContent == .terminals ? restoreProgress : nil
+    }
+
     let core: ProjectCoreClientProtocol
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
     private(set) var hosts: [String: any TerminalHostProtocol] = [:]
@@ -545,6 +579,11 @@ final class AppModel: ObservableObject {
         // own project picks it up from the store when it is opened again.
         guard selectedProjectID == projectID else { return sessionID }
         liveSessions.append(session)
+        // The grouping is what the tab bar reads through `visibleSessions`, so a
+        // tab that is not in it is a tab nobody can see. `newSession` regrouped
+        // on its own and restoring did not, which left restored tabs invisible
+        // until some unrelated recompute — a cwd report, usually — went past.
+        recomputeWorkspaces()
         syncProjectSessionDetails()
         return sessionID
     }
@@ -641,6 +680,8 @@ final class AppModel: ObservableObject {
 
         let interruptedSessions = project.interruptedSessions
         pendingWorkspaceRecoveryProjectID = nil
+        restoreProgress = RestoreProgress(completed: 0, total: interruptedSessions.count)
+        defer { restoreProgress = nil }
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
 
         for interrupted in interruptedSessions {
@@ -703,6 +744,7 @@ final class AppModel: ObservableObject {
                 // is what stops the next launch restoring it alongside its own
                 // replacement — that compounds, doubling tabs every launch.
                 try? await core.consumeInterruptedSession(sessionId: interrupted.id)
+                restoreProgress?.completed += 1
             } catch {
                 loadErrorMessage = error.localizedDescription
                 break
