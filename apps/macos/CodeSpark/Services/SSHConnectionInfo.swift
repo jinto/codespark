@@ -76,11 +76,10 @@ struct SSHConnectionInfo: Equatable {
     func sshCommand(replaying replay: String? = nil) -> String {
         var parts = ["ssh"]
         if let port { parts.append(contentsOf: ["-p", "\(port)"]) }
-        if let user {
-            parts.append("\(user)@\(host)")
-        } else {
-            parts.append(host)
-        }
+        // Quoted for the same reason the remote command is: Ghostty hands this
+        // whole string to `/bin/sh -c`, and the host is free text from the New
+        // SSH Project sheet. Unquoted, everything a `;` introduces runs here.
+        parts.append(Self.shellQuoted(user.map { "\($0)@\(host)" } ?? host))
         if let remote = remoteCommand(replaying: replay) {
             // Ghostty runs this whole string through `/bin/sh -c`, so the remote
             // command has to survive as one word. Unquoted, the local shell eats

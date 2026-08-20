@@ -33,10 +33,10 @@ final class SSHIntegrationTests: XCTestCase {
 
     func test_ssh_command_builds_correctly_for_localhost() {
         let info = SSHConnectionInfo(host: "localhost")
-        XCTAssertEqual(info.sshCommand(), "ssh localhost")
+        XCTAssertEqual(info.sshCommand(), "ssh 'localhost'")
 
         let withUser = SSHConnectionInfo(host: "localhost", user: "testuser", port: 22)
-        XCTAssertEqual(withUser.sshCommand(), "ssh -p 22 testuser@localhost")
+        XCTAssertEqual(withUser.sshCommand(), "ssh -p 22 'testuser@localhost'")
     }
 
     // MARK: - Worktrees over ssh

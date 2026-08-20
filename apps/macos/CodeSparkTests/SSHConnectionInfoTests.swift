@@ -9,7 +9,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertNil(info.user)
         XCTAssertNil(info.port)
         XCTAssertNil(info.remotePath)
-        XCTAssertEqual(info.sshCommand(), "ssh myhost")
+        XCTAssertEqual(info.sshCommand(), "ssh 'myhost'")
         XCTAssertEqual(info.displayLabel, "myhost")
     }
 
@@ -17,7 +17,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         let info = SSHConnectionInfo(uri: "ssh://jinto@myhost")!
         XCTAssertEqual(info.host, "myhost")
         XCTAssertEqual(info.user, "jinto")
-        XCTAssertEqual(info.sshCommand(), "ssh jinto@myhost")
+        XCTAssertEqual(info.sshCommand(), "ssh 'jinto@myhost'")
         XCTAssertEqual(info.displayLabel, "jinto@myhost")
     }
 
@@ -26,7 +26,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertEqual(info.host, "myhost")
         XCTAssertNil(info.user)
         XCTAssertEqual(info.remotePath, "/home/user/project")
-        XCTAssertEqual(info.sshCommand(), "ssh myhost -t 'cd '\\''/home/user/project'\\'' && exec $SHELL'")
+        XCTAssertEqual(info.sshCommand(), "ssh 'myhost' -t 'cd '\\''/home/user/project'\\'' && exec $SHELL'")
     }
 
     func test_parse_full_uri() {
@@ -35,7 +35,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertEqual(info.user, "jinto")
         XCTAssertEqual(info.port, 2222)
         XCTAssertEqual(info.remotePath, "/srv/app")
-        XCTAssertEqual(info.sshCommand(), "ssh -p 2222 jinto@myhost -t 'cd '\\''/srv/app'\\'' && exec $SHELL'")
+        XCTAssertEqual(info.sshCommand(), "ssh -p 2222 'jinto@myhost' -t 'cd '\\''/srv/app'\\'' && exec $SHELL'")
     }
 
     func test_parse_host_and_port() {
@@ -43,7 +43,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertEqual(info.host, "myhost")
         XCTAssertEqual(info.port, 8022)
         XCTAssertNil(info.user)
-        XCTAssertEqual(info.sshCommand(), "ssh -p 8022 myhost")
+        XCTAssertEqual(info.sshCommand(), "ssh -p 8022 'myhost'")
     }
 
     func test_uri_roundtrip() {
@@ -62,7 +62,7 @@ final class SSHConnectionInfoTests: XCTestCase {
     func test_root_path_ignored() {
         let info = SSHConnectionInfo(uri: "ssh://myhost/")!
         XCTAssertNil(info.remotePath)
-        XCTAssertEqual(info.sshCommand(), "ssh myhost")
+        XCTAssertEqual(info.sshCommand(), "ssh 'myhost'")
     }
 
     // MARK: - What ssh actually receives
@@ -93,6 +93,28 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertEqual(
             try argumentsSSHReceives(from: info.sshCommand(replaying: "printf '%b' 'screen'")),
             ["myhost", "-t", "printf '%b' 'screen'; exec $SHELL"]
+        )
+    }
+
+    /// The host comes from a free-text field in the New SSH Project sheet, and
+    /// the whole command is parsed by the local `/bin/sh` before ssh ever sees
+    /// it. Unquoted, everything after a `;` runs on this machine.
+    func test_a_host_with_a_shell_metacharacter_stays_one_argument() throws {
+        let info = SSHConnectionInfo(host: "box; touch /tmp/codespark-should-not-exist",
+                                     remotePath: "/srv/app")
+        XCTAssertEqual(
+            try argumentsSSHReceives(from: info.sshCommand()),
+            ["box; touch /tmp/codespark-should-not-exist", "-t", "cd '/srv/app' && exec $SHELL"]
+        )
+        XCTAssertFalse(FileManager.default.fileExists(atPath: "/tmp/codespark-should-not-exist"),
+                       "the local shell ran what was typed into the host field")
+    }
+
+    func test_a_user_with_a_shell_metacharacter_stays_one_argument() throws {
+        let info = SSHConnectionInfo(host: "box", user: "jay$(id -u)", remotePath: "/srv/app")
+        XCTAssertEqual(
+            try argumentsSSHReceives(from: info.sshCommand()),
+            ["jay$(id -u)@box", "-t", "cd '/srv/app' && exec $SHELL"]
         )
     }
 

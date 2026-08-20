@@ -255,4 +255,44 @@ final class RemoteWorktreeScanTests: XCTestCase {
 
         XCTAssertNotNil(service.worktrees(for: "ssh://box/srv/two"), "the second refresh was dropped")
     }
+
+    // MARK: - A remote that goes quiet has to be given up on
+
+    /// `BatchMode`, `ConnectTimeout` and `ServerAlive*` cover getting there and
+    /// losing the link. None of them cover a host that accepted the command and
+    /// never answered — the lookup path carried its own deadline for that, and
+    /// creating a worktree carried none, so the sheet waited forever.
+    func test_creating_a_worktree_gives_up_on_a_remote_that_never_answers() async throws {
+        try installHangingStubSSH()
+        let originalTimeout = GitWorktreeService.remoteTimeout
+        GitWorktreeService.remoteTimeout = 1
+        defer { GitWorktreeService.remoteTimeout = originalTimeout }
+
+        let started = Date()
+        do {
+            _ = try await GitWorktreeService.addWorktree(
+                projectPath: "ssh://box/srv/repo",
+                branch: "feature"
+            )
+            XCTFail("a stub that never answers reported success")
+        } catch {
+            // Giving up is the expected outcome; what matters is that it did.
+        }
+
+        XCTAssertLessThan(Date().timeIntervalSince(started), 10,
+                          "it was still waiting well past the deadline")
+    }
+
+    /// A stub that accepts the command and then says nothing, like a host whose
+    /// connection is alive but whose git has wedged.
+    private func installHangingStubSSH() throws {
+        let stub = stubDirectory.appendingPathComponent("ssh")
+        let script = """
+        #!/bin/sh
+        sleep 120
+        """
+        try script.write(to: stub, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+        GitWorktreeService.sshExecutablePath = stub.path
+    }
 }

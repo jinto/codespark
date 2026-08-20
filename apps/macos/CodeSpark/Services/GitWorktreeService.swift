@@ -41,9 +41,11 @@ final class GitWorktreeService: @unchecked Sendable {
         "-o", "ServerAliveCountMax=2",
     ]
 
-    /// Ceiling for one remote lookup, in case the connection lives but the
-    /// remote git does not answer.
-    private static let remoteTimeout: TimeInterval = 20
+    /// Ceiling for one remote command, in case the connection lives but the
+    /// remote git does not answer. `BatchMode`/`ConnectTimeout`/`ServerAlive*`
+    /// cover getting there and losing the link; none of them cover a remote that
+    /// accepted the command and went quiet. Shortened by tests.
+    static var remoteTimeout: TimeInterval = 20
 
     /// A poll over several remote projects should not open one connection per
     /// project all at once.
@@ -208,11 +210,21 @@ final class GitWorktreeService: @unchecked Sendable {
         process.standardError = stderrPipe
 
         try process.run()
+        // The lookup path has had this since it was written; creating and
+        // removing had nothing. A remote that takes the command and never
+        // answers left the sheet waiting with no way back.
+        // The lookup path has had this since it was written; creating and
+        // removing had nothing. A remote that takes the command and never
+        // answers left the sheet waiting with no way back.
+        let deadline = Task {
+            try await Task.sleep(nanoseconds: UInt64(remoteTimeout * 1_000_000_000))
+            if process.isRunning { process.terminate() }
+        }
+        defer { deadline.cancel() }
         let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
         let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        let exitStatus: Int32 = await withCheckedContinuation { cont in
-            process.terminationHandler = { cont.resume(returning: $0.terminationStatus) }
-        }
+        process.waitUntilExit()
+        let exitStatus = process.terminationStatus
         guard exitStatus == 0 else {
             let message = String(data: errData, encoding: .utf8)?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
