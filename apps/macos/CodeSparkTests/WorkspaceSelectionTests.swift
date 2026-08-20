@@ -887,9 +887,11 @@ final class WorkspaceSelectionTests: XCTestCase {
         // Restoring p1's tabs takes a round trip each; the user gets bored and
         // clicks another project halfway through.
         var started = 0
+        var areasAfterLeaving: [String] = []
         core.onStartSession = { [weak model] in
             started += 1
             if started == 1 { model?.selectedProjectID = "p2" }
+            if started > 1, let model { areasAfterLeaving.append("\(model.mainAreaContent)") }
         }
         await model.load()
 
@@ -897,6 +899,69 @@ final class WorkspaceSelectionTests: XCTestCase {
             model.liveSessions.allSatisfy { $0.workspacePath == "/tmp/p2" },
             "p1's restored tabs landed in another project's tab bar: \(model.liveSessions.map(\.workspacePath))"
         )
+        // The bar belongs to the restore, not to the screen. p2 is not restoring
+        // anything, and saying it is counts tabs that will never arrive there.
+        XCTAssertFalse(
+            areasAfterLeaving.contains { $0.hasPrefix("restoring") },
+            "p2 was shown p1's restore: \(areasAfterLeaving)"
+        )
+    }
+
+    /// The loop guards every tab it creates and guards rewriting the detail, but
+    /// its last two lines ran against whatever was on screen by the time it
+    /// finished — choosing a tab there, and dragging the sidebar to that tab's
+    /// worktree. The project you switched to gets its selection taken over by a
+    /// restore that was never about it.
+    @MainActor
+    func test_a_finished_restore_leaves_the_project_you_switched_to_alone() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "p1", path: "/tmp/p1", transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: true, liveSessionDetails: []),
+                ProjectSummaryViewData(id: "p2", name: "p2", path: "/tmp/p2", transport: "local",
+                                       liveSessions: 2, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [
+                ProjectDetailViewData(
+                    id: "p1", name: "p1", path: "/tmp/p1", transport: "local",
+                    liveSessions: [],
+                    interruptedSessions: [
+                        SessionSummary(id: "old-1", title: "Terminal", targetLabel: "local",
+                                       lastCwd: "/tmp/p1", workspacePath: "/tmp/p1"),
+                        SessionSummary(id: "old-2", title: "Terminal", targetLabel: "local",
+                                       lastCwd: "/tmp/p1", workspacePath: "/tmp/p1")
+                    ]
+                ),
+                ProjectDetailViewData(
+                    id: "p2", name: "p2", path: "/tmp/p2", transport: "local",
+                    liveSessions: [
+                        SessionViewData(id: "b1", title: "one", targetLabel: "local",
+                                        lastCwd: "/tmp/p2", workspacePath: "/tmp/p2"),
+                        SessionViewData(id: "b2", title: "two", targetLabel: "local",
+                                        lastCwd: "/tmp/p2", workspacePath: "/tmp/p2")
+                    ]
+                )
+            ]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+
+        // Halfway through p1's restore the user opens p2, which lands on p2's
+        // first tab.
+        var switched = false
+        core.onStartSession = { [weak model] in
+            guard !switched else { return }
+            switched = true
+            Task { @MainActor in await model?.selectProject(id: "p2") }
+        }
+        await model.load()
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(model.selectedProjectID, "p2")
+        XCTAssertEqual(model.activeSessionID, "b1",
+                       "p1's restore reached into p2 and moved it off the tab it opened on")
     }
 
     // MARK: - Every workspace remembers the tab you were on
@@ -1810,8 +1875,8 @@ final class WorkspaceSelectionTests: XCTestCase {
                        "the count has to move as each tab lands, and know how many are coming")
         XCTAssertNil(model.restoreProgress,
                      "and it has to go away when the work does")
-        XCTAssertEqual(areas.first, "restoring(CodeSpark.AppModel.RestoreProgress(completed: 0, total: 3))",
-                       "with nothing back yet the area says so instead of \"No sessions yet\"")
+        XCTAssertEqual(areas.first?.hasPrefix("restoring"), true,
+                       "with nothing back yet the area said \(areas.first ?? "nothing") instead of restoring")
         XCTAssertEqual(Array(areas.dropFirst()), ["terminals", "terminals"],
                        "once a tab is back it gets the room — the rest is a strip, not a cover")
     }
@@ -1953,5 +2018,60 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(model.selectedProjectID, "p2")
         XCTAssertTrue(model.sidebarWorktrees(for: p2).isEmpty,
                       "and there is still nothing under it to show")
+    }
+
+    // MARK: - The tree opens on the click, not after the scan
+
+    /// Selecting refetches the worktree list, and that queues behind every other
+    /// project's lookup — a remote one can hold it for 20s. Folding is local
+    /// state and has no reason to wait for any of it. It used to, because the
+    /// toggle sat after the `await`, and with the disclosure triangle gone this
+    /// click is the only way to open a tree at all.
+    @MainActor
+    func test_a_click_opens_the_tree_without_waiting_for_the_lookup() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "p1", path: Self.mainWorktree, transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "p1", path: Self.mainWorktree,
+                                            transport: "local", liveSessions: [])],
+            detailLatencyByID: ["p1": 400_000_000]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+
+        let click = Task { await model.selectProjectAndToggleWorktrees(id: "p1") }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
+                      "the tree is still shut while the lookup runs")
+        await click.value
+    }
+
+    // MARK: - An ssh restore is the one that most needs to say it is working
+
+    /// `selectProject` raises the reconnect offer for an ssh project with no
+    /// live tabs, and `mainAreaContent` puts that ahead of everything. Restoring
+    /// never lowered it, so the whole ssh restore — the slow one, the reason the
+    /// progress exists — sat behind a "Reconnect" button instead.
+    @MainActor
+    func test_an_ssh_restore_shows_its_progress_not_the_reconnect_offer() async {
+        let core = sshProjectWithOneInterruptedTab()
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        var areas: [String] = []
+        core.onStartSession = { [weak model] in
+            guard let model else { return }
+            areas.append("\(model.mainAreaContent)")
+        }
+
+        await model.load()
+
+        XCTAssertEqual(areas.first?.hasPrefix("restoring"), true,
+                       "the area said \(areas.first ?? "nothing") while the tab was on its way back")
+        XCTAssertNil(model.pendingSSHReconnectProjectID,
+                     "and the offer must not outlive the restore that answered it")
     }
 }

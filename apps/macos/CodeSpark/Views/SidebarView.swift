@@ -31,9 +31,6 @@ struct SidebarView: View {
     }
 
     private func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
-        // Expanded, this row is only a heading — its path has moved down to the
-        // main worktree row.
-        if model.showsWorktreeRows(for: project) { return nil }
         if project.transport == "ssh" {
             if let info = SSHConnectionInfo(uri: project.path) {
                 return info.displayLabel
@@ -432,6 +429,11 @@ struct ProjectSidebarRow: View {
             }
 
             if let info = infoLine {
+                // Open, the path below belongs to the main worktree row and this
+                // one must not repeat it — but the line keeps its space. Removing
+                // it shortens the row by a whole line under the cursor that just
+                // clicked it, which is the same jitter the dot above is hidden
+                // rather than dropped to avoid.
                 Text(info)
                     .font(.system(size: 10))
                     .foregroundStyle(
@@ -442,6 +444,7 @@ struct ProjectSidebarRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .padding(.leading, 12)
+                    .opacity(showsWorktreeRows ? 0 : 1)
                     .accessibilityIdentifier("projectInfoLine")
             }
         }

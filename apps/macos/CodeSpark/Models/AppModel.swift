@@ -92,12 +92,22 @@ final class AppModel: ObservableObject {
     /// waits on a remote host after that, so the wait is long enough to need
     /// saying out loud. nil whenever nothing is being restored.
     struct RestoreProgress: Equatable {
+        /// Whose restore this is. A restore outlives the screen that started it —
+        /// switch projects halfway and the count would otherwise follow you and
+        /// promise tabs that are landing somewhere else.
+        var projectID: String
         var completed: Int
         var total: Int
 
         var fraction: Double { total > 0 ? Double(completed) / Double(total) : 0 }
     }
     @Published private(set) var restoreProgress: RestoreProgress?
+
+    /// The restore the project on screen is waiting for, if it is waiting for one.
+    private var progressForSelectedProject: RestoreProgress? {
+        guard let restoreProgress, restoreProgress.projectID == selectedProjectID else { return nil }
+        return restoreProgress
+    }
 
     /// What the main area shows. Kept here as one decision so the view does not
     /// restate it in a chain of conditions only a running app can check.
@@ -113,13 +123,13 @@ final class AppModel: ObservableObject {
         // A tab that is already back gets the room. Restoring the rest is said in
         // a strip above it, not by covering the terminal the user can use now.
         guard visibleSessions.isEmpty else { return .terminals }
-        if let restoreProgress { return .restoring(restoreProgress) }
+        if let progress = progressForSelectedProject { return .restoring(progress) }
         return .empty
     }
 
     /// The strip above a terminal, for the tabs still on their way back.
     var restoreBannerProgress: RestoreProgress? {
-        mainAreaContent == .terminals ? restoreProgress : nil
+        mainAreaContent == .terminals ? progressForSelectedProject : nil
     }
 
     let core: ProjectCoreClientProtocol
@@ -681,7 +691,14 @@ final class AppModel: ObservableObject {
 
         let interruptedSessions = project.interruptedSessions
         pendingWorkspaceRecoveryProjectID = nil
-        restoreProgress = RestoreProgress(completed: 0, total: interruptedSessions.count)
+        // `selectProject` raises the reconnect offer for an ssh project with no
+        // live tabs, and `mainAreaContent` puts that ahead of everything. We are
+        // the answer to it: reconnecting is exactly what this is doing. Left
+        // standing it hides the progress through the whole ssh restore — the
+        // slow one — and outlives it, so closing every tab later offers to
+        // reconnect a project that is already connected.
+        pendingSSHReconnectProjectID = nil
+        restoreProgress = RestoreProgress(projectID: projectID, completed: 0, total: interruptedSessions.count)
         defer { restoreProgress = nil }
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
 
@@ -765,6 +782,12 @@ final class AppModel: ObservableObject {
                 interruptedSessions: []
             )
         }
+        // Same guard the loop uses on every tab it creates: by the time a
+        // restore finishes, the user may be looking at another project, and
+        // `liveSessions` is then theirs. Choosing a tab in it moves them off the
+        // one they opened on, and `activeSessionID.didSet` drags the sidebar to
+        // that tab's worktree after it.
+        guard selectedProjectID == projectID else { return }
         recomputeWorkspaces()
         activeSessionID = liveSessions.last?.id
     }
@@ -1095,8 +1118,14 @@ final class AppModel: ObservableObject {
     /// guard would eat the first click on every project opened this session.
     /// A repo with one worktree just stores a flag that draws nothing.
     func selectProjectAndToggleWorktrees(id: String) async {
-        await selectProject(id: id, promptForRecovery: true)
+        // Fold first. Selecting refetches the worktree list, which queues behind
+        // every other project's lookup — a remote one holds it for up to 20s —
+        // and folding is local state that has no reason to wait for any of it.
+        // Behind the await, the only way to open a tree took a round trip to
+        // another machine to answer, and a second impatient click cancelled the
+        // first.
         toggleWorktrees(projectID: id)
+        await selectProject(id: id, promptForRecovery: true)
     }
 
     static func savedExpandedProjectIDs() -> Set<String> {
