@@ -71,9 +71,12 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
   - **트리 유무를 먼저 묻지 않고 토글한다.** 선택이 git으로 워크트리 목록을 새로 읽으므로 캐시가 비어 있는 첫 클릭에는 "없음"으로 보인다 — 가드를 두면 이번 세션에 처음 여는 프로젝트마다 첫 클릭을 삼킨다. 워크트리가 1개면 아무것도 안 그리는 플래그만 저장될 뿐이다.
   - `expandedProjectIDs`(UserDefaults 저장)가 기준이고 **다른 프로젝트의 선택과는 무관하다** — Cmd+1로 옮겨가도 열어둔 트리는 그대로다. 선택된 프로젝트는 `workspaces`(라이브)를, 나머지는 `liveSessionDetails`를 그룹핑해 행을 만든다.
   - **UI 테스트 주의**: 삼각형이 사라지면서 "워크트리 여러 개인 프로젝트"를 공짜로 걸러주던 수단도 사라졌다. 이제 모든 행이 클릭을 받으므로 `projectRowWithATree()`가 눌러보고 `worktreeBranch` 개수가 변하는 행을 찾는다. `worktreeDisclosure`를 찾던 옛 방식대로 두면 테스트가 **조용히 skip되며 통과**한다.
+  - **밖에서 만든 워크트리는 폴링으로만 발견된다**: 앱이 만든 것(`addWorktree`)은 즉시 반영되지만, 에이전트가 탭 안에서 만든 것이나 다른 체크아웃의 것은 10초 타이머가 찾는다. 타이머는 `NSApp.isActive`일 때만 돌고 TTL은 30초(실패 60초)라 최대 ~40초. **앱이 배경에 있으면 아예 돌지 않으므로** 활성화되는 순간(`didBecomeActiveNotification`) 한 번 더 묻는다 — 안 그러면 몇 시간 자리를 비운 뒤 돌아와도 다음 tick까지 낡은 목록을 본다.
+  - **조회 실패는 로그로 남긴다**: 실패하면 그 프로젝트의 워크트리 행이 조용히 하나로 접힌다. stderr를 버리던 동안에는 왜 그런지 알아낼 방법이 아무 데도 없었다.
   - **캐시 주의**: `GitWorktreeService.refreshWorktrees(for:)`는 **넘기지 않은 경로의 캐시를 지운다**. 선택된 프로젝트 하나만 넘기면 나머지 프로젝트의 워크트리 행이 통째로 사라진다 — 항상 `worktreeProjectPaths`(워크트리를 가질 수 있는 프로젝트 전부, 원격 포함)를 넘길 것.
 - **스코프**: 탭바·`Cmd+[/]`·새 탭은 전부 `activeWorkspacePath` 기준(`visibleSessions`). 안 보이는 워크트리의 Ghostty surface는 계속 살아 있다 — `terminalContent`는 여전히 `allSessions`를 순회해야 한다.
 - **순서 (중요)**: `recomputeWorkspaces()`는 **선택 대입보다 먼저** 실행해야 한다. `activeWorkspacePath`의 `didSet`이 `workspaces`를 읽기 때문에, 낡은 그룹핑이면 방금 만든 탭을 못 보고 선택을 옛 탭으로 되돌린다.
+  - **탭을 만들었으면 그 자리에서 다시 그룹핑한다**: 탭바는 `visibleSessions`를 거쳐 그룹핑을 읽으므로, `liveSessions`에만 넣고 recompute를 안 하면 **아무도 못 보는 탭**이 된다. `startAndAttachSession`이 직접 하는 이유다 — 예전엔 `newSession`만 따로 부르고 복원 경로는 안 불러서, 복원된 탭이 cwd 보고 같은 엉뚱한 계기가 지나갈 때까지 안 보였다.
 - **재귀**: `activeSessionID`와 `activeWorkspacePath`의 `didSet`이 서로를 부른다. `workspaceSelectedSessions`를 **먼저** 쓰고 부등호 가드로 끊는 순서가 종료 조건이다.
 - **기억은 두 겹**: `workspaceSelectedSessions`(워크스페이스→탭)와 `projectSelectedWorkspaces`(프로젝트→워크스페이스). 돌아왔을 때 "떠난 자리"로 복귀하려면 둘 다 필요하다.
   - `apply(detail:)`는 기억된 워크트리로 열고, 그게 사라졌을 때만 프로젝트 경로로 떨어진다.
@@ -83,6 +86,7 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
   - `worktrees`가 **nil이나 빈 배열이면 정정하지 않는다**. git 조회 실패와 "워크트리가 삭제됨"은 다르다 — 구분하지 않으면 git이 한 번 실패할 때마다 사용자를 작업 중인 워크트리에서 끌어낸다.
   - `apply(detail:)`은 recompute 전에 `activeWorkspacePath = nil`을 넣는다. 전환 중엔 선택이 아직 *이전* 프로젝트를 가리키므로, 안 비우면 정정 로직이 그걸 "사라진 워크트리"로 보고 **새 프로젝트의 기억을 읽기도 전에 덮어쓴다**.
 - **메인 영역은 탭바를 따른다**: 렌더 분기는 `liveSessions`가 아니라 `visibleSessions` 기준. 프로젝트에 탭이 있어도 *지금 워크트리*에 없으면 "New Terminal"을 내밀어야 한다.
+  - 그 판단은 **`AppModel.mainAreaContent`** 한 곳에 있다(`sshReconnect` / `restoring` / `empty` / `terminals`). 뷰에서 조건을 다시 늘어놓지 말 것 — 어느 화면이 뜨는지는 앱을 띄워야만 보이는 종류라, 모델에 두어야 테스트가 본다. 실제로 그 덕에 "이미 돌아와 쓸 수 있는 터미널을 진행 화면이 덮는" 순서 실수가 잡혔다.
 - **전환 수단**: 사이드바 행 클릭 + `Cmd+Opt+[`/`]` 순환 + `Cmd+1…9`. 사이드바를 숨기면 클릭 경로가 사라지므로 핫키가 없으면 다른 워크트리의 탭이 고립된다.
   - `Cmd+1…9`는 프로젝트가 아니라 **탭이 살아 있는 워크스페이스**(`numberedWorkspaces`)를 가리킨다. 사이드바 순서대로 매기고, 워크트리 1개짜리 프로젝트는 프로젝트 행 자체가 그 워크스페이스다. 빈 워크트리는 번호를 받지 않고, **트리 접기/펼치기는 번호를 바꾸지 않는다** — 손가락 기억이 깨지면 안 되기 때문. 열린 탭이 하나도 없으면 번호도 없다.
   - **배지는 화면에 있는 행이 대신 쓴다**(`numberedIndex(forProject:)`): 트리가 펼쳐져 있으면 워크트리 행이 자기 숫자를 달고 프로젝트 행은 비운다. 접혀 있으면 그 행들이 없으므로 **프로젝트 행이 안쪽 첫 숫자를 대신 단다** — 안 그러면 Cmd로 갈 수 있는 자리인데 화면 어디에도 번호가 안 보인다.
@@ -133,6 +137,10 @@ Process detection + screen parsing replaces the old hook system:
 - **종료**: `saveAllSessionsForRestore()`는 최종 스냅샷만 저장하고 **세션을 닫지 않는다**. 행이 `live`로 남아야 다음 실행의 `reconcileInterruptedSessions()`가 `interrupted`로 전환하고, 복원은 그걸 읽는다. 여기서 닫으면 복원이 종료 타이밍에 좌우되는 복불복이 된다.
 - **시작**: `load()`가 자동 복원한다. 각 탭은 자기 `last_cwd`로, SSH는 `remotePath`를 통한 `cd` 주입으로 돌아간다.
 - **중복 방지 (중요)**: 복원한 `interrupted` 행은 `consumeInterruptedSession`으로 즉시 닫는다. 안 그러면 다음 실행에서 그 행이 자기 대체 세션과 **함께** 복원돼 탭이 매번 2배가 된다. 또 `reconcileInterruptedSessions`는 시작 시 남아 있던 `interrupted` 행을 먼저 폐기한다 — 그래야 복원 대상이 "직전 실행의 탭"으로 한정된다.
+- **복원은 진행을 말한다**: 탭마다 왕복이 한 번이고 ssh면 그 위에 원격 접속이 얹히므로, 복원은 눈에 보일 만큼 걸린다. `AppModel.restoreProgress`(nil = 복원 중 아님)가 `completed`/`total`을 들고, 아직 아무것도 못 돌려놨으면 화면 전체가, 첫 탭이 돌아온 뒤에는 터미널 위의 띠가 그걸 말한다(`restoreBannerProgress`). 로컬·원격 구분이 없다 — 루프가 구분하지 않으므로.
+  - **돌아온 탭이 자리를 갖는다**: 진행 화면이 복원 끝까지 터미널을 덮으면 안 된다. 쓸 수 있게 된 탭은 즉시 화면을 갖고, 남은 것은 띠로 밀려난다.
+  - **`ProgressView(value:)`를 쓰지 말 것**: 자기 값을 향해 애니메이션하는데 카운트마다 뷰가 다시 만들어져 **끝내 도달하지 못한다**. 화면에는 "5 of 6" 옆에 텅 빈 바가 떴다. 채워진 길이만큼 직접 그린다(`progressBar`). 숫자를 검사하는 테스트로는 안 보인다 — 숫자는 내내 옳았다.
+  - **알려진 한계**: ssh 탭은 세션이 *시작*되면 완료로 센다. 원격 접속이 끝나기를 기다리지 않으므로 마지막 탭에서 바가 100%인데 화면은 아직 연결 중일 수 있다.
 - **이전 화면 재생**: 종료 직전 화면은 오버레이가 아니라 **진짜 스크롤백**으로 돌아온다. `RestoredScreenReplay`가 화면을 임시 파일에 담고, 그걸 `cat`하는 명령을 Ghostty `initial_input`(= pty 입력)으로 주입한다. 페이로드가 `ESC[2J`로 시작해 주입 명령의 에코를 지우므로, 흐린 이전 화면 아래에 새 프롬프트가 찍힌다.
   - Ghostty에는 화면에 직접 쓰는 API가 없고, `sh -c '…; exec $SHELL'` 래핑은 `shell_integration.zig`의 shell 검출에 걸려 integration이 아예 주입되지 않는다(→ cwd 추적 사망). 그래서 셸에게 시키는 우회가 유일한 길이다.
   - **알려진 대가**: 주입 명령이 셸 히스토리에 남는다. 복원된 탭에서 Up을 누르면 `cat /var/folders/…`가 뜬다.
