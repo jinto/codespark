@@ -132,4 +132,48 @@ final class SSHConnectionInfoTests: XCTestCase {
         let text = (try? String(contentsOf: recorded, encoding: .utf8)) ?? ""
         return text.split(separator: "\n").map(String.init)
     }
+
+    // MARK: - Workspace addressing
+
+    // A worktree on the other machine has to be addressable in the same string
+    // space as the project itself — `workspacePath` is one column, and it is
+    // what grouping, selection, restore, and removal all compare.
+
+    func test_workspace_uri_carries_the_connection_authority() {
+        let info = SSHConnectionInfo(host: "box", user: "jay", port: 2222, remotePath: "/srv/repo")
+        XCTAssertEqual(
+            info.workspaceURI(forRemotePath: "/srv/worktrees/repo-feat-ab12"),
+            "ssh://jay@box:2222/srv/worktrees/repo-feat-ab12"
+        )
+    }
+
+    func test_workspace_uri_round_trips_to_the_remote_path() {
+        let info = SSHConnectionInfo(host: "box", remotePath: "/srv/repo")
+        let uri = info.workspaceURI(forRemotePath: "/srv/wt/a b")
+        XCTAssertEqual(SSHConnectionInfo.remotePath(fromWorkspaceURI: uri), "/srv/wt/a b")
+    }
+
+    // A local workspace path answers nil, which is how callers tell the two
+    // namespaces apart without a second flag.
+    func test_local_paths_have_no_remote_path() {
+        XCTAssertNil(SSHConnectionInfo.remotePath(fromWorkspaceURI: "/Users/jay/projects/codespark"))
+    }
+
+    // Two spellings of one directory would be two different workspaces, and a
+    // tab keyed to the wrong spelling answers to no row at all.
+    func test_trailing_slash_is_not_a_different_worktree() {
+        let info = SSHConnectionInfo(host: "box")
+        XCTAssertEqual(
+            info.workspaceURI(forRemotePath: "/srv/wt/repo/"),
+            info.workspaceURI(forRemotePath: "/srv/wt/repo")
+        )
+    }
+
+    func test_root_survives_canonicalization() {
+        XCTAssertEqual(SSHConnectionInfo.canonicalRemotePath("/"), "/")
+    }
+
+    func test_shell_quoting_survives_an_apostrophe() {
+        XCTAssertEqual(SSHConnectionInfo.shellQuoted("/srv/it's here"), "'/srv/it'\\''s here'")
+    }
 }
