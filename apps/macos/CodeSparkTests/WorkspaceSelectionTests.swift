@@ -1466,4 +1466,32 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         XCTAssertEqual(model.worktreeProjectPaths.sorted(), ["/tmp/local", "ssh://jay@box/srv/repo"])
     }
+
+    /// A lookup that fails is not a worktree that vanished. Dropping the list
+    /// regroups every tab under one workspace, and the selection — still
+    /// standing on a linked worktree — then matches no row: `visibleSessions`
+    /// empties and the main area goes blank while the shells are all fine.
+    @MainActor
+    func test_a_failed_lookup_keeps_the_worktrees_it_already_found() async {
+        let service = GitWorktreeService()
+        service.primeCache([
+            GitWorktree(path: "ssh://box/srv/repo", branch: "main", isMainWorktree: true),
+            GitWorktree(path: "ssh://box/srv/wt/feat", branch: "feat", isMainWorktree: false),
+        ], for: "ssh://box/srv/repo")
+
+        // Point at a stub that always fails, and expire the cache so the next
+        // refresh actually re-runs the lookup.
+        let original = GitWorktreeService.sshExecutablePath
+        defer { GitWorktreeService.sshExecutablePath = original }
+        GitWorktreeService.sshExecutablePath = "/usr/bin/false"
+        service.expireCacheForTesting()
+
+        await service.refreshWorktrees(for: ["ssh://box/srv/repo"])
+
+        XCTAssertEqual(
+            service.worktrees(for: "ssh://box/srv/repo")?.map(\.branch),
+            ["main", "feat"],
+            "a failed lookup discarded the rows it had"
+        )
+    }
 }

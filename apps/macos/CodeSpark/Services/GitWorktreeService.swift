@@ -89,8 +89,12 @@ final class GitWorktreeService: @unchecked Sendable {
                 next += 1
             }
             for await (path, result) in group {
+                // A failure is "we could not ask", not "the worktrees are gone".
+                // Keeping the last good answer is what stops a dropped
+                // connection from regrouping every tab under one workspace and
+                // blanking the main area for the length of the failure TTL.
                 cache[path] = CacheEntry(
-                    worktrees: result,
+                    worktrees: result ?? cache[path]?.worktrees,
                     fetchedAt: Date(),
                     ttl: result != nil ? normalTTL : failureTTL
                 )
@@ -108,6 +112,14 @@ final class GitWorktreeService: @unchecked Sendable {
     /// production path.
     func primeCache(_ worktrees: [GitWorktree], for projectPath: String) {
         cache[projectPath] = CacheEntry(worktrees: worktrees, fetchedAt: Date(), ttl: normalTTL)
+    }
+
+    /// Ages every entry past its TTL so the next refresh re-runs the lookup.
+    /// Only tests call this.
+    func expireCacheForTesting() {
+        cache = cache.mapValues {
+            CacheEntry(worktrees: $0.worktrees, fetchedAt: .distantPast, ttl: 0)
+        }
     }
 
     // MARK: - Remote git
