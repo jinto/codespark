@@ -571,20 +571,34 @@ final class AppModel: ObservableObject {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
 
         // SSH projects: use ssh command instead of local shell
-        if project.transport == "ssh", let info = SSHConnectionInfo(uri: project.path) {
+        if project.transport == "ssh", var info = SSHConnectionInfo(uri: project.path) {
+            // The tab belongs to the worktree the tab bar is showing. That
+            // address is a URI on this same host, and its remote path is where
+            // the shell has to land.
+            let remoteCwd = SSHConnectionInfo.remotePath(fromWorkspaceURI: workspacePath)
+            if let remoteCwd { info.remotePath = remoteCwd }
             do {
+                // `cwd` is a *remote* path on purpose — see the note in
+                // `restoreInterruptedTabs`. It is also what the store files as
+                // this tab's position, and no OSC 7 will ever refill it.
                 let sessionID = try await startAndAttachSession(
                     projectID: projectID,
                     transport: "ssh",
                     targetLabel: info.displayLabel,
                     title: info.displayLabel,
                     shell: shell,
-                    cwd: nil,
-                    workspacePath: project.path,
+                    cwd: remoteCwd,
+                    workspacePath: workspacePath,
                     command: info.sshCommand(),
                     sshInfo: info
                 )
+                guard selectedProjectID == projectID else { return }
+                // Regroup before selecting: `activeWorkspacePath`'s observer
+                // reads `workspaces`, so a stale grouping would not see the new
+                // tab and would bounce the selection to an older one.
                 recomputeWorkspaces()
+                workspaceSelectedSessions[workspacePath] = sessionID
+                activeWorkspacePath = workspacePath
                 activeSessionID = sessionID
                 pendingSSHReconnectProjectID = nil
             } catch {

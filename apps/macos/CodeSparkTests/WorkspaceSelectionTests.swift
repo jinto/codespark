@@ -1533,9 +1533,37 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(model.activeWorkspacePath, "ssh://box/srv/repo")
     }
 
+    /// The tab bar is scoped to one worktree, so a tab opened from it belongs
+    /// there — and on a remote project that also means the shell has to start
+    /// in that directory on the other machine.
+    @MainActor
+    func test_a_new_remote_tab_belongs_to_the_worktree_on_screen() async {
+        let original = GitWorktreeService.sshExecutablePath
+        defer { GitWorktreeService.sshExecutablePath = original }
+        GitWorktreeService.sshExecutablePath = "/usr/bin/false"
+
+        var hosts: [MockTerminalHost] = []
+        let model = await remoteModel(projectPath: "ssh://box/srv/repo", hosts: { hosts.append($0) })
+        await model.selectProject(id: "p1")
+        model.activeWorkspacePath = "ssh://box/srv/wt/feat"
+
+        await model.newSession()
+
+        XCTAssertEqual(model.liveSessions.last?.workspacePath, "ssh://box/srv/wt/feat")
+        XCTAssertEqual(model.liveSessions.last?.lastCwd, "/srv/wt/feat")
+        // The whole remote command is re-quoted for the local `/bin/sh -c`, so
+        // compare against what the connection itself builds rather than against
+        // a hand-written fragment.
+        let expected = SSHConnectionInfo(host: "box", remotePath: "/srv/wt/feat").sshCommand()
+        XCTAssertEqual(hosts.last?.commands.last ?? nil, expected)
+    }
+
     /// A remote project with two worktrees primed in the cache, not yet selected.
     @MainActor
-    private func remoteModel(projectPath: String) async -> AppModel {
+    private func remoteModel(
+        projectPath: String,
+        hosts: @escaping (MockTerminalHost) -> Void = { _ in }
+    ) async -> AppModel {
         let core = MockProjectCoreClient(
             summaries: [
                 ProjectSummaryViewData(id: "p1", name: "remote", path: projectPath, transport: "ssh",
@@ -1545,7 +1573,11 @@ final class WorkspaceSelectionTests: XCTestCase {
             details: [ProjectDetailViewData(id: "p1", name: "remote", path: projectPath,
                                             transport: "ssh", liveSessions: [])]
         )
-        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        let model = AppModel(core: core, terminalFactory: { _ in
+            let host = MockTerminalHost()
+            hosts(host)
+            return host
+        })
         model.projects = [
             ProjectSummaryViewData(id: "p1", name: "remote", path: projectPath, transport: "ssh",
                                    liveSessions: 0, recentlyClosedSessions: 0,
