@@ -104,6 +104,7 @@ Process detection + screen parsing replaces the old hook system:
 
 탭의 정체성은 "셸 프로세스"가 아니라 "일하던 자리"다. 프로세스는 앱과 함께 죽고, 자리를 복원한다.
 
+- **순서는 연 순서다**: `store.zig`의 `sessionsForProject`가 내주는 배열이 곧 탭바의 왼쪽→오른쪽이고, 복원도 그 순서로 다시 연다. 그래서 `order by created_at asc`다 — `updated_at`으로 정렬하면 rename이나 `cd` 한 번에 탭이 자리를 옮기고, 실행 중엔 오른쪽에 붙던 새 탭이 프로젝트를 다시 읽는 순간 맨 왼쪽으로 튄다. 인메모리 `liveSessions`는 append(오른쪽)이므로 스토어가 내림차순이면 둘이 어긋난다.
 - **cwd 추적**: Ghostty `GHOSTTY_ACTION_PWD`(OSC 7) → `AppModel.sessionDidReportCwd` → `last_cwd`. 값이 실제로 바뀔 때만 store에 쓴다.
   - OSC 7은 Ghostty **shell integration이 주입돼야** 나온다. 빌드 페이즈가 `vendor/ghostty/zig-out/share/ghostty/shell-integration`을 `Contents/Resources/ghostty/`로 복사하고, `GhosttyRuntime.initialize()`가 `ghostty_init` **전에** `GHOSTTY_RESOURCES_DIR`를 거기로 설정한다. 이게 빠지면 cwd 추적이 조용히 죽는다.
   - 임베디드 surface는 `ghostty_surface_userdata()`가 nil이다. 탭 식별은 raw surface 포인터 비교로 한다.
