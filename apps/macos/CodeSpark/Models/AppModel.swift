@@ -781,15 +781,18 @@ final class AppModel: ObservableObject {
 
     func removeWorktree(path: String) async {
         guard let project = selectedProject, !project.path.isEmpty else { return }
-        // By ownership, not by where the tab is standing: a tab belongs to the
-        // worktree it was opened in and keeps belonging to it after a `cd`. The
-        // old cwd test let a tab that had wandered out survive the directory it
-        // lived in, and shut down visitors from other worktrees in its place.
-        for session in liveSessions where session.belongs(to: path) {
-            closeSession(id: session.id)
-        }
         do {
+            // Remove first, close after. A remove that fails must not cost the
+            // user their terminals — over ssh that failure is routine.
             try await GitWorktreeService.removeWorktree(projectPath: project.path, worktreePath: path)
+            // By ownership, not by where the tab is standing: a tab belongs to
+            // the worktree it was opened in and keeps belonging to it after a
+            // `cd`. The old cwd test let a tab that had wandered out survive the
+            // directory it lived in, and shut down visitors from other worktrees
+            // in its place.
+            for session in liveSessions where session.belongs(to: path) {
+                closeSession(id: session.id)
+            }
             gitWorktreeService.expireCache(for: project.path)
             await gitWorktreeService.refreshWorktrees(for: worktreeProjectPaths)
             recomputeWorkspaces()

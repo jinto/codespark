@@ -200,4 +200,22 @@ final class RemoteWorktreeScanTests: XCTestCase {
         XCTAssertEqual(GitWorktreeService.repoName(forProjectPath: "ssh://jay@box/srv/my-repo"), "my-repo")
         XCTAssertEqual(GitWorktreeService.repoName(forProjectPath: "/Users/jay/my-repo"), "my-repo")
     }
+
+    // MARK: - Removing
+
+    func test_removing_a_remote_worktree_uses_remote_paths_not_uris() async throws {
+        let argvFile = try installStubSSH(stdout: "")
+
+        try await GitWorktreeService.removeWorktree(
+            projectPath: "ssh://jay@box/srv/repo",
+            worktreePath: "ssh://jay@box/srv/wt/repo-feat-ab12"
+        )
+
+        let argv = try recordedArgv(argvFile)
+        XCTAssertTrue(
+            argv.contains("git -C '/srv/repo' worktree remove '/srv/wt/repo-feat-ab12'"),
+            "argv was \(argv)"
+        )
+        XCTAssertFalse(argv.joined().contains("ssh://"), "a URI reached git: \(argv)")
+    }
 }

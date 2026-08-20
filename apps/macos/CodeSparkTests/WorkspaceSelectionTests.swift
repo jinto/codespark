@@ -630,6 +630,57 @@ final class WorkspaceSelectionTests: XCTestCase {
     private static let mainWorktree = "/tmp/proj"
     private static let featureWorktree = "/tmp/proj-feature"
 
+    /// The same two-worktree project, but real on disk. Removal only closes
+    /// tabs once git has agreed, so a made-up path would turn every removal
+    /// test into a no-op that passes for the wrong reason.
+    @MainActor
+    private func modelWithTwoRealWorktrees() async throws -> (model: AppModel, main: String, feature: String) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cs-worktree-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+
+        let main = root.appendingPathComponent("proj").path
+        let feature = root.appendingPathComponent("proj-feature").path
+        try FileManager.default.createDirectory(atPath: main, withIntermediateDirectories: true)
+        try Self.runGit(["-C", main, "init", "-q", "-b", "main"])
+        try Self.runGit(["-C", main, "-c", "user.email=t@t", "-c", "user.name=t",
+                         "commit", "-q", "--allow-empty", "-m", "init"])
+        try Self.runGit(["-C", main, "worktree", "add", "-q", "-b", "feature", feature])
+
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "Proj", path: main, transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "Proj", path: main,
+                                            transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: main, branch: "main", isMainWorktree: true),
+            GitWorktree(path: feature, branch: "feature", isMainWorktree: false)
+        ], for: main)
+        model.recomputeWorkspaces()
+        return (model, main, feature)
+    }
+
+    private static func runGit(_ arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = Pipe()
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw NSError(domain: "TestSetup", code: Int(process.terminationStatus),
+                          userInfo: [NSLocalizedDescriptionKey: "git \(arguments.joined(separator: " ")) failed"])
+        }
+    }
+
     /// A project whose repo has two worktrees. The cache is primed after `load()`
     /// because `selectProject` invalidates it on the way in.
     @MainActor
@@ -990,16 +1041,14 @@ final class WorkspaceSelectionTests: XCTestCase {
     // MARK: - Removing a worktree
 
     @MainActor
-    func test_removing_a_worktree_closes_only_the_tabs_that_were_in_it() async {
-        let (model, _) = await modelWithTwoWorktrees()
-        await model.newSession(inWorkspacePath: Self.mainWorktree)
-        await model.newSession(inWorkspacePath: Self.featureWorktree)
-        let inMain = model.liveSessions.first { $0.workspacePath == Self.mainWorktree }!
-        let inFeature = model.liveSessions.first { $0.workspacePath == Self.featureWorktree }!
+    func test_removing_a_worktree_closes_only_the_tabs_that_were_in_it() async throws {
+        let (model, mainWorktree, featureWorktree) = try await modelWithTwoRealWorktrees()
+        await model.newSession(inWorkspacePath: mainWorktree)
+        await model.newSession(inWorkspacePath: featureWorktree)
+        let inMain = model.liveSessions.first { $0.workspacePath == mainWorktree }!
+        let inFeature = model.liveSessions.first { $0.workspacePath == featureWorktree }!
 
-        // The git call fails here — /tmp/proj is no repo — but the tabs living in
-        // the worktree have to be let go before the directory disappears.
-        await model.removeWorktree(path: Self.featureWorktree)
+        await model.removeWorktree(path: featureWorktree)
 
         XCTAssertTrue(model.closingSessionIDs.contains(inFeature.id))
         XCTAssertFalse(model.closingSessionIDs.contains(inMain.id),
@@ -1381,18 +1430,18 @@ final class WorkspaceSelectionTests: XCTestCase {
     /// came back regrouped under main; a visitor from another worktree was shut
     /// down in its place. Both contradict the dialog and the ownership rule.
     @MainActor
-    func test_removing_a_worktree_closes_the_tabs_that_belong_to_it() async {
-        let (model, _) = await modelWithTwoWorktrees()
-        await model.newSession(inWorkspacePath: Self.featureWorktree)
-        await model.newSession(inWorkspacePath: Self.mainWorktree)
-        let ofFeature = model.liveSessions.first { $0.workspacePath == Self.featureWorktree }!
-        let ofMain = model.liveSessions.first { $0.workspacePath == Self.mainWorktree }!
+    func test_removing_a_worktree_closes_the_tabs_that_belong_to_it() async throws {
+        let (model, mainWorktree, featureWorktree) = try await modelWithTwoRealWorktrees()
+        await model.newSession(inWorkspacePath: featureWorktree)
+        await model.newSession(inWorkspacePath: mainWorktree)
+        let ofFeature = model.liveSessions.first { $0.workspacePath == featureWorktree }!
+        let ofMain = model.liveSessions.first { $0.workspacePath == mainWorktree }!
 
         // The one that belongs here steps out; the one that does not steps in.
         model.sessionDidReportCwd(sessionID: ofFeature.id, cwd: "/tmp/somewhere-else")
-        model.sessionDidReportCwd(sessionID: ofMain.id, cwd: Self.featureWorktree + "/src")
+        model.sessionDidReportCwd(sessionID: ofMain.id, cwd: featureWorktree + "/src")
 
-        await model.removeWorktree(path: Self.featureWorktree)
+        await model.removeWorktree(path: featureWorktree)
 
         XCTAssertTrue(model.closingSessionIDs.contains(ofFeature.id),
                       "a tab belongs to the worktree it was opened in, wherever it wandered")
@@ -1431,14 +1480,14 @@ final class WorkspaceSelectionTests: XCTestCase {
     /// empty one. `groupSessions` places them by cwd, so removal has to let them
     /// go the same way or they outlive the directory they were living in.
     @MainActor
-    func test_removing_a_worktree_closes_a_legacy_tab_that_has_no_workspace() async {
-        let (model, _) = await modelWithTwoWorktrees()
-        await model.newSession(inWorkspacePath: Self.featureWorktree)
+    func test_removing_a_worktree_closes_a_legacy_tab_that_has_no_workspace() async throws {
+        let (model, _, featureWorktree) = try await modelWithTwoRealWorktrees()
+        await model.newSession(inWorkspacePath: featureWorktree)
         let legacy = model.liveSessions[0]
         model.liveSessions[0].workspacePath = ""
-        model.sessionDidReportCwd(sessionID: legacy.id, cwd: Self.featureWorktree + "/src")
+        model.sessionDidReportCwd(sessionID: legacy.id, cwd: featureWorktree + "/src")
 
-        await model.removeWorktree(path: Self.featureWorktree)
+        await model.removeWorktree(path: featureWorktree)
 
         XCTAssertTrue(model.closingSessionIDs.contains(legacy.id),
                       "a row with no workspace is placed by its cwd, and let go the same way")
@@ -1556,6 +1605,26 @@ final class WorkspaceSelectionTests: XCTestCase {
         // a hand-written fragment.
         let expected = SSHConnectionInfo(host: "box", remotePath: "/srv/wt/feat").sshCommand()
         XCTAssertEqual(hosts.last?.commands.last ?? nil, expected)
+    }
+
+    /// Closing the tabs first means a remove that fails still costs the user
+    /// their terminals — and over ssh, failing is routine.
+    @MainActor
+    func test_a_failed_remove_leaves_the_tabs_alone() async {
+        let original = GitWorktreeService.sshExecutablePath
+        defer { GitWorktreeService.sshExecutablePath = original }
+        GitWorktreeService.sshExecutablePath = "/usr/bin/false"
+
+        let model = await remoteModel(projectPath: "ssh://box/srv/repo")
+        await model.selectProject(id: "p1")
+        model.activeWorkspacePath = "ssh://box/srv/wt/feat"
+        await model.newSession()
+        XCTAssertEqual(model.liveSessions.count, 1)
+
+        await model.removeWorktree(path: "ssh://box/srv/wt/feat")
+
+        XCTAssertTrue(model.closingSessionIDs.isEmpty, "a tab was closed for a remove that failed")
+        XCTAssertNotNil(model.loadErrorMessage)
     }
 
     /// A remote project with two worktrees primed in the cache, not yet selected.

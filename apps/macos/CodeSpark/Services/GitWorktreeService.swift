@@ -403,6 +403,14 @@ final class GitWorktreeService: @unchecked Sendable {
     }
 
     static func removeWorktree(projectPath: String, worktreePath: String) async throws {
+        if let info = SSHConnectionInfo(uri: projectPath),
+           let repoPath = info.remotePath,
+           let target = SSHConnectionInfo.remotePath(fromWorkspaceURI: worktreePath) {
+            _ = try await runRemote(info, command: """
+            git -C \(SSHConnectionInfo.shellQuoted(repoPath)) worktree remove \(SSHConnectionInfo.shellQuoted(target))
+            """)
+            return
+        }
         try await runGit(["-C", projectPath, "worktree", "remove", worktreePath])
     }
 
