@@ -8,6 +8,7 @@ struct NewSSHProjectSheet: View {
     let onCreate: () -> Void
     let onCancel: () -> Void
     @FocusState private var focusedField: Field?
+    @State private var isBrowsing = false
 
     private enum Field { case host, user, port, path }
 
@@ -24,6 +25,7 @@ struct NewSSHProjectSheet: View {
                     .textFieldStyle(.roundedBorder)
                     .focused($focusedField, equals: .host)
                     .onSubmit { focusedField = .user }
+                    .accessibilityIdentifier("newSSHProjectHost")
             }
 
             HStack(spacing: 12) {
@@ -52,10 +54,18 @@ struct NewSSHProjectSheet: View {
                 Text("Remote Path (optional)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                TextField("/home/user/project", text: $remotePath)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($focusedField, equals: .path)
-                    .onSubmit { if !host.isEmpty { onCreate() } }
+                HStack(spacing: 8) {
+                    TextField("/home/user/project", text: $remotePath)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($focusedField, equals: .path)
+                        .onSubmit { if !host.isEmpty { onCreate() } }
+                        .accessibilityIdentifier("newSSHProjectRemotePath")
+                    // Typing the path stays available: a host that will not answer
+                    // a non-interactive ssh cannot be browsed, only typed.
+                    Button("Browse…") { isBrowsing = true }
+                        .disabled(host.isEmpty)
+                        .accessibilityIdentifier("newSSHProjectBrowse")
+                }
             }
 
             if !host.isEmpty {
@@ -77,6 +87,19 @@ struct NewSSHProjectSheet: View {
         .padding(20)
         .frame(width: 400)
         .onAppear { focusedField = .host }
+        .sheet(isPresented: $isBrowsing) {
+            let info = buildConnectionInfo()
+            RemoteFolderPickerSheet(
+                host: info.displayLabel,
+                source: SSHDirectorySource(info: info),
+                startingAt: remotePath.isEmpty ? nil : remotePath,
+                onChoose: { chosen in
+                    remotePath = chosen
+                    isBrowsing = false
+                },
+                onCancel: { isBrowsing = false }
+            )
+        }
     }
 
     private func buildConnectionInfo() -> SSHConnectionInfo {

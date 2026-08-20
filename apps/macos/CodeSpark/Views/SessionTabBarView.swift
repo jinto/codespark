@@ -64,7 +64,9 @@ private struct SessionTab: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(title)
-                .font(.system(.caption, weight: isActive ? .semibold : .regular))
+                // 두께 고정 — 탭을 누를 때 제목이 제자리에서 늘어나면 안 된다.
+                .font(.system(.caption, weight: .medium))
+                .foregroundStyle(isActive ? .primary : .secondary)
                 .lineLimit(1)
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onSelect)

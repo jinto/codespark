@@ -82,6 +82,124 @@ final class SSHIntegrationTests: XCTestCase {
         XCTAssertEqual(service.worktrees(for: projectURI)?.count, 1)
     }
 
+    // MARK: - Remote folder picker
+
+    func test_lists_real_directories_over_ssh() async throws {
+        let root = try makeRemoteFixture(["apps", "logs"])
+        defer { try? FileManager.default.removeItem(atPath: root) }
+
+        let listing = try await RemoteDirectoryLister().list(SSHConnectionInfo(host: "localhost"), path: root)
+
+        XCTAssertEqual(listing.path, canonical(root))
+        XCTAssertEqual(listing.entries.map(\.name), ["apps", "logs"])
+    }
+
+    func test_listing_marks_a_real_git_repository() async throws {
+        let root = try makeRemoteFixture(["repo", "plain"])
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        try FileManager.default.createDirectory(atPath: root + "/repo/.git", withIntermediateDirectories: true)
+
+        let listing = try await RemoteDirectoryLister().list(SSHConnectionInfo(host: "localhost"), path: root)
+
+        XCTAssertEqual(listing.entries.first(where: { $0.name == "repo" })?.isGitRepository, true)
+        XCTAssertEqual(listing.entries.first(where: { $0.name == "plain" })?.isGitRepository, false)
+    }
+
+    func test_listing_starts_in_the_remote_home_directory() async throws {
+        let listing = try await RemoteDirectoryLister().list(SSHConnectionInfo(host: "localhost"), path: nil)
+
+        XCTAssertEqual(listing.path, canonical(NSHomeDirectory()))
+    }
+
+    func test_a_directory_that_does_not_exist_is_reported_not_crashed() async throws {
+        do {
+            _ = try await RemoteDirectoryLister().list(
+                SSHConnectionInfo(host: "localhost"),
+                path: "/nope-\(UUID().uuidString)"
+            )
+            XCTFail("expected the listing to fail")
+        } catch {
+            XCTAssertEqual(error as? RemoteDirectoryError, .directoryUnavailable)
+        }
+    }
+
+    /// `Process.waitUntilExit()` services the *current* thread's run loop, and a
+    /// Swift concurrency task can resume on a different thread than the one that
+    /// launched ssh — then it waits on a run loop that will never hear about the
+    /// exit. It hangs on maybe one call in a handful, so one round trip proves
+    /// nothing; a run of them does.
+    func test_listing_returns_every_time_instead_of_hanging() async throws {
+        let finished = expectation(description: "every listing returned")
+
+        Task {
+            // Concurrent, because that is what scatters the continuations across
+            // the cooperative pool — a serial loop tends to resume on the very
+            // thread that launched ssh and never reproduces the hang.
+            for _ in 0..<5 {
+                await withTaskGroup(of: Void.self) { group in
+                    for _ in 0..<8 {
+                        group.addTask {
+                            _ = try? await RemoteDirectoryLister().list(
+                                SSHConnectionInfo(host: "localhost"),
+                                path: "/nope-\(UUID().uuidString)"
+                            )
+                        }
+                    }
+                }
+                await MainActor.run {}  // force a hop between rounds
+            }
+            finished.fulfill()
+        }
+
+        await fulfillment(of: [finished], timeout: 60)
+    }
+
+    func test_creates_a_directory_over_ssh() async throws {
+        let root = try makeRemoteFixture([])
+        defer { try? FileManager.default.removeItem(atPath: root) }
+
+        let created = try await RemoteDirectoryLister().createDirectory(
+            SSHConnectionInfo(host: "localhost"),
+            in: root,
+            named: "new app"
+        )
+
+        XCTAssertEqual(created, canonical(root) + "/new app")
+        var isDirectory: ObjCBool = false
+        XCTAssertTrue(FileManager.default.fileExists(atPath: root + "/new app", isDirectory: &isDirectory))
+        XCTAssertTrue(isDirectory.boolValue)
+    }
+
+    /// The whole point of picking a folder: the tab has to open *there*.
+    func test_the_picked_folder_becomes_the_session_working_directory() async throws {
+        let root = try makeRemoteFixture(["apps"])
+        defer { try? FileManager.default.removeItem(atPath: root) }
+        let picked = try await RemoteDirectoryLister()
+            .list(SSHConnectionInfo(host: "localhost"), path: root + "/apps").path
+
+        // What the sheet stores as the project path, and what the tab reopens with.
+        let project = SSHConnectionInfo(host: "localhost", remotePath: picked)
+        let reopened = SSHConnectionInfo(uri: project.uri)!
+
+        let output = try await runSSH(info: reopened, remoteCommand: "pwd")
+        XCTAssertTrue(output.contains(picked), "expected \(picked), got: \(output)")
+    }
+
+    /// Creates a fixture under /tmp, which localhost-ssh sees as its own filesystem.
+    private func makeRemoteFixture(_ children: [String]) throws -> String {
+        let root = NSTemporaryDirectory() + "cs-remote-picker-" + UUID().uuidString
+        try FileManager.default.createDirectory(atPath: root, withIntermediateDirectories: true)
+        for child in children {
+            try FileManager.default.createDirectory(atPath: root + "/" + child, withIntermediateDirectories: true)
+        }
+        return root
+    }
+
+    /// `pwd` on the remote side resolves symlinks; /tmp is one on macOS.
+    private func canonical(_ path: String) -> String {
+        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+    }
+
     // MARK: - Helpers
 
     private func runLocal(_ executable: String, _ arguments: [String]) throws {

@@ -656,12 +656,17 @@ pub const Store = struct {
         project_id: []const u8,
         state: models.SessionState,
     ) StoreError![]models.SessionSummary {
+        // Opening order, not recency: this list *is* the tab bar, left to right,
+        // and restore replays it the same way. Sorting by `updated_at` would let
+        // a rename or a `cd` slide a tab across the bar, and every new tab —
+        // appended on the right while the app runs — would jump to the far left
+        // the next time the project is read back.
         var stmt = try Statement.init(
             self.db,
             "select id, title, transport, target_label, last_cwd, close_reason, workspace_path\n" ++
                 " from sessions\n" ++
                 " where project_id = ?1 and state = ?2\n" ++
-                " order by updated_at desc, rowid desc",
+                " order by created_at asc, rowid asc",
         );
         defer stmt.deinit();
         try stmt.bindText(1, project_id);

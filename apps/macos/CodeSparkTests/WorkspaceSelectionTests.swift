@@ -1019,6 +1019,44 @@ final class WorkspaceSelectionTests: XCTestCase {
     }
 
     @MainActor
+    func test_a_folded_project_wears_the_digit_hiding_inside_it() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let p1 = model.projects.first { $0.id == "p1" }!
+
+        XCTAssertEqual(model.numberedIndex(forProject: p1), 1,
+                       "a folded tree hides the row that would carry the digit")
+    }
+
+    @MainActor
+    func test_an_open_tree_leaves_the_digit_to_its_worktree_row() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        model.toggleWorktrees(projectID: "p1")
+        let p1 = model.projects.first { $0.id == "p1" }!
+
+        XCTAssertNil(model.numberedIndex(forProject: p1),
+                     "with the rows on screen the digit belongs to the worktree")
+    }
+
+    @MainActor
+    func test_a_project_without_tabs_wears_no_digit() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        await model.selectProject(id: "p2")
+        await model.newSession()
+        let p1 = model.projects.first { $0.id == "p1" }!
+
+        XCTAssertNil(model.numberedIndex(forProject: p1),
+                     "nothing is running in it, so no digit leads there")
+    }
+
+    @MainActor
     func test_only_nine_places_can_be_numbered() async {
         let (model, _) = await modelWithTwoWorktrees()
         let many = (0..<12).map { "/tmp/proj-w\($0)" }
@@ -1204,6 +1242,36 @@ final class WorkspaceSelectionTests: XCTestCase {
                                   terminalFactory: { _ in MockTerminalHost() })
 
         XCTAssertEqual(relaunched.expandedProjectIDs, ["p1"])
+    }
+
+    /// The disclosure triangle is gone, so the row itself has to open the tree.
+    /// A click still selects — that is the other half of what it has always
+    /// meant — and now folds or unfolds on the way.
+    @MainActor
+    func test_clicking_a_project_row_selects_it_and_opens_its_tree() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+
+        await model.selectProjectAndToggleWorktrees(id: "p1")
+
+        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
+                      "the row click has to open the tree — nothing else can")
+    }
+
+    /// Clicking the row you are already on is how you fold the tree back up.
+    @MainActor
+    func test_clicking_the_same_project_row_again_folds_its_tree() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+
+        await model.selectProjectAndToggleWorktrees(id: "p1")
+        await model.selectProjectAndToggleWorktrees(id: "p1")
+
+        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertTrue(model.expandedProjectIDs.isEmpty)
     }
 
     @MainActor
