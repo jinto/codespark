@@ -20,6 +20,15 @@ extension AppModel {
             .sink { [weak self] _ in
                 self?.captureCheckpoints()
             }
+        // The tick above stands down while the app is in the background, so
+        // worktrees made elsewhere in the meantime — by an agent in a tab, say —
+        // would wait for the next tick after coming back. Ask on the way in.
+        activationObserver = NotificationCenter.default
+            .publisher(for: NSApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in
+                self?.refreshGitBranches()
+                self?.refreshGitWorktrees()
+            }
     }
 
     // MARK: - Debounce

@@ -128,6 +128,7 @@ final class AppModel: ObservableObject {
     private var detailTask: Task<Void, Never>?
     var idleTimer: AnyCancellable?
     var checkpointTimer: AnyCancellable?
+    var activationObserver: AnyCancellable?
     private var hasReconciledOnLaunch = false
     let gitBranchService = GitBranchService()
     let gitWorktreeService = GitWorktreeService()

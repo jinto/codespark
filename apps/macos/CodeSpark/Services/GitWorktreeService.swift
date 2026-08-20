@@ -443,11 +443,13 @@ final class GitWorktreeService: @unchecked Sendable {
 
         try process.run()
         let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        let exitStatus: Int32 = await withCheckedContinuation { cont in
-            process.terminationHandler = { proc in
-                cont.resume(returning: proc.terminationStatus)
-            }
-        }
+        // Draining the pipe already waited for the write end to close, which git
+        // does as it exits — so by here the process is usually gone, and a
+        // `terminationHandler` installed at that point is relying on Foundation
+        // to call it anyway. It did, every time this was measured; see
+        // `fetchWorktrees`. Waiting outright needs no such favour.
+        process.waitUntilExit()
+        let exitStatus = process.terminationStatus
         guard exitStatus == 0 else {
             let msg = String(data: stderrData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "git failed"
             throw NSError(domain: "GitWorktree", code: Int(exitStatus), userInfo: [NSLocalizedDescriptionKey: msg])
@@ -465,23 +467,38 @@ final class GitWorktreeService: @unchecked Sendable {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = ["-C", path, "worktree", "list", "--porcelain"]
-        process.standardError = FileHandle.nullDevice
 
         let pipe = Pipe()
         process.standardOutput = pipe
+        // Kept rather than dropped on the floor: a failure here empties a
+        // project's worktree rows, and with stderr discarded there was nothing
+        // to say why.
+        let errorPipe = Pipe()
+        process.standardError = errorPipe
 
         do {
             try process.run()
             // Read stdout BEFORE waiting for termination to avoid pipe deadlock.
             // If the process writes more than the pipe buffer (64KB), it blocks
-            // until the reader drains — so we must read first, then wait.
+            // until the reader drains — so we must read first, then wait. stderr
+            // comes second for the same reason: it is the small one, and
+            // draining it first would leave a long listing wedged behind it.
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let exitStatus: Int32 = await withCheckedContinuation { cont in
-                process.terminationHandler = { proc in
-                    cont.resume(returning: proc.terminationStatus)
-                }
+            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            // The read above already waited for git to close its end, which it
+            // does on the way out, so waiting here costs nothing. It replaces a
+            // `terminationHandler` installed at this point — after the process
+            // has usually exited — which Foundation is not obliged to call. It
+            // did call it every time this was measured, so this is not a fix for
+            // anything observed; it is one less thing that has to hold.
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                NSLog("[CodeSpark] git worktree list failed (%d) for %@: %@",
+                      process.terminationStatus, path,
+                      String(data: errorData, encoding: .utf8)?
+                          .trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+                return (path, nil)
             }
-            guard exitStatus == 0 else { return (path, nil) }
             guard let output = String(data: data, encoding: .utf8) else { return (path, nil) }
             let worktrees = parseWorktreeList(output)
             return (path, worktrees.isEmpty ? nil : worktrees)

@@ -1842,4 +1842,116 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertNil(model.restoreProgress,
                      "an ordinary launch must not flash a bar at nobody")
     }
+
+    // MARK: - The row is the target, not the chevron
+
+    /// The disclosure triangle is an 8pt target in a row the width of the
+    /// sidebar. Clicking the row is what people actually do.
+    @MainActor
+    func test_clicking_a_project_opens_and_folds_its_worktrees() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+
+        await model.selectProjectAndToggleWorktrees(id: "p1")
+        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertTrue(model.expandedProjectIDs.contains("p1"), "the first click opens the tree")
+
+        await model.selectProjectAndToggleWorktrees(id: "p1")
+        XCTAssertFalse(model.expandedProjectIDs.contains("p1"), "and the next one folds it")
+    }
+
+    // MARK: - Finding worktrees with the real git
+
+    /// Everything above primes the cache, so nothing there ever spawns the
+    /// process this is about.
+    ///
+    /// The service used to read the exit status through a `terminationHandler`
+    /// installed *after* draining stdout — by which point git has usually exited,
+    /// so the handler is never called and the await hangs forever. One hang
+    /// wedges `isRefreshing` and worktrees stop updating app-wide for the rest of
+    /// the run. Asking repeatedly is the point: the race only bites sometimes,
+    /// and a hang shows up here as a timeout rather than an assertion.
+    @MainActor
+    func test_a_repo_with_a_worktree_reports_both_every_time() async throws {
+        let repo = try makeRepoWithWorktree()
+        defer { try? FileManager.default.removeItem(at: repo) }
+        let service = GitWorktreeService()
+
+        for attempt in 1...8 {
+            await service.refreshWorktrees(for: [repo.path])
+
+            let found = service.worktrees(for: repo.path)
+            XCTAssertEqual(found?.count, 2,
+                           "attempt \(attempt) came back with \(found?.count.description ?? "nil")")
+            XCTAssertEqual(found?.first?.isMainWorktree, true)
+            XCTAssertEqual(found?.last?.branch, "side")
+
+            // Force the next round through git instead of the 30s cache.
+            service.invalidateCache(for: repo.path)
+        }
+    }
+
+    /// A worktree Claude Code made is locked, and the porcelain output carries a
+    /// `locked <reason>` line the parser has to walk past rather than read as a
+    /// reason to drop the entry.
+    func test_a_locked_worktree_is_still_a_worktree() {
+        let output = """
+        worktree /repo
+        HEAD 397b0c351c60dd65374311b12771aec66cf9cf3c
+        branch refs/heads/main
+
+        worktree /repo/.claude/worktrees/scratch-1
+        HEAD e88b2979aa74007dcd276c3b7bfcd2ce75516903
+        branch refs/heads/worktree-scratch-1
+        locked claude session scratch-1 (pid 9122 start Thu Aug 20 03:48:17 2026)
+        """
+
+        let worktrees = GitWorktreeService.parseWorktreeList(output)
+
+        XCTAssertEqual(worktrees.map(\.branch), ["main", "worktree-scratch-1"])
+        XCTAssertEqual(worktrees.map(\.isMainWorktree), [true, false])
+    }
+
+    private func makeRepoWithWorktree() throws -> URL {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("codespark-worktree-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+
+        try runRealGit(["init", "-b", "main", root.path])
+        try runRealGit(["-C", root.path, "-c", "user.email=t@t", "-c", "user.name=t",
+                        "commit", "--allow-empty", "-m", "root"])
+        try runRealGit(["-C", root.path, "worktree", "add",
+                        root.appendingPathComponent("side").path, "-b", "side"])
+        return root
+    }
+
+    private func runRealGit(_ arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw XCTSkip("git \(arguments.first ?? "") is not usable in this environment")
+        }
+    }
+
+    /// A repo with one worktree has no children to draw, so its stored flag
+    /// shows nothing either way — what the click has to do is select.
+    @MainActor
+    func test_clicking_a_single_worktree_project_selects_it() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+
+        await model.selectProjectAndToggleWorktrees(id: "p2")
+        let p2 = model.projects.first { $0.id == "p2" }!
+
+        XCTAssertEqual(model.selectedProjectID, "p2")
+        XCTAssertTrue(model.sidebarWorktrees(for: p2).isEmpty,
+                      "and there is still nothing under it to show")
+    }
 }
