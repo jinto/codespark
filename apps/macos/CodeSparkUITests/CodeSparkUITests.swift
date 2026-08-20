@@ -381,4 +381,25 @@ final class CodeSparkUITests: XCTestCase {
         // it is given, either way round.
         rows[0].click()
     }
+
+    // MARK: - Two gestures on one row
+
+    /// The row carries a single click (select, and fold or unfold) and a double
+    /// click (select, and open the session chooser). While the single click only
+    /// selected, both firing was harmless. Now that it flips state, a double
+    /// click moves the sidebar on the way to a sheet nobody asked it to move
+    /// for.
+    func test_double_clicking_a_project_row_leaves_its_tree_alone() throws {
+        let row = try projectRowWithATree()
+        let opened = branchRows.count
+        // Without rows on screen the assertion below would hold for the wrong
+        // reason: nothing can fold when nothing is showing.
+        XCTAssertGreaterThan(opened, 0, "the tree never opened, so this proves nothing")
+
+        row.doubleClick()
+        dismissSessionChooserIfPresent()
+
+        XCTAssertEqual(branchRows.count, opened,
+                       "the double click folded or unfolded the tree on its way to the chooser")
+    }
 }
