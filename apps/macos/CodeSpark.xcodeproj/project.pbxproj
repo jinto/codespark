@@ -59,6 +59,7 @@
 		552061F050EC181BD64E2449 /* SSHConnectionInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */; };
 		0EEC708F84CF823A8E360EC4 /* NewSSHProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */; };
 		7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */; };
+		A1B2C3D40000000000000001 /* RemoteWorktreeScanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000002 /* RemoteWorktreeScanTests.swift */; };
 		450EF5449C0B78E86452B863 /* SSHIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */; };
 		93FAA0C0CD93FC076C934EB3 /* ClipboardImageHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257D067859E4ABC83E423AF3 /* ClipboardImageHandler.swift */; };
 		9F862F9EEFF5775836F6DA22 /* ClipboardImageHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82CF9045C1A9AED8862C73FD /* ClipboardImageHandlerTests.swift */; };
@@ -140,6 +141,7 @@
 		8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionInfo.swift; sourceTree = "<group>"; };
 		A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSSHProjectSheet.swift; sourceTree = "<group>"; };
 		105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionInfoTests.swift; sourceTree = "<group>"; };
+		A1B2C3D40000000000000002 /* RemoteWorktreeScanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteWorktreeScanTests.swift; sourceTree = "<group>"; };
 		A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHIntegrationTests.swift; sourceTree = "<group>"; };
 		D1E2F3A4B5C6D7E8F9A0B1C2 /* TerminalStateDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalStateDetector.swift; sourceTree = "<group>"; };
 		E2F3A4B5C6D7E8F9A0B1C2D3 /* TerminalStateDetectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalStateDetectorTests.swift; sourceTree = "<group>"; };
@@ -206,6 +208,7 @@
 				82CF9045C1A9AED8862C73FD /* ClipboardImageHandlerTests.swift */,
 				9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */,
 				105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */,
+				A1B2C3D40000000000000002 /* RemoteWorktreeScanTests.swift */,
 				A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */,
 				23C1F099F0619FDF11DD53CF /* MockProjectCoreClient.swift */,
 				48CA429791ED61F383243326 /* MockTerminalHost.swift */,
@@ -493,6 +496,7 @@
 				9F862F9EEFF5775836F6DA22 /* ClipboardImageHandlerTests.swift in Sources */,
 				9ED695B19FC93D927CBF1CBD /* KeyEventRouterTests.swift in Sources */,
 				7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */,
+				A1B2C3D40000000000000001 /* RemoteWorktreeScanTests.swift in Sources */,
 				450EF5449C0B78E86452B863 /* SSHIntegrationTests.swift in Sources */,
 				A3C9A10ACAD571C82C1DCB74 /* MockProjectCoreClient.swift in Sources */,
 				3389CBD887323FCBA7DD452F /* MockTerminalHost.swift in Sources */,

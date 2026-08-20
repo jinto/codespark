@@ -28,6 +28,23 @@ struct GitWorktreeCreation: Equatable {
 final class GitWorktreeService: @unchecked Sendable {
     static let defaultWorktreeRoot = "~/worktrees"
 
+    /// Overridden by tests so remote lookups can be exercised without a server.
+    static var sshExecutablePath = "/usr/bin/ssh"
+
+    /// A background poll must never block on a prompt, and `ConnectTimeout`
+    /// only covers getting connected — `ServerAlive*` is what notices a session
+    /// that went quiet after that.
+    static let remoteSSHOptions = [
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=5",
+        "-o", "ServerAliveInterval=5",
+        "-o", "ServerAliveCountMax=2",
+    ]
+
+    /// Ceiling for one remote lookup, in case the connection lives but the
+    /// remote git does not answer.
+    private static let remoteTimeout: TimeInterval = 20
+
     private var cache: [String: CacheEntry] = [:]
     private let normalTTL: TimeInterval = 30
     private let failureTTL: TimeInterval = 60
@@ -78,6 +95,26 @@ final class GitWorktreeService: @unchecked Sendable {
     /// production path.
     func primeCache(_ worktrees: [GitWorktree], for projectPath: String) {
         cache[projectPath] = CacheEntry(worktrees: worktrees, fetchedAt: Date(), ttl: normalTTL)
+    }
+
+    // MARK: - Remote git
+
+    static func remoteSSHArguments(_ info: SSHConnectionInfo, remoteCommand: String) -> [String] {
+        var argv = remoteSSHOptions
+        if let port = info.port { argv.append(contentsOf: ["-p", "\(port)"]) }
+        if let user = info.user {
+            argv.append("\(user)@\(info.host)")
+        } else {
+            argv.append(info.host)
+        }
+        argv.append(remoteCommand)
+        return argv
+    }
+
+    /// The remote side hands this to a shell, so the repository path has to
+    /// survive as a single word.
+    static func remoteWorktreeListCommand(repoPath: String) -> String {
+        "git -C \(SSHConnectionInfo.shellQuoted(repoPath)) worktree list --porcelain"
     }
 
     // MARK: - Parsing
@@ -231,6 +268,13 @@ final class GitWorktreeService: @unchecked Sendable {
     }
 
     private static func fetchWorktrees(at path: String) async -> (String, [GitWorktree]?) {
+        // The one place local and remote part ways. Everything downstream —
+        // cache, parser, grouping — sees the same shapes either way.
+        if let info = SSHConnectionInfo(uri: path) {
+            guard let repoPath = info.remotePath else { return (path, nil) }
+            return (path, await fetchRemoteWorktrees(info: info, repoPath: repoPath))
+        }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = ["-C", path, "worktree", "list", "--porcelain"]
@@ -256,6 +300,50 @@ final class GitWorktreeService: @unchecked Sendable {
             return (path, worktrees.isEmpty ? nil : worktrees)
         } catch {
             return (path, nil)
+        }
+    }
+
+    private static func fetchRemoteWorktrees(
+        info: SSHConnectionInfo,
+        repoPath: String
+    ) async -> [GitWorktree]? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: sshExecutablePath)
+        process.arguments = remoteSSHArguments(
+            info,
+            remoteCommand: remoteWorktreeListCommand(repoPath: repoPath)
+        )
+        process.standardError = FileHandle.nullDevice
+
+        let pipe = Pipe()
+        process.standardOutput = pipe
+
+        do {
+            try process.run()
+            let deadline = Task {
+                try await Task.sleep(nanoseconds: UInt64(remoteTimeout * 1_000_000_000))
+                if process.isRunning { process.terminate() }
+            }
+            defer { deadline.cancel() }
+            // Read before waiting: a process that outgrows the pipe buffer
+            // blocks until someone drains it.
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            let exitStatus: Int32 = await withCheckedContinuation { cont in
+                process.terminationHandler = { cont.resume(returning: $0.terminationStatus) }
+            }
+            guard exitStatus == 0, let output = String(data: data, encoding: .utf8) else { return nil }
+            // Remote git answers in its own filesystem's terms; the app speaks
+            // workspace addresses.
+            let worktrees = parseWorktreeList(output).map { worktree in
+                GitWorktree(
+                    path: info.workspaceURI(forRemotePath: worktree.path),
+                    branch: worktree.branch,
+                    isMainWorktree: worktree.isMainWorktree
+                )
+            }
+            return worktrees.isEmpty ? nil : worktrees
+        } catch {
+            return nil
         }
     }
 }
