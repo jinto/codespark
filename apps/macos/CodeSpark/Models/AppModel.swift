@@ -1036,6 +1036,42 @@ final class AppModel: ObservableObject {
         return grouped.count > 1 ? grouped : []
     }
 
+    /// The worktree rows of one project, with the idle ones folded away.
+    struct SidebarWorktreeRows: Equatable {
+        var shown: [WorkspaceViewData]
+        var foldedCount: Int
+    }
+
+    /// Projects the user has asked to see every worktree of. Not remembered
+    /// across launches: it answers "show me the rest, now", and a tree that
+    /// reopened permanently unfolded would defeat the folding.
+    @Published private(set) var projectsShowingEveryWorktree: Set<String> = []
+
+    /// A repo collects worktrees, and the ones with no tabs are the ones nobody
+    /// is working in. They fold behind a count rather than pushing everything
+    /// else off the screen.
+    ///
+    /// Only those. A worktree with tabs carries a `Cmd` digit, and folding it
+    /// would leave a number pointing at nothing on screen — the same reason a
+    /// folded project row wears the digit that leads inside it. The worktree
+    /// being *stood in* stays too, even before it has a tab: it is the selected
+    /// row, and a tree whose selection is hidden reads as no selection at all.
+    func sidebarWorktreeRows(for project: ProjectSummaryViewData) -> SidebarWorktreeRows {
+        let all = sidebarWorktrees(for: project)
+        guard !projectsShowingEveryWorktree.contains(project.id) else {
+            return SidebarWorktreeRows(shown: all, foldedCount: 0)
+        }
+        let shown = all.filter { workspace in
+            !workspace.sessions.isEmpty
+                || (selectedProjectID == project.id && workspace.path == activeWorkspacePath)
+        }
+        return SidebarWorktreeRows(shown: shown, foldedCount: all.count - shown.count)
+    }
+
+    func revealFoldedWorktrees(projectID: String) {
+        projectsShowingEveryWorktree.insert(projectID)
+    }
+
     /// Two halves of one rule: a path belongs to the row that *is* that worktree.
     /// While a tree is open the project row is only a heading, so it lets go of
     /// its path and the main worktree row picks it up — otherwise the same

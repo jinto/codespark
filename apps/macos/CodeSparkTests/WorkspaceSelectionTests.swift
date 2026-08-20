@@ -2164,4 +2164,82 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertTrue("ssh://box/srv/repo".sameWorkspace(as: "ssh://box/srv/repo"))
         XCTAssertFalse("ssh://box/tmp/x".sameWorkspace(as: "ssh://box/private/tmp/x"))
     }
+
+    // MARK: - Worktrees nobody is working in fold away
+
+    /// A repo collects worktrees, and the ones with no tabs are the ones nobody
+    /// is in. They fold behind a count rather than pushing the rest off screen.
+    /// Only those: a worktree with tabs carries a `Cmd` digit, and hiding it
+    /// would leave a number with nothing on screen to point at.
+    @MainActor
+    private func modelWithFourWorktrees() async -> AppModel {
+        let (model, _) = await modelWithTwoWorktrees()
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.featureWorktree, branch: "feature", isMainWorktree: false),
+            GitWorktree(path: "/tmp/proj-idle-a", branch: "idle-a", isMainWorktree: false),
+            GitWorktree(path: "/tmp/proj-idle-b", branch: "idle-b", isMainWorktree: false)
+        ], for: Self.mainWorktree)
+        model.recomputeWorkspaces()
+        return model
+    }
+
+    @MainActor
+    func test_worktrees_with_no_tabs_fold_behind_a_count() async {
+        let model = await modelWithFourWorktrees()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        model.activeWorkspacePath = Self.featureWorktree
+        let project = model.projects.first { $0.id == "p1" }!
+
+        let rows = model.sidebarWorktreeRows(for: project)
+
+        XCTAssertEqual(rows.shown.map(\.branch), ["feature"],
+                       "only the worktree with a tab should be standing")
+        XCTAssertEqual(rows.foldedCount, 3)
+    }
+
+    /// You can be standing in a worktree you have not opened a tab in yet, and
+    /// folding away the row you are on would leave the tree with nothing
+    /// selected on screen.
+    @MainActor
+    func test_the_worktree_you_are_standing_in_never_folds() async {
+        let model = await modelWithFourWorktrees()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        model.activeWorkspacePath = "/tmp/proj-idle-a"
+        let project = model.projects.first { $0.id == "p1" }!
+
+        let rows = model.sidebarWorktreeRows(for: project)
+
+        XCTAssertEqual(rows.shown.map(\.branch), ["feature", "idle-a"])
+        XCTAssertEqual(rows.foldedCount, 2)
+    }
+
+    @MainActor
+    func test_asking_for_the_rest_shows_them_all() async {
+        let model = await modelWithFourWorktrees()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        model.activeWorkspacePath = Self.featureWorktree
+        let project = model.projects.first { $0.id == "p1" }!
+
+        model.revealFoldedWorktrees(projectID: "p1")
+
+        let rows = model.sidebarWorktreeRows(for: project)
+        XCTAssertEqual(rows.shown.count, 4)
+        XCTAssertEqual(rows.foldedCount, 0, "nothing is left to ask for")
+    }
+
+    /// Nothing to fold, nothing to say — a tree where every worktree is in use
+    /// must not grow a row that reads "0 more".
+    @MainActor
+    func test_a_tree_with_no_idle_worktrees_grows_no_extra_row() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let project = model.projects.first { $0.id == "p1" }!
+
+        let rows = model.sidebarWorktreeRows(for: project)
+
+        XCTAssertEqual(rows.shown.count, 2)
+        XCTAssertEqual(rows.foldedCount, 0)
+    }
 }

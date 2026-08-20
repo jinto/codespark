@@ -142,7 +142,8 @@ struct SidebarView: View {
                             // Shown while the project is expanded, selected or not:
                             // switching projects must not fold someone's tree.
                             if model.showsWorktreeRows(for: project) {
-                                ForEach(model.sidebarWorktrees(for: project)) { workspace in
+                                let worktreeRows = model.sidebarWorktreeRows(for: project)
+                                ForEach(worktreeRows.shown) { workspace in
                                     WorktreeSidebarRow(
                                         workspace: workspace,
                                         isSelected: model.selectedProjectID == project.id
@@ -182,6 +183,14 @@ struct SidebarView: View {
                                             }
                                         }
                                     }
+                                }
+
+                                if worktreeRows.foldedCount > 0 {
+                                    FoldedWorktreesRow(count: worktreeRows.foldedCount)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            model.revealFoldedWorktrees(projectID: project.id)
+                                        }
                                 }
                             }
                         }
@@ -468,6 +477,36 @@ private struct DropInsertionLine: View {
             .opacity(isShowing ? 1 : 0)
             .animation(.easeOut(duration: 0.12), value: isShowing)
             .allowsHitTesting(false)
+    }
+}
+
+/// The worktrees nobody is working in, kept out of the way until asked for.
+/// Only ones with no tabs fold, so no `Cmd` digit is ever hidden behind this.
+struct FoldedWorktreesRow: View {
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text("\u{22EF}")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(width: 5)
+
+            Text("\(count) more")
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.5))
+                .lineLimit(1)
+                .accessibilityIdentifier("foldedWorktrees")
+
+            Spacer()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.white.opacity(0.02))
+        )
+        .padding(.leading, 12)
     }
 }
 

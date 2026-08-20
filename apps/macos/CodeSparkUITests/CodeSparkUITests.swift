@@ -389,6 +389,27 @@ final class CodeSparkUITests: XCTestCase {
         rows[0].click()
     }
 
+    // MARK: - Worktrees nobody is in
+
+    /// A repo collects worktrees; the ones with no tabs fold behind a count so
+    /// they stop pushing the rest off screen. Asking has to bring them back —
+    /// and only a running app can say whether the row takes the click.
+    func test_the_folded_worktrees_open_when_asked() throws {
+        _ = try projectRowWithATree()
+        let folded = app.staticTexts["foldedWorktrees"]
+        try XCTSkipUnless(
+            folded.waitForExistence(timeout: 5),
+            "every worktree in this store is in use, so none folded"
+        )
+        let before = branchRows.count
+
+        folded.click()
+
+        XCTAssertTrue(wait { self.branchRows.count > before },
+                      "asking for the rest brought nothing back")
+        XCTAssertFalse(folded.exists, "the count stayed after everything was shown")
+    }
+
     // MARK: - Two gestures on one row
 
     /// The row carries a single click (select, and fold or unfold) and a double
