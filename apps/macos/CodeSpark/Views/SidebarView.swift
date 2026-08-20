@@ -51,12 +51,9 @@ struct SidebarView: View {
         (path as NSString).abbreviatingWithTildeInPath
     }
 
-    /// A project carries the digit only when it is the whole workspace — once a
-    /// repo has several worktrees the digits belong to the worktree rows.
     private func hotkeyIndex(for project: ProjectSummaryViewData) -> Int? {
-        guard showHotkeys, model.sidebarWorktrees(for: project).isEmpty,
-              let only = model.workspaces(for: project).first else { return nil }
-        return model.numberedIndex(projectID: project.id, path: only.path)
+        guard showHotkeys else { return nil }
+        return model.numberedIndex(forProject: project)
     }
 
     private func hotkeyIndex(for workspace: WorkspaceViewData, in project: ProjectSummaryViewData) -> Int? {

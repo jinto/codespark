@@ -967,6 +967,18 @@ final class AppModel: ObservableObject {
             .map { $0 + 1 }
     }
 
+    /// The digit a *project row* wears. While its tree is open the worktree rows
+    /// carry their own digits and the heading stays bare; folded, those rows are
+    /// off screen, so the project row shows the first digit hiding inside it —
+    /// otherwise a repo with several worktrees has a reachable number that
+    /// nothing on screen ever names.
+    func numberedIndex(forProject project: ProjectSummaryViewData) -> Int? {
+        guard !showsWorktreeRows(for: project),
+              let first = numberedWorkspaces.first(where: { $0.projectID == project.id })
+        else { return nil }
+        return numberedIndex(projectID: first.projectID, path: first.path)
+    }
+
     /// Menu wording: the project on its own when it is the whole workspace,
     /// "project — branch" once a repo has several worktrees to tell apart.
     func numberedWorkspaceLabel(_ workspace: NumberedWorkspace) -> String {
