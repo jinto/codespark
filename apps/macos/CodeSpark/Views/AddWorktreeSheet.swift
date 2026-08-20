@@ -23,7 +23,7 @@ struct AddWorktreeSheet: View {
             }
 
             if !branchName.isEmpty {
-                Text("\(GitWorktreeService.configuredWorktreeRoot)/\(GitWorktreeService.previewWorktreeName(projectPath: projectPath, branch: branchName))")
+                Text(GitWorktreeService.previewWorktreePath(projectPath: projectPath, branch: branchName))
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.tertiary)
             }

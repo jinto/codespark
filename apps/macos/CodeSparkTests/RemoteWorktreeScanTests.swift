@@ -159,4 +159,45 @@ final class RemoteWorktreeScanTests: XCTestCase {
         XCTAssertGreaterThan(peak, 0, "the stub never ran")
         XCTAssertLessThanOrEqual(peak, 4, "ran \(peak) ssh processes at once")
     }
+
+    // MARK: - Creating
+
+    /// Tilde expansion does not happen inside quotes, so the root cannot simply
+    /// be shell-quoted like every other remote path.
+    func test_a_tilde_root_expands_on_the_remote_side() {
+        XCTAssertEqual(GitWorktreeService.remoteRootExpression("~/worktrees"), "\"$HOME\"/'worktrees'")
+        XCTAssertEqual(GitWorktreeService.remoteRootExpression("~"), "\"$HOME\"")
+        XCTAssertEqual(GitWorktreeService.remoteRootExpression("/srv/wt"), "'/srv/wt'")
+    }
+
+    /// Where `$HOME` is, whether the name is free, and what path git actually
+    /// used all have to be decided on the same side of the connection — so it
+    /// is one script, and it prints the path it made.
+    func test_the_create_script_reports_the_path_it_made() {
+        let script = GitWorktreeService.remoteAddWorktreeScript(
+            repoPath: "/srv/repo", branch: "feat", root: "~/worktrees", name: "repo-feat-ab12"
+        )
+        XCTAssertTrue(script.contains("\"$HOME\"/'worktrees'"), script)
+        XCTAssertTrue(script.contains("exit 3"), script)
+        XCTAssertTrue(script.contains("git -C '/srv/repo' worktree add -b 'feat'"), script)
+        XCTAssertTrue(script.contains("printf"), script)
+    }
+
+    func test_creating_a_remote_worktree_returns_its_uri() async throws {
+        try installStubSSH(stdout: "/home/jay/worktrees/repo-feat-ab12")
+
+        let creation = try await GitWorktreeService.addWorktree(
+            projectPath: "ssh://jay@box/srv/repo", branch: "feat", worktreeRoot: "~/worktrees", id: "ab12"
+        )
+
+        XCTAssertEqual(creation.path, "ssh://jay@box/home/jay/worktrees/repo-feat-ab12")
+        XCTAssertEqual(creation.branch, "feat")
+    }
+
+    /// The directory name comes from the repository, and for a remote project
+    /// the repository is named by the remote path — not by the URI.
+    func test_the_directory_is_named_after_the_remote_repository() {
+        XCTAssertEqual(GitWorktreeService.repoName(forProjectPath: "ssh://jay@box/srv/my-repo"), "my-repo")
+        XCTAssertEqual(GitWorktreeService.repoName(forProjectPath: "/Users/jay/my-repo"), "my-repo")
+    }
 }

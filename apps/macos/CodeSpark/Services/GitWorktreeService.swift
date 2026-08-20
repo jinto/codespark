@@ -142,6 +142,109 @@ final class GitWorktreeService: @unchecked Sendable {
         "git -C \(SSHConnectionInfo.shellQuoted(repoPath)) worktree list --porcelain"
     }
 
+    /// Tilde expansion is the one thing quoting must not swallow — `'~/wt'` is
+    /// a literal directory named `~`. Everything after the tilde is still
+    /// quoted.
+    static func remoteRootExpression(_ root: String) -> String {
+        if root == "~" { return "\"$HOME\"" }
+        if root.hasPrefix("~/") {
+            return "\"$HOME\"/" + SSHConnectionInfo.shellQuoted(String(root.dropFirst(2)))
+        }
+        return SSHConnectionInfo.shellQuoted(root)
+    }
+
+    /// Exit code the create script uses for "that name is already taken".
+    static let remoteNameTakenExitCode = 3
+
+    /// Creating a worktree on the other machine is one script because three
+    /// facts have to agree and all three live over there: where `$HOME` is,
+    /// whether the name is taken, and the absolute path git ended up using.
+    ///
+    /// `git worktree add` chatters on stdout, so it is redirected — stdout
+    /// carries exactly one thing, the path.
+    static func remoteAddWorktreeScript(
+        repoPath: String,
+        branch: String,
+        root: String,
+        name: String
+    ) -> String {
+        let rootExpr = remoteRootExpression(root)
+        let quotedName = SSHConnectionInfo.shellQuoted(name)
+        return """
+        root=\(rootExpr); p="$root"/\(quotedName); \
+        if [ -e "$p" ]; then exit \(remoteNameTakenExitCode); fi; \
+        mkdir -p "$root" || exit 1; \
+        git -C \(SSHConnectionInfo.shellQuoted(repoPath)) worktree add -b \(SSHConnectionInfo.shellQuoted(branch)) "$p" 1>&2 || exit 1; \
+        printf '%s\\n' "$p"
+        """
+    }
+
+    /// Runs one remote command and returns its stdout, or throws with the
+    /// remote's own stderr so the failure reads like git's.
+    private static func runRemote(_ info: SSHConnectionInfo, command: String) async throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: sshExecutablePath)
+        process.arguments = remoteSSHArguments(info, remoteCommand: command)
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        process.standardOutput = stdoutPipe
+        process.standardError = stderrPipe
+
+        try process.run()
+        let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        let exitStatus: Int32 = await withCheckedContinuation { cont in
+            process.terminationHandler = { cont.resume(returning: $0.terminationStatus) }
+        }
+        guard exitStatus == 0 else {
+            let message = String(data: errData, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            throw NSError(
+                domain: "GitWorktree",
+                code: Int(exitStatus),
+                userInfo: [NSLocalizedDescriptionKey: message.isEmpty ? "remote git failed" : message]
+            )
+        }
+        return String(data: outData, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private static func addRemoteWorktree(
+        info: SSHConnectionInfo,
+        repoPath: String,
+        branch: String,
+        root: String,
+        id: String?
+    ) async throws -> GitWorktreeCreation {
+        // The local existence loop cannot run over here, so the check moved into
+        // the script. One retry covers a genuine collision; a second failure is
+        // the user's to see.
+        var attemptID = id ?? makeWorktreeID()
+        for attempt in 0..<2 {
+            let name = makeWorktreeName(projectPath: repoPath, branch: branch, id: attemptID)
+            do {
+                let created = try await runRemote(info, command: remoteAddWorktreeScript(
+                    repoPath: repoPath, branch: branch, root: root, name: name
+                ))
+                return GitWorktreeCreation(
+                    id: attemptID,
+                    name: name,
+                    path: info.workspaceURI(forRemotePath: created),
+                    branch: branch
+                )
+            } catch let error as NSError where error.code == remoteNameTakenExitCode
+                && attempt == 0 && id == nil {
+                attemptID = makeWorktreeID()
+            }
+        }
+        throw NSError(
+            domain: "GitWorktree",
+            code: remoteNameTakenExitCode,
+            userInfo: [NSLocalizedDescriptionKey: "A worktree directory with that name already exists on the remote."]
+        )
+    }
+
     // MARK: - Parsing
 
     static func parseWorktreeList(_ output: String) -> [GitWorktree] {
@@ -205,6 +308,15 @@ final class GitWorktreeService: @unchecked Sendable {
         worktreeRoot: String? = nil,
         id: String? = nil
     ) async throws -> GitWorktreeCreation {
+        if let info = SSHConnectionInfo(uri: projectPath), let repoPath = info.remotePath {
+            return try await addRemoteWorktree(
+                info: info,
+                repoPath: repoPath,
+                branch: branch,
+                root: worktreeRoot ?? configuredWorktreeRoot,
+                id: id
+            )
+        }
         let rootPath = expandedWorktreeRoot(worktreeRoot ?? configuredWorktreeRoot)
         try FileManager.default.createDirectory(
             atPath: rootPath,
@@ -238,19 +350,36 @@ final class GitWorktreeService: @unchecked Sendable {
         String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(4)).lowercased()
     }
 
+    /// The repository's own name, whichever namespace the project lives in. A
+    /// remote project is addressed by URI, but it is the remote path that names
+    /// the repository.
+    static func repoName(forProjectPath projectPath: String) -> String {
+        let path = SSHConnectionInfo.remotePath(fromWorkspaceURI: projectPath) ?? projectPath
+        return URL(fileURLWithPath: path).lastPathComponent
+    }
+
     static func makeWorktreeName(projectPath: String, branch: String, id: String) -> String {
-        let repo = URL(fileURLWithPath: projectPath).lastPathComponent
-        return [sanitizeComponent(repo), sanitizeComponent(branch), sanitizeComponent(id)]
+        [
+            sanitizeComponent(repoName(forProjectPath: projectPath)),
+            sanitizeComponent(branch),
+            sanitizeComponent(id),
+        ]
             .filter { !$0.isEmpty }
             .joined(separator: "-")
     }
 
     static func previewWorktreeName(projectPath: String, branch: String) -> String {
         [
-            sanitizeComponent(URL(fileURLWithPath: projectPath).lastPathComponent),
+            sanitizeComponent(repoName(forProjectPath: projectPath)),
             sanitizeComponent(branch),
             "<id>",
         ].joined(separator: "-")
+    }
+
+    /// What the create sheet shows. The root setting is the same string either
+    /// way — on a remote project it names a directory on the other machine.
+    static func previewWorktreePath(projectPath: String, branch: String) -> String {
+        "\(configuredWorktreeRoot)/\(previewWorktreeName(projectPath: projectPath, branch: branch))"
     }
 
     static func worktreeID(from path: String) -> String {
