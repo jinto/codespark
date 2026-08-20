@@ -514,7 +514,8 @@ struct WorktreeSidebarRow: View {
                     .frame(width: 5, height: 5)
 
                 Text(workspace.branch)
-                    .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                    // 두께는 선택과 무관하게 고정 — 배경과 글자색이 선택을 말한다.
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(isSelected ? .white : .white.opacity(0.7))
                     .lineLimit(1)
                     .truncationMode(.middle)

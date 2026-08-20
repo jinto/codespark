@@ -13,6 +13,7 @@
 		3D0FEFA3FAB6C31107E3A49C /* WorkspaceSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */; };
 		A1B2C3D40002E5F600001002 /* AppBundleMetadataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40001E5F600001001 /* AppBundleMetadataTests.swift */; };
 		A1B2C3D40007E5F600001007 /* RestoredScreenReplayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40006E5F600001006 /* RestoredScreenReplayTests.swift */; };
+		D7E1A2B3C4D50011E5F600001011 /* SidebarTypographyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50010E5F600001010 /* SidebarTypographyTests.swift */; };
 		2CE4832E1EECF0838626509C /* KeyEventRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EBC0F80B881E43ADC44ABFA /* KeyEventRouter.swift */; };
 		9ED695B19FC93D927CBF1CBD /* KeyEventRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */; };
 		B4F28A6E1D93C7520EAF6D91 /* UIVerificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */; };
@@ -121,6 +122,7 @@
 		1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSelectionTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40001E5F600001001 /* AppBundleMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBundleMetadataTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40006E5F600001006 /* RestoredScreenReplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoredScreenReplayTests.swift; sourceTree = "<group>"; };
+		D7E1A2B3C4D50010E5F600001010 /* SidebarTypographyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarTypographyTests.swift; sourceTree = "<group>"; };
 		982886C18B94884FEA504409 /* GitWorktreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitWorktreeService.swift; sourceTree = "<group>"; };
 		9FDED25D7FAF92C05A934D97 /* TerminalHostProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostProtocol.swift; sourceTree = "<group>"; };
 		A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSidebarRow.swift; sourceTree = "<group>"; };
@@ -215,6 +217,7 @@
 				1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */,
 				A1B2C3D40001E5F600001001 /* AppBundleMetadataTests.swift */,
 				A1B2C3D40006E5F600001006 /* RestoredScreenReplayTests.swift */,
+				D7E1A2B3C4D50010E5F600001010 /* SidebarTypographyTests.swift */,
 				E2F3A4B5C6D7E8F9A0B1C2D3 /* TerminalStateDetectorTests.swift */,
 			);
 			path = CodeSparkTests;
@@ -502,6 +505,7 @@
 				3D0FEFA3FAB6C31107E3A49C /* WorkspaceSelectionTests.swift in Sources */,
 				A1B2C3D40002E5F600001002 /* AppBundleMetadataTests.swift in Sources */,
 				A1B2C3D40007E5F600001007 /* RestoredScreenReplayTests.swift in Sources */,
+				D7E1A2B3C4D50011E5F600001011 /* SidebarTypographyTests.swift in Sources */,
 				B2C3D4E5F6A7B8C9D0E1F2A3 /* TerminalStateDetectorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

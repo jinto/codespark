@@ -26,7 +26,8 @@ struct SessionSidebarRow: View {
                 .onExitCommand { isEditing = false }
             } else {
                 Text(session.title)
-                    .font(.system(.caption, weight: isActive ? .semibold : .regular))
+                    // 편집 필드와 같은 두께로 고정 — 활성 여부는 배경과 글자색이 말한다.
+                    .font(.system(.caption, weight: .medium))
                     .foregroundStyle(isActive ? .white : .primary)
                     .lineLimit(1)
             }
