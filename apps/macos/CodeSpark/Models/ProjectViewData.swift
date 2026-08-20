@@ -142,6 +142,33 @@ struct ProjectDetailViewData: Equatable {
 
 // MARK: - Workspace
 
+extension String {
+    /// Whether two workspace addresses name the same place. Local paths are
+    /// compared with symlinks resolved: git reports the resolved directory
+    /// (`/private/tmp`, not `/tmp`), while a project keeps whatever spelling it
+    /// was added with. Two spellings meant the selection matched no workspace,
+    /// and the correction in `recomputeWorkspaces` moved it every time it ran.
+    ///
+    /// Remote addresses are URIs, not filesystem paths — resolving one against
+    /// this machine's filesystem would be meaningless, so they compare as text.
+    /// The remote side already guards this by reporting `pwd -P`.
+    func sameWorkspace(as other: String) -> Bool {
+        if self == other { return true }
+        guard !hasPrefix("ssh://"), !other.hasPrefix("ssh://") else { return false }
+        return String.normalizedWorkspacePath(self) == String.normalizedWorkspacePath(other)
+    }
+
+    /// `resolvingSymlinksInPath` only follows links that exist, and a worktree
+    /// git has just reported may already be gone. `/private` is stripped
+    /// explicitly because that is the pair this actually turns on — `/tmp` and
+    /// `/var` are symlinks into it on every mac.
+    private static func normalizedWorkspacePath(_ path: String) -> String {
+        let resolved = (path as NSString).resolvingSymlinksInPath
+        guard resolved.hasPrefix("/private/") else { return resolved }
+        return String(resolved.dropFirst("/private".count))
+    }
+}
+
 extension SessionViewData {
     /// Whether this tab belongs to a workspace. Membership is fixed at creation
     /// in `workspacePath`; only rows written before that column existed fall

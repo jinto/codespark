@@ -2122,4 +2122,46 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertNil(model.pendingSSHReconnectProjectID,
                      "and the offer must not outlive the restore that answered it")
     }
+
+    // MARK: - One place, however it is spelled
+
+    /// git reports the symlink-resolved directory, a project keeps the spelling
+    /// it was added with, and on macOS `/tmp` is a symlink to `/private/tmp`.
+    /// Compared as text the selection matched no workspace, so the correction in
+    /// `recomputeWorkspaces` fired — every time it ran, which is once per tab
+    /// during a restore.
+    @MainActor
+    func test_a_worktree_is_the_same_place_however_the_path_is_spelled() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "p1", path: "/tmp/spelled", transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "p1", path: "/tmp/spelled",
+                                            transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+
+        // What git says, resolved, next to the way the project was added.
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: "/private/tmp/spelled", branch: "main", isMainWorktree: true),
+            GitWorktree(path: "/private/tmp/spelled-feat", branch: "feat", isMainWorktree: false)
+        ], for: "/tmp/spelled")
+        model.activeWorkspacePath = "/tmp/spelled"
+
+        model.recomputeWorkspaces()
+
+        XCTAssertEqual(model.activeWorkspacePath, "/tmp/spelled",
+                       "the selection was moved off a worktree it was already standing in")
+    }
+
+    func test_two_spellings_of_one_directory_compare_equal() {
+        XCTAssertTrue("/tmp/x".sameWorkspace(as: "/private/tmp/x"))
+        XCTAssertFalse("/tmp/x".sameWorkspace(as: "/tmp/y"))
+        // Remote addresses are URIs; resolving them here would be meaningless.
+        XCTAssertTrue("ssh://box/srv/repo".sameWorkspace(as: "ssh://box/srv/repo"))
+        XCTAssertFalse("ssh://box/tmp/x".sameWorkspace(as: "ssh://box/private/tmp/x"))
+    }
 }

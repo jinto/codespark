@@ -27,13 +27,27 @@ protocol ProjectCoreClientProtocol {
 }
 
 enum ProjectCoreClient {
-    static var live: ProjectCoreClientProtocol {
+    /// Where the store lives. `CODESPARK_STORE_PATH` overrides it so a UI test
+    /// can hand the app a store of its own: without that the suite drives the
+    /// developer's real projects, which is why its worktree tests could only
+    /// skip — there was no way to put a fixture in front of them — and why they
+    /// leaked state into each other through the tabs they opened.
+    static var storePath: String {
+        if let override = ProcessInfo.processInfo.environment["CODESPARK_STORE_PATH"],
+           !override.isEmpty {
+            return override
+        }
         let appName = Bundle.main.bundleIdentifier ?? "CodeSpark"
-        let dbPath = FileManager.default
+        return FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(appName, isDirectory: true)
             .appendingPathComponent("store.sqlite3")
             .path
+    }
+
+    static var live: ProjectCoreClientProtocol {
+        let appName = Bundle.main.bundleIdentifier ?? "CodeSpark"
+        let dbPath = storePath
         do {
             try FileManager.default.createDirectory(
                 atPath: (dbPath as NSString).deletingLastPathComponent,

@@ -340,10 +340,9 @@ final class AppModel: ObservableObject {
         // lookup failed or has not landed yet, which is no reason to move
         // someone off the worktree they are working in.
         if worktrees?.isEmpty == false, let active = activeWorkspacePath,
-           !workspaces.contains(where: { $0.path == active }) {
-            activeWorkspacePath = workspaces.contains(where: { $0.path == project.path })
-                ? project.path
-                : workspaces[0].path
+           !workspaces.contains(where: { $0.path.sameWorkspace(as: active) }) {
+            activeWorkspacePath = workspaces.first { $0.path.sameWorkspace(as: project.path) }?.path
+                ?? workspaces[0].path
         }
     }
 
