@@ -150,6 +150,35 @@ final class CodeSparkUITests: XCTestCase {
         XCTAssertTrue(wait { browse.isEnabled }, "Browse stayed disabled after a host was named")
     }
 
+    /// Changing an existing project's folder is the same problem as picking one
+    /// when the project is created — the folder is on the other machine — so it
+    /// gets the same way of looking rather than a bare text field.
+    func test_changing_a_remote_folder_offers_to_browse_too() throws {
+        XCTAssertTrue(
+            wait(upTo: 25, until: { self.projectRows.count > 0 }),
+            "no projects in this store"
+        )
+        var opened = false
+        for row in projectRows.allElementsBoundByIndex {
+            row.rightClick()
+            let item = app.menuItems["Change Remote Folder..."]
+            if item.waitForExistence(timeout: 2) {
+                item.click()
+                opened = true
+                break
+            }
+            // Local project: no such item. Close the menu and try the next row.
+            app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+        }
+        try XCTSkipUnless(opened, "no ssh project in this store")
+
+        XCTAssertTrue(
+            wait { self.app.buttons["changeRemoteFolderBrowse"].exists },
+            "the sheet offers no way to look at the host"
+        )
+        app.buttons["Cancel"].click()
+    }
+
     /// End to end: browse a real host, choose a folder, and watch it land in the
     /// field that becomes the project's remote path.
     func test_choosing_a_folder_fills_in_the_remote_path() throws {

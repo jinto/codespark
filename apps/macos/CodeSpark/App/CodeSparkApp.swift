@@ -145,9 +145,9 @@ struct CodeSparkApp: App {
                 Divider()
 
                 // Cmd+1~9: jump to a workspace that has tabs
-                ForEach(Array(model.numberedWorkspaces.enumerated()), id: \.element.path) { index, workspace in
-                    Button(model.numberedWorkspaceLabel(workspace)) {
-                        Task { await model.selectNumberedWorkspace(index + 1) }
+                ForEach(Array(model.numberedProjects.enumerated()), id: \.element) { index, projectID in
+                    Button(model.numberedProjectLabel(projectID)) {
+                        Task { await model.selectNumberedProject(index + 1) }
                     }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: AppShortcut.selectWorkspaceByIndex.modifiers)
                 }

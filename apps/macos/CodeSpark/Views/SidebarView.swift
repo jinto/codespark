@@ -39,10 +39,6 @@ struct SidebarView: View {
         return model.numberedIndex(forProject: project)
     }
 
-    private func hotkeyIndex(for workspace: WorkspaceViewData, in project: ProjectSummaryViewData) -> Int? {
-        guard showHotkeys else { return nil }
-        return model.numberedIndex(projectID: project.id, path: workspace.path)
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -149,7 +145,6 @@ struct SidebarView: View {
                                         isSelected: model.selectedProjectID == project.id
                                             && model.activeWorkspacePath == workspace.path,
                                         status: model.workspaceStatus(for: workspace),
-                                        hotkeyIndex: hotkeyIndex(for: workspace, in: project),
                                         pathLine: model.worktreePathLine(for: workspace).map(model.displayPath)
                                     )
                                     .contentShape(Rectangle())
@@ -618,6 +613,7 @@ private struct ChangeRemoteFolderSheet: View {
     let onSave: () -> Void
     let onCancel: () -> Void
     @FocusState private var isFocused: Bool
+    @State private var isBrowsing = false
 
     private var previewCommand: String {
         SSHConnectionInfo(
@@ -641,10 +637,18 @@ private struct ChangeRemoteFolderSheet: View {
                 Text("Remote Path")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                TextField("/home/user/project", text: $remotePath)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($isFocused)
-                    .onSubmit(onSave)
+                HStack(spacing: 8) {
+                    TextField("/home/user/project", text: $remotePath)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($isFocused)
+                        .onSubmit(onSave)
+                        .accessibilityIdentifier("changeRemoteFolderPath")
+                    // Same as creating the project: the folder is over there, so
+                    // the way to find it is to look. Typing stays available for a
+                    // host that will not answer a non-interactive ssh.
+                    Button("Browse…") { isBrowsing = true }
+                        .accessibilityIdentifier("changeRemoteFolderBrowse")
+                }
             }
 
             Text(previewCommand)
@@ -662,5 +666,19 @@ private struct ChangeRemoteFolderSheet: View {
         .padding(20)
         .frame(width: 360)
         .onAppear { isFocused = true }
+        .sheet(isPresented: $isBrowsing) {
+            // Start where the project already is, so browsing opens next to the
+            // folder being changed rather than at the remote home directory.
+            RemoteFolderPickerSheet(
+                host: sshInfo.displayLabel,
+                source: SSHDirectorySource(info: sshInfo),
+                startingAt: remotePath.isEmpty ? nil : remotePath,
+                onChoose: { chosen in
+                    remotePath = chosen
+                    isBrowsing = false
+                },
+                onCancel: { isBrowsing = false }
+            )
+        }
     }
 }

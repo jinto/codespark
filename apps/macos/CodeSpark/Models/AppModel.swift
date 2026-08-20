@@ -1105,54 +1105,41 @@ final class AppModel: ObservableObject {
     ///
     /// Deliberately blind to whether a tree is expanded — folding a project must
     /// not shuffle the digits out from under the user's fingers.
-    var numberedWorkspaces: [NumberedWorkspace] {
-        orderedProjects
-            .flatMap { project in
-                workspaces(for: project)
-                    .filter { !$0.sessions.isEmpty }
-                    .map { NumberedWorkspace(projectID: project.id, path: $0.path) }
-            }
-            .prefix(9)
-            .map { $0 }
+    /// Where `Cmd+1…9` go: the projects, in sidebar order.
+    ///
+    /// Projects rather than worktrees, because a digit is only worth having if
+    /// it stays put. Worktrees come and go, fold away, and empty ones would eat
+    /// the nine places before the projects further down ever got one. Moving
+    /// between the worktrees of a project is what `Cmd+Opt+[`/`]` is for.
+    var numberedProjects: [String] {
+        orderedProjects.prefix(9).map(\.id)
     }
 
-    /// 1-based position of a workspace in that list, for the Cmd-held overlay.
-    func numberedIndex(projectID: String, path: String) -> Int? {
-        numberedWorkspaces
-            .firstIndex(of: NumberedWorkspace(projectID: projectID, path: path))
-            .map { $0 + 1 }
-    }
-
-    /// The digit a *project row* wears. While its tree is open the worktree rows
-    /// carry their own digits and the heading stays bare; folded, those rows are
-    /// off screen, so the project row shows the first digit hiding inside it —
-    /// otherwise a repo with several worktrees has a reachable number that
-    /// nothing on screen ever names.
+    /// 1-based position of a project, for the Cmd-held overlay.
     func numberedIndex(forProject project: ProjectSummaryViewData) -> Int? {
-        guard !showsWorktreeRows(for: project),
-              let first = numberedWorkspaces.first(where: { $0.projectID == project.id })
-        else { return nil }
-        return numberedIndex(projectID: first.projectID, path: first.path)
+        numberedProjects.firstIndex(of: project.id).map { $0 + 1 }
     }
 
-    /// Menu wording: the project on its own when it is the whole workspace,
-    /// "project — branch" once a repo has several worktrees to tell apart.
-    func numberedWorkspaceLabel(_ workspace: NumberedWorkspace) -> String {
-        guard let project = projects.first(where: { $0.id == workspace.projectID }) else { return "" }
-        guard let branch = sidebarWorktrees(for: project)
-            .first(where: { $0.path == workspace.path })?.branch else { return project.name }
+    /// Menu wording: the project, and the worktree the digit will land in when
+    /// that is not simply the project itself.
+    func numberedProjectLabel(_ projectID: String) -> String {
+        guard let project = projects.first(where: { $0.id == projectID }) else { return "" }
+        guard let remembered = projectSelectedWorkspaces[projectID],
+              let branch = sidebarWorktrees(for: project)
+                  .first(where: { $0.path == remembered })?.branch
+        else { return project.name }
         return "\(project.name) — \(branch)"
     }
 
-    func selectNumberedWorkspace(_ index: Int) async {
-        guard index >= 1, index <= numberedWorkspaces.count else { return }
-        let target = numberedWorkspaces[index - 1]
-        await selectWorktree(projectID: target.projectID, path: target.path)
+    /// A digit lands where clicking that project's row lands: it selects the
+    /// project — which reopens the worktree it was last left in, since
+    /// `apply(detail:)` restores that — and opens or folds its tree, the other
+    /// half of what the click means.
+    func selectNumberedProject(_ index: Int) async {
+        guard index >= 1, index <= numberedProjects.count else { return }
+        await selectProjectAndToggleWorktrees(id: numberedProjects[index - 1])
     }
 
-    /// Which projects show their worktree rows. Opening is the user's choice and
-    /// it sticks: selecting another project no longer folds the tree, and the
-    /// shape of the sidebar survives a relaunch.
     func toggleWorktrees(projectID: String) {
         if expandedProjectIDs.contains(projectID) {
             expandedProjectIDs.remove(projectID)
