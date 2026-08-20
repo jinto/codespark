@@ -103,11 +103,7 @@ struct SidebarView: View {
                                 isSelected: model.selectedProjectID == project.id,
                                 status: model.projectStatus(for: project),
                                 infoLine: projectInfoLine(for: project),
-                                hotkeyIndex: hotkeyIndex(for: project),
-                                isExpanded: model.sidebarWorktrees(for: project).isEmpty
-                                    ? nil
-                                    : model.expandedProjectIDs.contains(project.id),
-                                onToggleExpansion: { model.toggleWorktrees(projectID: project.id) }
+                                hotkeyIndex: hotkeyIndex(for: project)
                             )
                             .contentShape(Rectangle())
                             .overlay(alignment: .top) {
@@ -129,7 +125,7 @@ struct SidebarView: View {
                                 }
                             }
                             .onTapGesture {
-                                Task { await model.selectProject(id: project.id, promptForRecovery: true) }
+                                Task { await model.selectProjectAndToggleWorktrees(id: project.id) }
                             }
                             .onTapGesture(count: 2) {
                                 Task {
@@ -402,26 +398,10 @@ struct ProjectSidebarRow: View {
     let status: ProjectStatus
     var infoLine: String? = nil
     var hotkeyIndex: Int? = nil
-    /// nil when the repo has a single worktree — there is no tree to open.
-    var isExpanded: Bool? = nil
-    var onToggleExpansion: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 5) {
-                if let isExpanded {
-                    Button(action: onToggleExpansion) {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundStyle(isSelected ? .white.opacity(0.8) : .secondary)
-                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                            .frame(width: 8, height: 8)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("worktreeDisclosure")
-                }
-
                 Circle()
                     .fill(status.color)
                     .frame(width: 7, height: 7)
