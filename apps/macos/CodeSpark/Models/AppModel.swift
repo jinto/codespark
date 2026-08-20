@@ -211,7 +211,7 @@ final class AppModel: ObservableObject {
                 // `worktreeProjectPaths`. Ask the same question in both places
                 // so opening one without the other cannot happen.
                 if worktreeProjectPaths.contains(detail.path) {
-                    gitWorktreeService.invalidateCache(for: detail.path)
+                    gitWorktreeService.expireCache(for: detail.path)
                     await gitWorktreeService.refreshWorktrees(for: worktreeProjectPaths)
                     recomputeWorkspaces()
                 }
@@ -756,7 +756,7 @@ final class AppModel: ObservableObject {
             let creation = try await GitWorktreeService.addWorktree(
                 projectPath: project.path, branch: branch
             )
-            gitWorktreeService.invalidateCache(for: project.path)
+            gitWorktreeService.expireCache(for: project.path)
             await gitWorktreeService.refreshWorktrees(for: worktreeProjectPaths)
             recomputeWorkspaces()
             await newSession(inWorkspacePath: creation.path)
@@ -776,7 +776,7 @@ final class AppModel: ObservableObject {
         }
         do {
             try await GitWorktreeService.removeWorktree(projectPath: project.path, worktreePath: path)
-            gitWorktreeService.invalidateCache(for: project.path)
+            gitWorktreeService.expireCache(for: project.path)
             await gitWorktreeService.refreshWorktrees(for: worktreeProjectPaths)
             recomputeWorkspaces()
         } catch {

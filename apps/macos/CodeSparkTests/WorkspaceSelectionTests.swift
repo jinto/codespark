@@ -1494,4 +1494,67 @@ final class WorkspaceSelectionTests: XCTestCase {
             "a failed lookup discarded the rows it had"
         )
     }
+
+    /// Selecting a project re-reads its worktrees. On a remote project that
+    /// read goes over the network and routinely fails — and if opening the
+    /// project throws the known rows away first, every reconnect costs the user
+    /// their worktree rows and blanks the main area.
+    @MainActor
+    func test_selecting_a_remote_project_whose_scan_fails_keeps_its_worktree_rows() async {
+        let original = GitWorktreeService.sshExecutablePath
+        defer { GitWorktreeService.sshExecutablePath = original }
+        GitWorktreeService.sshExecutablePath = "/usr/bin/false"
+
+        let model = await remoteModel(projectPath: "ssh://box/srv/repo")
+
+        await model.selectProject(id: "p1")
+
+        XCTAssertEqual(
+            model.workspaces.map(\.branch),
+            ["main", "feat"],
+            "opening the project discarded the worktrees it already knew"
+        )
+    }
+
+    /// The project URI is where the user pointed; the worktree list is what git
+    /// says. When they disagree — a URI into a subdirectory — the selection has
+    /// to land on a workspace that exists, or `visibleSessions` empties and the
+    /// main area goes blank.
+    @MainActor
+    func test_a_project_uri_that_is_not_a_worktree_lands_on_the_main_worktree() async {
+        let original = GitWorktreeService.sshExecutablePath
+        defer { GitWorktreeService.sshExecutablePath = original }
+        GitWorktreeService.sshExecutablePath = "/usr/bin/false"
+
+        let model = await remoteModel(projectPath: "ssh://box/srv/repo/apps")
+
+        await model.selectProject(id: "p1")
+
+        XCTAssertEqual(model.activeWorkspacePath, "ssh://box/srv/repo")
+    }
+
+    /// A remote project with two worktrees primed in the cache, not yet selected.
+    @MainActor
+    private func remoteModel(projectPath: String) async -> AppModel {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "remote", path: projectPath, transport: "ssh",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "remote", path: projectPath,
+                                            transport: "ssh", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        model.projects = [
+            ProjectSummaryViewData(id: "p1", name: "remote", path: projectPath, transport: "ssh",
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: [])
+        ]
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: "ssh://box/srv/repo", branch: "main", isMainWorktree: true),
+            GitWorktree(path: "ssh://box/srv/wt/feat", branch: "feat", isMainWorktree: false),
+        ], for: projectPath)
+        return model
+    }
 }

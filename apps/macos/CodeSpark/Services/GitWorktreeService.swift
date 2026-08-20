@@ -187,6 +187,15 @@ final class GitWorktreeService: @unchecked Sendable {
         cache.removeValue(forKey: projectPath)
     }
 
+    /// Ask for a fresh answer without throwing away the one we have. Callers
+    /// that mean "re-read this now" want this, not `invalidateCache` — dropping
+    /// the entry outright means a lookup that then fails leaves nothing, and
+    /// over ssh that failure is routine.
+    func expireCache(for projectPath: String) {
+        guard let entry = cache[projectPath] else { return }
+        cache[projectPath] = CacheEntry(worktrees: entry.worktrees, fetchedAt: .distantPast, ttl: 0)
+    }
+
     /// Creates a new worktree at `~/worktrees/<repo>-<branch>-<id>` on a new branch.
     /// The generated ID is part of the directory name, so it remains available
     /// without a second metadata store when the app is relaunched.
