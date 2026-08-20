@@ -91,6 +91,13 @@ final class CodeSparkUITests: XCTestCase {
         app.terminate()
     }
 
+    // The three sidebar tests need a project with more than one worktree, and a
+    // checkout usually has exactly one — so they skip, and a skip reads as a
+    // pass. They cannot make the worktree themselves: the runner is sandboxed
+    // and `/usr/bin/git` is a shim over `xcrun`, which refuses there outright
+    // ("cannot be used within an App Sandbox"). The pre-push hook lends the
+    // repository one before it runs this suite, and takes it back after.
+
     private func wait(
         upTo timeout: TimeInterval = 5,
         until condition: () -> Bool

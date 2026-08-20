@@ -15,6 +15,32 @@ else
   echo "   UI tests launch the app and take over focus for ~20s."
 fi
 
+# The sidebar tests need a project with more than one worktree. A checkout
+# usually has one, so they skip — and a skip reads as a pass, which left the
+# sidebar's only cover switched off. They cannot make one themselves: the test
+# runner is sandboxed and git there is a shim over xcrun, which refuses inside a
+# sandbox. So lend the repository a worktree here and take it back afterwards.
+FIXTURE_WORKTREE=""
+FIXTURE_BRANCH=""
+if [ -z "$SKIP_UI" ] && [ "$(git worktree list --porcelain | grep -c '^worktree ')" -eq 1 ]; then
+  FIXTURE_BRANCH="prepush-uitest-$$"
+  FIXTURE_WORKTREE="$(mktemp -d)/$FIXTURE_BRANCH"
+  if git worktree add "$FIXTURE_WORKTREE" -b "$FIXTURE_BRANCH" >/dev/null 2>&1; then
+    echo "   Lent the repo a second worktree so the sidebar tests can run."
+  else
+    echo "⚠️  Could not create a worktree fixture — sidebar UI tests will skip."
+    FIXTURE_WORKTREE=""
+    FIXTURE_BRANCH=""
+  fi
+fi
+
+cleanup_fixture() {
+  [ -n "$FIXTURE_WORKTREE" ] || return 0
+  git worktree remove --force "$FIXTURE_WORKTREE" >/dev/null 2>&1 || true
+  git branch -D "$FIXTURE_BRANCH" >/dev/null 2>&1 || true
+}
+trap cleanup_fixture EXIT
+
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
 xcodebuild -project apps/macos/CodeSpark.xcodeproj \
   -scheme CodeSpark \
