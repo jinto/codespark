@@ -1036,6 +1036,83 @@ test "consumeInterruptedSession leaves live sessions untouched" {
     try std.testing.expectEqual(@as(usize, 1), detail.live_sessions.len);
 }
 
+test "the tab bar comes back in the order the tabs were opened" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "", .local);
+    defer std.testing.allocator.free(project_id);
+
+    for ([_][]const u8{ "first", "second", "third" }) |title| {
+        const id = try openTab(&store, project_id, title);
+        std.testing.allocator.free(id);
+    }
+
+    var detail = try store.projectDetail(std.testing.allocator, project_id);
+    defer detail.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 3), detail.live_sessions.len);
+    try std.testing.expectEqualStrings("first", detail.live_sessions[0].title);
+    try std.testing.expectEqualStrings("second", detail.live_sessions[1].title);
+    try std.testing.expectEqualStrings("third", detail.live_sessions[2].title);
+}
+
+test "a tab that reports work keeps the place it was opened in" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "", .local);
+    defer std.testing.allocator.free(project_id);
+
+    const first = try openTab(&store, project_id, "first");
+    defer std.testing.allocator.free(first);
+    const second = try openTab(&store, project_id, "second");
+    defer std.testing.allocator.free(second);
+    const third = try openTab(&store, project_id, "third");
+    defer std.testing.allocator.free(third);
+
+    // The leftmost tab renames itself and cds — neither is a reason to move it.
+    try store.updateSessionTitle(first, "first");
+    try store.updateSessionCwd(first, "/tmp/elsewhere");
+
+    var detail = try store.projectDetail(std.testing.allocator, project_id);
+    defer detail.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("first", detail.live_sessions[0].title);
+    try std.testing.expectEqualStrings("second", detail.live_sessions[1].title);
+    try std.testing.expectEqualStrings("third", detail.live_sessions[2].title);
+}
+
+test "restore reads interrupted tabs left to right" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "", .local);
+    defer std.testing.allocator.free(project_id);
+
+    for ([_][]const u8{ "first", "second", "third" }) |title| {
+        const id = try openTab(&store, project_id, title);
+        std.testing.allocator.free(id);
+    }
+    try store.reconcileInterruptedSessions();
+
+    var detail = try store.projectDetail(std.testing.allocator, project_id);
+    defer detail.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 3), detail.interrupted_sessions.len);
+    try std.testing.expectEqualStrings("first", detail.interrupted_sessions[0].title);
+    try std.testing.expectEqualStrings("second", detail.interrupted_sessions[1].title);
+    try std.testing.expectEqualStrings("third", detail.interrupted_sessions[2].title);
+}
+
+fn openTab(store: *core.Store, project_id: []const u8, title: []const u8) ![]u8 {
+    return store.startSession(std.testing.allocator, .{
+        .project_id = project_id,
+        .transport = .local,
+        .target_label = "local",
+        .title = title,
+        .shell = "zsh",
+        .initial_cwd = "/tmp",
+    });
+}
+
 fn freeProjectSummaries(items: []core.ProjectSummary) void {
     for (items) |*item| item.deinit(std.testing.allocator);
     std.testing.allocator.free(items);
