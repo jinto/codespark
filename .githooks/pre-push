@@ -11,6 +11,14 @@ SKIP_UI=""
 if ioreg -n Root -d1 -a 2>/dev/null | grep -A1 CGSSessionScreenIsLocked | grep -q true; then
   echo "⚠️  Screen is locked — skipping UI tests. Unlock and re-push to run them."
   SKIP_UI="-skip-testing:CodeSparkUITests"
+elif [ -n "$SSH_CONNECTION" ]; then
+  # Over ssh there is no window server to drive. The runner asks the console
+  # session for permission to control it, that dialog opens on the physical
+  # screen where nobody is looking, and XCTest gives up a minute later with
+  # "Timed out while enabling automation mode" — after holding the push for
+  # that minute. Say so instead.
+  echo "⚠️  Pushing over ssh — skipping UI tests. Run them from the machine itself."
+  SKIP_UI="-skip-testing:CodeSparkUITests"
 else
   echo "   UI tests launch the app and take over focus for ~20s."
 fi
