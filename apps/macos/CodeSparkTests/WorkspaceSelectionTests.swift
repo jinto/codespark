@@ -1627,6 +1627,27 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertNotNil(model.loadErrorMessage)
     }
 
+    /// An agent that creates a worktree and cd's into it leaves the tab where
+    /// it was opened — right, but silent. A remote tab reports a path on the
+    /// other machine, so it has to be spelled as an address before it can be
+    /// matched against one.
+    @MainActor
+    func test_a_remote_tab_that_wandered_names_the_branch_it_is_in() async {
+        let original = GitWorktreeService.sshExecutablePath
+        defer { GitWorktreeService.sshExecutablePath = original }
+        GitWorktreeService.sshExecutablePath = "/usr/bin/false"
+
+        let model = await remoteModel(projectPath: "ssh://box/srv/repo")
+        await model.selectProject(id: "p1")
+
+        let visitor = SessionViewData(
+            id: "s1", title: "t", targetLabel: "box",
+            lastCwd: "/srv/wt/feat/apps", workspacePath: "ssh://box/srv/repo"
+        )
+
+        XCTAssertEqual(model.visitingBranch(for: visitor), "feat")
+    }
+
     /// A remote project with two worktrees primed in the cache, not yet selected.
     @MainActor
     private func remoteModel(

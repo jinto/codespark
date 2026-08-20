@@ -1052,12 +1052,21 @@ final class AppModel: ObservableObject {
     /// leaves the tab where it was opened, which is right, but silent.
     ///
     /// nil whenever there is nothing to say: the tab is home, it stepped outside
-    /// the repo entirely, the repo has a single worktree, or it is an ssh tab
-    /// whose cwd names a directory on the other machine.
+    /// the repo entirely, or the repo has a single worktree.
     func visitingBranch(for session: SessionViewData) -> String? {
-        guard workspaces.count > 1, selectedProject?.transport != "ssh" else { return nil }
-        guard let cwd = session.lastCwd,
-              let current = WorkspaceViewData.containing(cwd: cwd, in: workspaces),
+        guard workspaces.count > 1, let cwd = session.lastCwd else { return nil }
+        // A remote tab reports a directory on the other machine, while
+        // workspaces are addressed as URIs. Spell it the same way before
+        // comparing — and through this project's own connection, so a path can
+        // never match a worktree on some other host.
+        let address: String
+        if selectedProject?.transport == "ssh" {
+            guard let info = SSHConnectionInfo(uri: selectedProject?.path ?? "") else { return nil }
+            address = info.workspaceURI(forRemotePath: cwd)
+        } else {
+            address = cwd
+        }
+        guard let current = WorkspaceViewData.containing(cwd: address, in: workspaces),
               current.path != session.workspacePath else { return nil }
         return current.branch
     }
