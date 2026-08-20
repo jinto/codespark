@@ -1195,6 +1195,36 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(relaunched.expandedProjectIDs, ["p1"])
     }
 
+    /// The disclosure triangle is gone, so the row itself has to open the tree.
+    /// A click still selects — that is the other half of what it has always
+    /// meant — and now folds or unfolds on the way.
+    @MainActor
+    func test_clicking_a_project_row_selects_it_and_opens_its_tree() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+
+        await model.selectProjectAndToggleWorktrees(id: "p1")
+
+        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
+                      "the row click has to open the tree — nothing else can")
+    }
+
+    /// Clicking the row you are already on is how you fold the tree back up.
+    @MainActor
+    func test_clicking_the_same_project_row_again_folds_its_tree() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+
+        await model.selectProjectAndToggleWorktrees(id: "p1")
+        await model.selectProjectAndToggleWorktrees(id: "p1")
+
+        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertTrue(model.expandedProjectIDs.isEmpty)
+    }
+
     @MainActor
     func test_toggling_twice_closes_the_tree_again() async {
         forgetExpandedProjects()

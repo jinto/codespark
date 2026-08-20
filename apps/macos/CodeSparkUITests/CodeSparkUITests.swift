@@ -15,6 +15,69 @@ final class CodeSparkUITests: XCTestCase {
         app.staticTexts.matching(identifier: "projectName")
     }
 
+    private var branchRows: XCUIElementQuery {
+        app.staticTexts.matching(identifier: "worktreeBranch")
+    }
+
+    /// Selecting a project with no live tabs raises the "Choose session" dialog,
+    /// which blocks the window until it is answered. The disclosure triangle
+    /// never selected anything, so the old tests never met it — opening a tree
+    /// by clicking its row does, on every project that has tabs to recover.
+    private func dismissSessionChooserIfPresent() {
+        let cancel = app.buttons["Cancel"]
+        if cancel.waitForExistence(timeout: 1) { cancel.click() }
+    }
+
+    /// Returns a project row that actually has a tree, left open.
+    ///
+    /// The disclosure triangle is gone, so the row itself folds and unfolds —
+    /// and every row now takes the click, whether or not it has anything to
+    /// show. That removes the free filter the triangle used to give us, so the
+    /// only way to find a multi-worktree project is to click and watch: a row
+    /// with a tree changes the branch-row count, a row without one does not.
+    ///
+    /// Expansion is remembered across launches, so a click can just as easily
+    /// fold a tree an earlier test left open. That still identifies the row —
+    /// we just click again to hand it back open.
+    private func projectRowWithATree() throws -> XCUIElement {
+        // Generous: the tests that run before this one leave tabs behind, and a
+        // launch that restores several replays their screens before the sidebar
+        // settles. Ten seconds was enough until it wasn't.
+        XCTAssertTrue(
+            wait(upTo: 25, until: { self.projectRows.count > 0 }),
+            "no projects in this store"
+        )
+        // Last first, so callers that press Cmd+1 land on a different project.
+        for row in projectRows.allElementsBoundByIndex.reversed() {
+            let before = branchRows.count
+            row.click()
+            dismissSessionChooserIfPresent()
+            guard wait(until: { self.branchRows.count != before }) else {
+                // No tree here — but the click stored an expansion flag all the
+                // same (it toggles before knowing whether there is a tree, see
+                // `selectProjectAndToggleWorktrees`). Flip it straight back, or
+                // the probe leaves droppings for every test that follows.
+                row.click()
+                dismissSessionChooserIfPresent()
+                continue
+            }
+            if branchRows.count < before {
+                // This row has a tree, and the click just folded one an earlier
+                // test left open. Reopening puts the count back at `before` —
+                // never above it — so wait against the folded count, not `before`.
+                let folded = branchRows.count
+                row.click()
+                dismissSessionChooserIfPresent()
+                XCTAssertTrue(
+                    wait(until: { self.branchRows.count > folded }),
+                    "the tree would not reopen"
+                )
+            }
+            return row
+        }
+        throw XCTSkip("no multi-worktree project in this store")
+    }
+
     override func setUpWithError() throws {
         continueAfterFailure = false
         app.launch()
@@ -236,20 +299,8 @@ final class CodeSparkUITests: XCTestCase {
     /// folded away the tree you had open. The unit suite cannot see it — the
     /// condition lives in the sidebar's view body.
     func test_an_open_worktree_tree_survives_selecting_another_project() throws {
-        let disclosures = app.buttons.matching(identifier: "worktreeDisclosure")
-        try XCTSkipUnless(
-            disclosures.firstMatch.waitForExistence(timeout: 10),
-            "no multi-worktree project in this store"
-        )
-        // The last one, so Cmd+1 lands on a different project than the tree.
-        let disclosure = disclosures.allElementsBoundByIndex.last!
-        let branchRows = app.staticTexts.matching(identifier: "worktreeBranch")
-
-        // Expansion is remembered across launches, so the tree may already be
-        // open — from a neighbouring test, or from the last time this one ran.
-        // Clicking blind would close it and test the opposite of the point.
-        if branchRows.count == 0 { disclosure.click() }
-        XCTAssertTrue(wait { branchRows.count > 0 }, "the tree did not open")
+        _ = try projectRowWithATree()
+        XCTAssertTrue(wait { self.branchRows.count > 0 }, "the tree did not open")
         let opened = branchRows.count
 
         app.typeKey("1", modifierFlags: .command)
@@ -267,30 +318,23 @@ final class CodeSparkUITests: XCTestCase {
     /// line apart. The handoff is decided in the sidebar's view body, so only a
     /// running app can prove the path actually moved.
     func test_opening_a_tree_moves_the_path_onto_the_main_worktree_row() throws {
-        let disclosures = app.buttons.matching(identifier: "worktreeDisclosure")
-        try XCTSkipUnless(
-            disclosures.firstMatch.waitForExistence(timeout: 10),
-            "no multi-worktree project in this store"
-        )
-        let disclosure = disclosures.allElementsBoundByIndex.last!
         let infoLines = app.staticTexts.matching(identifier: "projectInfoLine")
         let worktreePaths = app.staticTexts.matching(identifier: "worktreePath")
+        let row = try projectRowWithATree()
+        let pathsOpen = worktreePaths.count
+        let infoLinesOpen = infoLines.count
 
-        // The tree may already be open from a previous run — this asserts the
-        // handoff in whichever direction the click takes it.
-        let infoLinesBefore = infoLines.count
-        let pathsBefore = worktreePaths.count
+        // Fold it back up: the path has to travel the other way too.
+        row.click()
+        dismissSessionChooserIfPresent()
 
-        disclosure.click()
-
-        XCTAssertTrue(wait { worktreePaths.count != pathsBefore },
-                      "clicking the disclosure moved no path at all")
-        let opened = worktreePaths.count > pathsBefore
         XCTAssertTrue(
-            wait { infoLines.count == infoLinesBefore + (opened ? -1 : 1) },
-            opened
-                ? "the expanded project row kept a path its main worktree row now shows"
-                : "the collapsed project row never took its path back"
+            wait { worktreePaths.count < pathsOpen },
+            "folding the tree left the path on a worktree row that is gone"
+        )
+        XCTAssertTrue(
+            wait { infoLines.count == infoLinesOpen + 1 },
+            "the collapsed project row never took its path back"
         )
     }
 
@@ -303,16 +347,8 @@ final class CodeSparkUITests: XCTestCase {
     /// (`test_switching_to_an_empty_worktree_clears_the_active_tab`); which view
     /// that picks needs the running app.
     func test_a_worktree_with_no_tabs_offers_to_make_one() throws {
-        let disclosures = app.buttons.matching(identifier: "worktreeDisclosure")
-        try XCTSkipUnless(
-            disclosures.firstMatch.waitForExistence(timeout: 10),
-            "no multi-worktree project in this store"
-        )
-        let disclosure = disclosures.allElementsBoundByIndex.last!
-        let branchRows = app.staticTexts.matching(identifier: "worktreeBranch")
-        let treeWasOpen = branchRows.count > 0
-        if !treeWasOpen { disclosure.click() }
-        XCTAssertTrue(wait { branchRows.count >= 2 }, "the tree did not open")
+        _ = try projectRowWithATree()
+        XCTAssertTrue(wait { self.branchRows.count >= 2 }, "the tree did not open")
 
         let newTerminal = app.buttons["New Terminal"]
         let rows = branchRows.allElementsBoundByIndex
@@ -338,12 +374,11 @@ final class CodeSparkUITests: XCTestCase {
             "a worktree with no tabs showed a blank pane instead of offering one"
         )
 
-        // Hand the sidebar back exactly as it was found. Tests after this one
-        // open a terminal into whatever is selected — parking on the empty
-        // worktree would hand them the very state this test needs to find — and
-        // one of them toggles this same disclosure, which a tree left open turns
-        // into a collapse.
+        // Hand the sidebar back with a non-empty worktree selected. Tests after
+        // this one open a terminal into whatever is selected, and parking on the
+        // empty worktree would hand them the very state this test needs to find.
+        // The tree itself can stay open — `projectRowWithATree` opens whatever
+        // it is given, either way round.
         rows[0].click()
-        if !treeWasOpen { disclosure.click() }
     }
 }

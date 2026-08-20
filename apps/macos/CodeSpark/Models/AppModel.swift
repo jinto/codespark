@@ -1009,6 +1009,20 @@ final class AppModel: ObservableObject {
         )
     }
 
+    /// What clicking a project row does. The disclosure triangle is gone, so the
+    /// row is the only thing that folds the tree — while still selecting, which
+    /// is the other half of what the click has always meant.
+    ///
+    /// It toggles without first asking whether there is a tree to toggle.
+    /// Selecting refreshes the worktree list over git, so on a cold cache the
+    /// answer at this moment is "none" even for a repo with several — and a
+    /// guard would eat the first click on every project opened this session.
+    /// A repo with one worktree just stores a flag that draws nothing.
+    func selectProjectAndToggleWorktrees(id: String) async {
+        await selectProject(id: id, promptForRecovery: true)
+        toggleWorktrees(projectID: id)
+    }
+
     static func savedExpandedProjectIDs() -> Set<String> {
         let saved = UserDefaults.standard.string(forKey: StorageKeys.expandedProjectIDs) ?? ""
         return Set(saved.split(separator: ",").map(String.init))
