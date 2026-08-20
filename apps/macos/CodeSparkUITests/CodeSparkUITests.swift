@@ -49,6 +49,117 @@ final class CodeSparkUITests: XCTestCase {
         )
     }
 
+    // MARK: - Remote folder picker
+
+    /// The unit suite can prove the picker *works*; only a running app can prove
+    /// the New SSH Project sheet ever offers it.
+    func test_the_new_ssh_sheet_offers_to_browse_the_host() {
+        openNewSSHSheet()
+
+        let browse = app.buttons["newSSHProjectBrowse"]
+        XCTAssertTrue(wait { browse.exists }, "the sheet has no Browse button")
+        XCTAssertFalse(browse.isEnabled, "there is no host to browse yet")
+
+        typeHost("localhost")
+
+        XCTAssertTrue(wait { browse.isEnabled }, "Browse stayed disabled after a host was named")
+    }
+
+    /// End to end: browse a real host, choose a folder, and watch it land in the
+    /// field that becomes the project's remote path.
+    func test_choosing_a_folder_fills_in_the_remote_path() throws {
+        try XCTSkipUnless(canSSHToLocalhost(), "sshd not running on localhost")
+        openNewSSHSheet()
+        typeHost("localhost")
+
+        app.buttons["newSSHProjectBrowse"].click()
+        XCTAssertTrue(
+            wait(upTo: 20) { self.app.buttons["remoteFolderPickerChoose"].isEnabled },
+            "the picker never finished listing the home directory"
+        )
+        app.buttons["remoteFolderPickerChoose"].click()
+
+        let remotePath = app.textFields["newSSHProjectRemotePath"]
+        XCTAssertTrue(
+            wait { (remotePath.value as? String)?.isEmpty == false },
+            "the chosen folder never reached the remote path field"
+        )
+        XCTAssertTrue(
+            ((remotePath.value as? String) ?? "").hasPrefix("/"),
+            "expected an absolute remote path, got \(String(describing: remotePath.value))"
+        )
+    }
+
+    /// Selecting a row is what saves the user a trip into the folder. The model
+    /// knows what a selection means; only the running app can say whether a
+    /// click ever produces one.
+    func test_clicking_a_folder_picks_it_without_walking_into_it() throws {
+        try XCTSkipUnless(canSSHToLocalhost(), "sshd not running on localhost")
+        openNewSSHSheet()
+        typeHost("localhost")
+
+        app.buttons["newSSHProjectBrowse"].click()
+        XCTAssertTrue(
+            wait(upTo: 20) { self.app.buttons["remoteFolderPickerChoose"].isEnabled },
+            "the picker never finished listing the home directory"
+        )
+        // The runner has its own sandboxed home, so the remote home is whatever
+        // the picker itself is showing.
+        let remoteHome = (app.textFields["remoteFolderPickerPath"].value as? String) ?? ""
+        XCTAssertTrue(remoteHome.hasPrefix("/"), "the picker never showed a path")
+
+        let row = firstFolderRow()
+        try XCTSkipIf(row == nil, "the home directory has no visible folders to click")
+        row?.click()
+        app.buttons["remoteFolderPickerChoose"].click()
+
+        let chosen = (app.textFields["newSSHProjectRemotePath"].value as? String) ?? ""
+        XCTAssertTrue(
+            chosen.hasPrefix(remoteHome + "/"),
+            "expected a folder inside \(remoteHome), got \(chosen)"
+        )
+    }
+
+    /// SwiftUI's List lands as a table or an outline depending on the platform's
+    /// mood; ask for both rather than pin the test to one.
+    private func firstFolderRow() -> XCUIElement? {
+        for container in [app.tables, app.outlines] {
+            let cell = container.firstMatch.cells.firstMatch
+            if cell.exists { return cell }
+        }
+        return nil
+    }
+
+    private func openNewSSHSheet() {
+        app.typeKey("n", modifierFlags: [.command, .shift])
+        XCTAssertTrue(
+            wait { self.app.textFields["newSSHProjectHost"].exists },
+            "the New SSH Project sheet never appeared"
+        )
+    }
+
+    private func typeHost(_ host: String) {
+        let field = app.textFields["newSSHProjectHost"]
+        field.click()
+        field.typeText(host)
+    }
+
+    private func canSSHToLocalhost() -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+        process.arguments = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=2",
+                             "-o", "StrictHostKeyChecking=no", "localhost", "echo", "ok"]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+
     // MARK: - Shortcuts reach the menu and fire
 
     /// The regression this whole layer exists for: `Cmd+Ctrl+S` had a working

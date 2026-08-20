@@ -57,6 +57,10 @@
 		EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */; };
 		EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1188AFD5C69D085D60330D02 /* AppTheme.swift */; };
 		552061F050EC181BD64E2449 /* SSHConnectionInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */; };
+		A1B2C3D40010E5F600002103 /* RemoteDirectoryListerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40010E5F600002003 /* RemoteDirectoryListerTests.swift */; };
+		A1B2C3D40010E5F600002104 /* RemoteFolderPickerModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40010E5F600002004 /* RemoteFolderPickerModelTests.swift */; };
+		A1B2C3D40010E5F600002102 /* RemoteFolderPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40010E5F600002002 /* RemoteFolderPickerSheet.swift */; };
+		A1B2C3D40010E5F600002101 /* RemoteDirectoryLister.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40010E5F600002001 /* RemoteDirectoryLister.swift */; };
 		0EEC708F84CF823A8E360EC4 /* NewSSHProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */; };
 		7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */; };
 		450EF5449C0B78E86452B863 /* SSHIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */; };
@@ -138,6 +142,10 @@
 		F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostFactory.swift; sourceTree = "<group>"; };
 		F6AB5E91D161AAA64F9501C4 /* AppModel+Monitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppModel+Monitor.swift"; sourceTree = "<group>"; };
 		8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionInfo.swift; sourceTree = "<group>"; };
+		A1B2C3D40010E5F600002003 /* RemoteDirectoryListerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteDirectoryListerTests.swift; sourceTree = "<group>"; };
+		A1B2C3D40010E5F600002004 /* RemoteFolderPickerModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteFolderPickerModelTests.swift; sourceTree = "<group>"; };
+		A1B2C3D40010E5F600002002 /* RemoteFolderPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteFolderPickerSheet.swift; sourceTree = "<group>"; };
+		A1B2C3D40010E5F600002001 /* RemoteDirectoryLister.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteDirectoryLister.swift; sourceTree = "<group>"; };
 		A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSSHProjectSheet.swift; sourceTree = "<group>"; };
 		105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionInfoTests.swift; sourceTree = "<group>"; };
 		A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHIntegrationTests.swift; sourceTree = "<group>"; };
@@ -206,6 +214,8 @@
 				82CF9045C1A9AED8862C73FD /* ClipboardImageHandlerTests.swift */,
 				9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */,
 				105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */,
+				A1B2C3D40010E5F600002003 /* RemoteDirectoryListerTests.swift */,
+				A1B2C3D40010E5F600002004 /* RemoteFolderPickerModelTests.swift */,
 				A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */,
 				23C1F099F0619FDF11DD53CF /* MockProjectCoreClient.swift */,
 				48CA429791ED61F383243326 /* MockTerminalHost.swift */,
@@ -225,6 +235,7 @@
 			children = (
 					C84785B7B190829BA72AF822 /* GitBranchService.swift */,
 				8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */,
+				A1B2C3D40010E5F600002001 /* RemoteDirectoryLister.swift */,
 				982886C18B94884FEA504409 /* GitWorktreeService.swift */,
 						B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */,
 				D1E2F3A4B5C6D7E8F9A0B1C2 /* TerminalStateDetector.swift */,
@@ -238,6 +249,7 @@
 			children = (
 				787ED7070EA378E8B9A0199D /* AddWorktreeSheet.swift */,
 				A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */,
+				A1B2C3D40010E5F600002002 /* RemoteFolderPickerSheet.swift */,
 				BE51452DABDDDB623C9F8A37 /* MainContentView.swift */,
 				F3450FDDB010612C39DC6A6B /* OnboardingView.swift */,
 				A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */,
@@ -493,6 +505,8 @@
 				9F862F9EEFF5775836F6DA22 /* ClipboardImageHandlerTests.swift in Sources */,
 				9ED695B19FC93D927CBF1CBD /* KeyEventRouterTests.swift in Sources */,
 				7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */,
+				A1B2C3D40010E5F600002103 /* RemoteDirectoryListerTests.swift in Sources */,
+				A1B2C3D40010E5F600002104 /* RemoteFolderPickerModelTests.swift in Sources */,
 				450EF5449C0B78E86452B863 /* SSHIntegrationTests.swift in Sources */,
 				A3C9A10ACAD571C82C1DCB74 /* MockProjectCoreClient.swift in Sources */,
 				3389CBD887323FCBA7DD452F /* MockTerminalHost.swift in Sources */,
@@ -544,6 +558,8 @@
 				366A365CFA1EFA718DEF53C6 /* SidebarView.swift in Sources */,
 				0EEC708F84CF823A8E360EC4 /* NewSSHProjectSheet.swift in Sources */,
 				552061F050EC181BD64E2449 /* SSHConnectionInfo.swift in Sources */,
+				A1B2C3D40010E5F600002102 /* RemoteFolderPickerSheet.swift in Sources */,
+				A1B2C3D40010E5F600002101 /* RemoteDirectoryLister.swift in Sources */,
 				E898DEED2F56E2BA70A0166F /* StorageKeys.swift in Sources */,
 				17F6D4887541BEBCDD9EBD85 /* TerminalFontSettings.swift in Sources */,
 				EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */,

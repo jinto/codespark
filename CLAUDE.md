@@ -117,6 +117,20 @@ Process detection + screen parsing replaces the old hook system:
   - **알려진 대가**: 주입 명령이 셸 히스토리에 남는다. 복원된 탭에서 Up을 누르면 `cat /var/folders/…`가 뜬다.
   - **SSH 탭은 다른 길**: `initial_input`은 pty로 들어가므로 원격 셸이 그걸 읽는다 — 로컬 임시 파일 경로를 원격에 타이핑하는 꼴이라 `No such file or directory`만 남는다. 그래서 SSH는 payload를 `RestoredScreenReplay.inlineCommand`(= `printf '%b' '…'`)로 만들어 **ssh 원격 명령 안에** 실어 보낸다. pty에 아무것도 타이핑하지 않으니 에코도 히스토리 오염도 없다.
 
+## Remote Folder Picker
+
+SSH 프로젝트의 **기본 폴더는 URI의 경로 부분**이다(`ssh://user@host:port/경로`). New SSH Project 시트의 `Browse…`가 원격을 훑어 그 칸을 채우면 나머지는 기존 길을 그대로 탄다 — `createProject`가 URI로 저장하고, `startSession`이 `ssh -t 'cd 경로 && exec $SHELL'`로 연다. `RemoteDirectoryLister`가 목록을, `RemoteFolderPickerSheet`/`RemoteFolderPickerModel`이 화면을 맡는다.
+
+- **원격 셸이 한 번 더 파싱한다**: ssh는 뒤따르는 인자를 공백으로 이어 붙여 원격 *로그인 셸*에 넘긴다. 그래서 스크립트를 `/bin/sh -c '<script>'` **한 단어로 감싸서** 보낸다. 안 감싸면 `;`와 `$e`가 저쪽에서 먹힌다 — `config.command`가 로컬 `/bin/sh`를 거치는 것과 같은 함정의 원격판.
+- **`~`만 원격에 맡긴다**: `remoteExpression(for:)`이 선행 `~`만 `"$HOME"`으로 남기고 나머지는 통째로 따옴표에 넣는다. 경로를 그냥 노출하면 `$(...)`가 원격에서 실행된다.
+- **마커 뒤부터가 답이다**: 수다스러운 `.bashrc`는 우리 스크립트보다 먼저 찍는다. `__CODESPARK_LS__` 줄 다음이 payload고, 마커가 없으면 `malformedOutput` — 첫 줄을 경로로 믿으면 "Welcome to prod!"에 들어가 앉는다.
+- **BatchMode 고정**: 비밀번호를 묻는 호스트에서 피커가 멈추면 안 된다. 못 열면 배너만 띄우고 **경로 입력창은 그대로 살려둔다** — 브라우징 실패가 프로젝트 생성을 막지 않는 게 설계다.
+- **stdout/stderr를 동시에 비운다**: 배너가 긴 호스트에서 stderr 파이프가 차면, stdout부터 끝까지 읽는 코드는 교착한다.
+- **`Process.waitUntilExit()`를 async 안에서 부르지 말 것**: 이 함수는 **부르는 스레드의 런루프**를 돈다. `await` 뒤에는 cooperative 풀의 다른 스레드에서 재개될 수 있고, 그 런루프는 종료 통지를 못 받아 **ssh가 죽은 지 한참 뒤에도 영원히 매달린다**. `run()` **전에** `terminationHandler`를 걸고 continuation으로 받는다(`exitStatus(of:)`). 단독 실행에선 잘 통과하다가 전체 스위트에서만 걸리는 종류라, `test_listing_returns_every_time_instead_of_hanging`이 라운드 사이에 MainActor 홉을 끼워 강제로 재현한다.
+- **실패해도 서 있던 자리는 지킨다**: `RemoteFolderPickerModel.move(to:)`는 호스트가 답한 경로만 반영한다. 못 여는 폴더를 눌러도 목록은 그대로고 배너만 바뀐다.
+- **마지막에 요청한 사람이 답을 갖는다**: 클릭 하나가 `Task` 하나라 왕복 두 개가 동시에 날아다닐 수 있다. 모든 왕복은 `beginRequest()`로 세대 번호를 받고, 응답이 돌아왔을 때 그 번호가 아직 최신일 때만 상태를 쓴다. 안 그러면 느린 응답이 나중에 도착해 **사용자를 방금 떠난 폴더로 되돌린다**. **목록뿐 아니라 `createFolder()`도 포함**이다 — mkdir 왕복 중에 다른 폴더로 옮기면, 늦게 온 생성 결과가 사용자를 새 폴더로 끌고 간다.
+- **선택은 화면에 있는 것만 가리킨다**: 숨김 폴더를 고른 뒤 토글을 끄면 `Choose`가 화면에 없는 경로를 내놓는다. `showsHiddenFolders`의 `didSet`이 안 보이게 된 선택을 버린다.
+
 ## Testing
 
 **TDD**: 중요 기능은 반드시 실패하는 테스트를 먼저 작성한 후 구현한다 (red → green → refactor).
