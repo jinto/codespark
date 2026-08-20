@@ -37,6 +37,9 @@ final class AppModel: ObservableObject {
     @Published var hiddenProjectIDs: Set<String> = []
     @Published var hiddenProjectNames: [String: String] = [:]
     @Published var gitBranches: [String: String] = [:]
+    /// Project folders git has been asked about and disowned. Kept apart from
+    /// "not asked yet": both have no branch, but only one of them knows it.
+    @Published var nonGitProjectPaths: Set<String> = []
     @Published var workspaces: [WorkspaceViewData] = []
     @Published private(set) var expandedProjectIDs: Set<String> = AppModel.savedExpandedProjectIDs()
     @Published var selectedWorkspacePath: String?
@@ -125,6 +128,25 @@ final class AppModel: ObservableObject {
         guard visibleSessions.isEmpty else { return .terminals }
         if let progress = progressForSelectedProject { return .restoring(progress) }
         return .empty
+    }
+
+    /// The line under a project's name. Every project is its own main worktree,
+    /// so what belongs there is the branch it is on — or, for a folder that is
+    /// not a repository, that fact.
+    ///
+    /// Never the path. The row's title is the folder's name, and spelling the
+    /// same folder out again underneath tells nobody anything. It also read as
+    /// the main worktree's path while the tree below was open, which is the
+    /// worktree row's line to say.
+    func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
+        if project.transport == "ssh" {
+            return SSHConnectionInfo(uri: project.path)?.displayLabel ?? project.path
+        }
+        guard !project.path.isEmpty else { return nil }
+        if let branch = gitBranches[project.path] { return branch }
+        // Blank until the lookup lands: "non-git" before asking would be a guess,
+        // and the line holds its space either way.
+        return nonGitProjectPaths.contains(project.path) ? "non-git" : nil
     }
 
     /// The strip above a terminal, for the tabs still on their way back.

@@ -17,6 +17,14 @@ final class GitBranchService: @unchecked Sendable {
         cache[path]?.branch
     }
 
+    /// Whether git has been asked about this folder and reported no branch.
+    /// Distinct from "not asked yet", which also has no branch — only one of the
+    /// two is something to say out loud.
+    func isKnownNonRepo(_ path: String) -> Bool {
+        guard let entry = cache[path] else { return false }
+        return entry.branch == nil
+    }
+
     @MainActor
     func refreshBranches(for paths: [String]) async {
         guard !isRefreshing else { return }

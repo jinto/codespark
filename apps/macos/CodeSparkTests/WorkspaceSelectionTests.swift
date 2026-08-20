@@ -2020,6 +2020,54 @@ final class WorkspaceSelectionTests: XCTestCase {
                       "and there is still nothing under it to show")
     }
 
+    // MARK: - A project row says which branch it is on
+
+    /// Every project is its main worktree, so the line under its name names the
+    /// branch. It never names the path — the row's title is already the folder,
+    /// and a second spelling of it says nothing.
+    @MainActor
+    func test_a_project_row_names_its_branch() {
+        let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []),
+                             terminalFactory: { _ in MockTerminalHost() })
+        let project = ProjectSummaryViewData(id: "p1", name: "proj", path: "/tmp/proj",
+                                             transport: "local", liveSessions: 0,
+                                             recentlyClosedSessions: 0,
+                                             hasInterruptedSessions: false, liveSessionDetails: [])
+        model.gitBranches = ["/tmp/proj": "main"]
+
+        XCTAssertEqual(model.projectInfoLine(for: project), "main")
+    }
+
+    /// A folder that is not a repository has no branch to report, and falling
+    /// back to its path put the folder's name on screen twice.
+    @MainActor
+    func test_a_folder_that_is_not_a_repo_says_so() {
+        let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []),
+                             terminalFactory: { _ in MockTerminalHost() })
+        let project = ProjectSummaryViewData(id: "p1", name: "notes", path: "/tmp/notes",
+                                             transport: "local", liveSessions: 0,
+                                             recentlyClosedSessions: 0,
+                                             hasInterruptedSessions: false, liveSessionDetails: [])
+        model.nonGitProjectPaths = ["/tmp/notes"]
+
+        XCTAssertEqual(model.projectInfoLine(for: project), "non-git")
+    }
+
+    /// Until the lookup lands we know neither, and guessing either way puts a
+    /// wrong word under the name. The line keeps its space and stays blank.
+    @MainActor
+    func test_a_project_says_nothing_until_the_branch_lookup_lands() {
+        let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []),
+                             terminalFactory: { _ in MockTerminalHost() })
+        let project = ProjectSummaryViewData(id: "p1", name: "proj", path: "/tmp/proj",
+                                             transport: "local", liveSessions: 0,
+                                             recentlyClosedSessions: 0,
+                                             hasInterruptedSessions: false, liveSessionDetails: [])
+
+        XCTAssertNil(model.projectInfoLine(for: project),
+                     "it guessed before it knew")
+    }
+
     // MARK: - The tree opens on the click, not after the scan
 
     /// Selecting refetches the worktree list, and that queues behind every other

@@ -30,20 +30,6 @@ struct SidebarView: View {
         var id: String { path }
     }
 
-    private func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
-        if project.transport == "ssh" {
-            if let info = SSHConnectionInfo(uri: project.path) {
-                return info.displayLabel
-            }
-            return project.path
-        }
-        guard !project.path.isEmpty else { return nil }
-        if let branch = model.gitBranches[project.path] {
-            return branch
-        }
-        return abbreviatePath(project.path)
-    }
-
     private func abbreviatePath(_ path: String) -> String {
         (path as NSString).abbreviatingWithTildeInPath
     }
@@ -96,7 +82,7 @@ struct SidebarView: View {
                                 project: project,
                                 isSelected: model.selectedProjectID == project.id,
                                 status: model.projectStatus(for: project),
-                                infoLine: projectInfoLine(for: project),
+                                infoLine: model.projectInfoLine(for: project),
                                 hotkeyIndex: hotkeyIndex(for: project),
                                 showsWorktreeRows: model.showsWorktreeRows(for: project)
                             )

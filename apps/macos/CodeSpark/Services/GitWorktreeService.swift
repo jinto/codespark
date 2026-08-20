@@ -456,6 +456,32 @@ final class GitWorktreeService: @unchecked Sendable {
         }
     }
 
+    /// A failure is reported once and then held. The lookup reruns every TTL, so
+    /// a project folder that is not a repository would otherwise write the same
+    /// line every minute for as long as the app is open. Clearing on success
+    /// means a folder that comes back reports its next failure again.
+    private static let failureLog = FailureLog()
+
+    private final class FailureLog: @unchecked Sendable {
+        private let lock = NSLock()
+        private var reported: Set<String> = []
+
+        func shouldReport(_ path: String) -> Bool {
+            lock.lock(); defer { lock.unlock() }
+            return reported.insert(path).inserted
+        }
+
+        func clear(_ path: String) {
+            lock.lock(); defer { lock.unlock() }
+            reported.remove(path)
+        }
+    }
+
+    private static func noteFailure(at path: String, status: Int32, stderr: String) {
+        guard failureLog.shouldReport(path) else { return }
+        NSLog("[CodeSpark] git worktree list failed (%d) for %@: %@", status, path, stderr)
+    }
+
     private static func fetchWorktrees(at path: String) async -> (String, [GitWorktree]?) {
         // The one place local and remote part ways. Everything downstream —
         // cache, parser, grouping — sees the same shapes either way.
@@ -493,13 +519,16 @@ final class GitWorktreeService: @unchecked Sendable {
             // anything observed; it is one less thing that has to hold.
             process.waitUntilExit()
             guard process.terminationStatus == 0 else {
-                NSLog("[CodeSpark] git worktree list failed (%d) for %@: %@",
-                      process.terminationStatus, path,
-                      String(data: errorData, encoding: .utf8)?
-                          .trimmingCharacters(in: .whitespacesAndNewlines) ?? "")
+                noteFailure(
+                    at: path,
+                    status: process.terminationStatus,
+                    stderr: String(data: errorData, encoding: .utf8)?
+                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                )
                 return (path, nil)
             }
             guard let output = String(data: data, encoding: .utf8) else { return (path, nil) }
+            failureLog.clear(path)
             let worktrees = parseWorktreeList(output)
             return (path, worktrees.isEmpty ? nil : worktrees)
         } catch {
