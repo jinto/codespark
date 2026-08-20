@@ -8,18 +8,25 @@ import XCTest
 /// `keyboardShortcut("…")` 인라인 금지와 같은 성격의 게이트다.
 final class SidebarTypographyTests: XCTestCase {
     func test_no_row_label_reweights_itself_when_selected() throws {
-        let viewsDirectory = URL(fileURLWithPath: #filePath)
+        // Every source file, not just `Views/`: rows are drawn from `Terminal/`
+        // too, and a label that reweights itself is the same jitter wherever it
+        // is written.
+        let sourceRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // CodeSparkTests
             .deletingLastPathComponent()  // macos
-            .appendingPathComponent("CodeSpark/Views")
+            .appendingPathComponent("CodeSpark")
 
-        // `weight: isSelected ? …`, `weight: isActive ? …`, `weight: isHovering ? …`
-        let reweight = try NSRegularExpression(pattern: #"weight:\s*is\w+\s*\?"#)
+        // Catches `weight: isSelected ? …` and the other spellings of the same
+        // thing: `.fontWeight(isActive ? …)`, `.bold(isSelected)`, and a whole
+        // font swapped on state (`.font(isActive ? .headline : .caption)`).
+        let reweight = try NSRegularExpression(
+            pattern: #"(weight:\s*is\w+\s*\?|fontWeight\(\s*is\w+\s*\?|\.bold\(\s*is\w+|\.font\(\s*is\w+\s*\?)"#
+        )
         var offenders: [String] = []
 
-        let files = try FileManager.default.contentsOfDirectory(
-            at: viewsDirectory, includingPropertiesForKeys: nil
-        )
+        let files = FileManager.default.enumerator(
+            at: sourceRoot, includingPropertiesForKeys: nil
+        )?.compactMap { $0 as? URL } ?? []
         for file in files where file.pathExtension == "swift" {
             let source = try String(contentsOf: file, encoding: .utf8)
             for (index, line) in source.components(separatedBy: .newlines).enumerated() {

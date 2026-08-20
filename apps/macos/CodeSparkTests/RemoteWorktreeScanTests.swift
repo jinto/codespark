@@ -74,6 +74,7 @@ final class RemoteWorktreeScanTests: XCTestCase {
 
     // MARK: - Scanning
 
+    @MainActor
     func test_remote_worktrees_come_back_addressed_as_uris() async throws {
         try installStubSSH(stdout: """
         worktree /srv/repo
@@ -113,6 +114,7 @@ final class RemoteWorktreeScanTests: XCTestCase {
 
     /// Without a remote path there is no way to know where the repository is,
     /// and guessing costs a connection on every poll.
+    @MainActor
     func test_a_project_without_a_remote_path_is_not_scanned() async throws {
         let argvFile = try installStubSSH(stdout: "")
 

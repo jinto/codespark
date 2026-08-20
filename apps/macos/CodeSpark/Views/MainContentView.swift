@@ -271,7 +271,7 @@ struct MainContentView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
-                .accessibilityIdentifier("restoreProgressCount")
+                .accessibilityIdentifier("restoreBannerCount")
             progressBar(progress.fraction, width: 120, height: 4)
             Spacer(minLength: 0)
         }

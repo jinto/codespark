@@ -43,6 +43,7 @@ final class SSHIntegrationTests: XCTestCase {
 
     /// A stub can only prove the argv we built. This proves the remote shell
     /// agrees — quoting, tilde expansion, and the path git actually chose.
+    @MainActor
     func test_worktrees_scan_create_and_remove_over_a_real_connection() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("cs-ssh-wt-\(UUID().uuidString)")

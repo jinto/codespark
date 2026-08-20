@@ -67,6 +67,7 @@ final class GitWorktreeService: @unchecked Sendable {
         var isExpired: Bool { Date().timeIntervalSince(fetchedAt) > ttl }
     }
 
+    @MainActor
     func worktrees(for projectPath: String) -> [GitWorktree]? {
         cache[projectPath]?.worktrees
     }
@@ -123,12 +124,14 @@ final class GitWorktreeService: @unchecked Sendable {
     /// Seeds the cache so multi-worktree behaviour can be exercised without a
     /// real repository. Only tests call this — `refreshWorktrees` is the
     /// production path.
+    @MainActor
     func primeCache(_ worktrees: [GitWorktree], for projectPath: String) {
         cache[projectPath] = CacheEntry(worktrees: worktrees, fetchedAt: Date(), ttl: normalTTL)
     }
 
     /// Ages every entry past its TTL so the next refresh re-runs the lookup.
     /// Only tests call this.
+    @MainActor
     func expireCacheForTesting() {
         cache = cache.mapValues {
             CacheEntry(worktrees: $0.worktrees, fetchedAt: .distantPast, ttl: 0)
@@ -314,6 +317,7 @@ final class GitWorktreeService: @unchecked Sendable {
 
     // MARK: - Mutate
 
+    @MainActor
     func invalidateCache(for projectPath: String) {
         cache.removeValue(forKey: projectPath)
     }
