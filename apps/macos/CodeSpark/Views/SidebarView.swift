@@ -172,7 +172,7 @@ struct SidebarView: View {
                                             && model.activeWorkspacePath == workspace.path,
                                         status: model.workspaceStatus(for: workspace),
                                         hotkeyIndex: hotkeyIndex(for: workspace, in: project),
-                                        pathLine: model.worktreePathLine(for: workspace).map(abbreviatePath)
+                                        pathLine: model.worktreePathLine(for: workspace).map(model.displayPath)
                                     )
                                     .contentShape(Rectangle())
                                     .onTapGesture {
@@ -303,7 +303,7 @@ struct SidebarView: View {
             Button("Cancel", role: .cancel) { pendingRemoveWorktree = nil }
         } message: {
             if let removal = pendingRemoveWorktree {
-                Text("Its tabs will close and \(abbreviatePath(removal.path)) will be deleted. The branch itself stays.")
+                Text("Its tabs will close and \(model.displayPath(for: removal.path)) will be deleted. The branch itself stays.")
             }
         }
         .confirmationDialog(

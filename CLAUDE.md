@@ -76,6 +76,15 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - **전환 수단**: 사이드바 행 클릭 + `Cmd+Opt+[`/`]` 순환 + `Cmd+1…9`. 사이드바를 숨기면 클릭 경로가 사라지므로 핫키가 없으면 다른 워크트리의 탭이 고립된다.
   - `Cmd+1…9`는 프로젝트가 아니라 **탭이 살아 있는 워크스페이스**(`numberedWorkspaces`)를 가리킨다. 사이드바 순서대로 매기고, 워크트리 1개짜리 프로젝트는 프로젝트 행 자체가 그 워크스페이스다. 빈 워크트리는 번호를 받지 않고, **트리 접기/펼치기는 번호를 바꾸지 않는다** — 손가락 기억이 깨지면 안 되기 때문. 열린 탭이 하나도 없으면 번호도 없다.
   - 단축키 등록 규칙은 아래 "Keyboard Shortcuts" 참고.
+- **원격(ssh) 프로젝트도 워크트리를 갖는다**: 원격 워크트리의 주소는 `ssh://user@host/remote/path` URI다. `workspacePath`가 소속·선택·복원·삭제가 공유하는 단일 키이므로, 원격도 같은 문자열 공간에 넣어 그 로직을 그대로 쓴다.
+  - **두 네임스페이스를 섞지 말 것**: `workspacePath`는 URI, `last_cwd`와 git 인자는 원격 raw 경로다. 변환은 `SSHConnectionInfo.workspaceURI(forRemotePath:)` / `remotePath(fromWorkspaceURI:)` **두 함수 밖에서 하지 않는다**. `git -C 'ssh://…'`는 `cannot change to`로 죽는다.
+  - **주소는 git이 부르는 대로 쓴다**: 워크트리를 만든 뒤 경로를 우리가 조립하면 안 된다. git은 심링크가 해소된 경로를 기록하므로(macOS의 `/var` → `/private/var`), 생성 스크립트가 `pwd -P`로 찍어준 걸 그대로 받는다. 철자가 둘이면 워크스페이스가 둘이고, 그중 하나는 아무 탭도 안 가리킨다 — 스텁 테스트로는 안 보이고 실제 ssh 왕복에서만 드러난다.
+  - **`remotePath` 없는 `ssh://host`는 스캔하지 않는다** — 리포 위치를 모르므로.
+  - **게이트가 두 겹**: `worktreeProjectPaths`의 필터와 `selectProject`의 호출 조건. 하나만 열면 원격 스캔은 아무 증상 없이 죽어 있는다. 그래서 호출부가 `worktreeProjectPaths.contains(...)`로 **같은 질문**을 한다.
+  - **조회 실패는 워크트리 삭제가 아니다 — 화면에서도**: 실패해도 캐시가 직전 성공 목록을 유지하고, "지금 다시 읽어라"는 `invalidateCache`가 아니라 **`expireCache`**다. 엔트리를 지워버리면 이어지는 조회가 실패했을 때 남는 게 없고, `groupSessions`가 프로젝트 하나로 재그룹핑해서 워크트리에 서 있던 선택이 아무것도 못 맞춘다(`visibleSessions`가 빈 배열) — 메인 영역이 빈다. 원격은 일상적으로 끊기므로 이게 기본 경로다.
+  - **원격 생성은 스크립트 한 번**: `$HOME` 전개·이름 충돌 확인(exit 3)·`git worktree add`·만들어진 경로 출력이 모두 원격에서 한 번에 일어난다. `'~/worktrees'`는 따옴표 안에서 전개되지 않으므로 루트만 `remoteRootExpression`이 따로 다룬다.
+  - **삭제는 git이 성공한 뒤에 탭을 닫는다**(로컬도 동일). 순서가 반대면 삭제에 실패해도 터미널만 잃는다. 그래서 삭제 테스트는 `/tmp`의 가짜 경로가 아니라 **진짜 git 워크트리** 위에서 돈다 — 가짜 경로에서는 git이 실패해 테스트가 아무것도 검증하지 못한다.
+  - **동시 ssh는 4개까지**, `ControlMaster`는 쓰지 않는다(고아 마스터·소켓 경로 길이·dead socket 재사용을 들이는 대가가 지연시간 절약보다 크다). refresh는 겹치면 버리지 않고 **줄을 선다** — 버리면 워크트리 생성/삭제 직후의 refresh가 사라진다.
 
 ## Keyboard Shortcuts
 
@@ -162,3 +171,5 @@ git push origin v{VERSION}
 ## Known Issues
 
 - SSH remote sessions: terminal state detection works via screen parsing only (no shell PID access for remote processes)
+- 원격 워크트리 스캔은 키 인증(`BatchMode=yes`)이 되는 호스트에서만 동작한다. 비밀번호를 묻는 호스트에서는 워크트리 행이 조용히 안 나온다 — 백그라운드 폴링이 프롬프트에 매달릴 수 없기 때문. 사용자가 직접 누르는 생성/삭제는 실패 시 `loadErrorMessage`에 뜬다.
+- IPv6 리터럴 호스트는 `SSHConnectionInfo` 파서(`lastIndex(of: ":")`) 한계로 지원하지 않는다. 원격 워크트리 주소가 이 파서 위에 서 있으므로, 고칠 때 함께 봐야 한다.

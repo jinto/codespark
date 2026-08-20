@@ -1648,6 +1648,23 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(model.visitingBranch(for: visitor), "feat")
     }
 
+    /// A workspace address is shown in two places — the worktree row's path
+    /// line and the removal dialog. A remote address is a URI, and running a
+    /// URI through `abbreviatingWithTildeInPath` eats one of its slashes:
+    /// `ssh:/localhost/srv/repo`. The host is already on the project row, so
+    /// the remote directory is the part worth reading.
+    @MainActor
+    func test_a_remote_workspace_reads_as_its_remote_directory() {
+        let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []),
+                             terminalFactory: { _ in MockTerminalHost() })
+
+        XCTAssertEqual(model.displayPath(for: "ssh://localhost/srv/repo"), "/srv/repo")
+        XCTAssertEqual(model.displayPath(for: "ssh://localhost/private/tmp/cs-ui-remote/repo"),
+                       "/private/tmp/cs-ui-remote/repo")
+        XCTAssertEqual(model.displayPath(for: "/Users/jinto/projects/codespark"),
+                       "~/projects/codespark")
+    }
+
     /// A remote project with two worktrees primed in the cache, not yet selected.
     @MainActor
     private func remoteModel(

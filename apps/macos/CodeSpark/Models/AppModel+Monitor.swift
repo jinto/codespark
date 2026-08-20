@@ -111,8 +111,9 @@ extension AppModel {
     }
 
     func refreshGitWorktrees() {
-        // Every local project, not just the selected one — an open tree keeps its
-        // rows while another project has focus. Only stale entries respawn git.
+        // Every project that can have worktrees, remote ones included, and not
+        // just the selected one — an open tree keeps its rows while another
+        // project has focus. Only stale entries respawn git.
         let paths = worktreeProjectPaths
         guard !paths.isEmpty else { return }
         Task {
