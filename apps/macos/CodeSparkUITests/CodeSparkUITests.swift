@@ -19,6 +19,14 @@ final class CodeSparkUITests: XCTestCase {
         app.staticTexts.matching(identifier: "worktreeBranch")
     }
 
+    /// Rows an open tree puts on screen. Not the same as the branch rows: the
+    /// worktrees nobody is working in fold behind a single "N more", so a tree
+    /// can open and add one row rather than five. Counting the fold as a row is
+    /// what keeps "did this click open a tree" answerable.
+    private var treeRowCount: Int {
+        branchRows.count + (app.staticTexts["foldedWorktrees"].exists ? 1 : 0)
+    }
+
     /// Selecting a project with no live tabs raises the "Choose session" dialog,
     /// which blocks the window until it is answered. The disclosure triangle
     /// never selected anything, so the old tests never met it — opening a tree
@@ -39,7 +47,10 @@ final class CodeSparkUITests: XCTestCase {
     /// Expansion is remembered across launches, so a click can just as easily
     /// fold a tree an earlier test left open. That still identifies the row —
     /// we just click again to hand it back open.
-    private func projectRowWithATree() throws -> XCUIElement {
+    /// `revealingFolded` is how every caller but the folding test wants it: the
+    /// idle worktrees are folded behind a count, and a test about the tree
+    /// itself needs the whole tree rather than the part still in use.
+    private func projectRowWithATree(revealingFolded: Bool = true) throws -> XCUIElement {
         // Generous: the tests that run before this one leave tabs behind, and a
         // launch that restores several replays their screens before the sidebar
         // settles. Ten seconds was enough until it wasn't.
@@ -49,10 +60,10 @@ final class CodeSparkUITests: XCTestCase {
         )
         // Last first, so callers that press Cmd+1 land on a different project.
         for row in projectRows.allElementsBoundByIndex.reversed() {
-            let before = branchRows.count
+            let before = treeRowCount
             row.click()
             dismissSessionChooserIfPresent()
-            guard wait(until: { self.branchRows.count != before }) else {
+            guard wait(until: { self.treeRowCount != before }) else {
                 // No tree here — but the click stored an expansion flag all the
                 // same (it toggles before knowing whether there is a tree, see
                 // `selectProjectAndToggleWorktrees`). Flip it straight back, or
@@ -61,17 +72,21 @@ final class CodeSparkUITests: XCTestCase {
                 dismissSessionChooserIfPresent()
                 continue
             }
-            if branchRows.count < before {
+            if treeRowCount < before {
                 // This row has a tree, and the click just folded one an earlier
                 // test left open. Reopening puts the count back at `before` —
                 // never above it — so wait against the folded count, not `before`.
-                let folded = branchRows.count
+                let folded = treeRowCount
                 row.click()
                 dismissSessionChooserIfPresent()
                 XCTAssertTrue(
-                    wait(until: { self.branchRows.count > folded }),
+                    wait(until: { self.treeRowCount > folded }),
                     "the tree would not reopen"
                 )
+            }
+            if revealingFolded {
+                let folded = app.staticTexts["foldedWorktrees"]
+                if folded.exists { folded.click() }
             }
             return row
         }
@@ -395,7 +410,7 @@ final class CodeSparkUITests: XCTestCase {
     /// they stop pushing the rest off screen. Asking has to bring them back —
     /// and only a running app can say whether the row takes the click.
     func test_the_folded_worktrees_open_when_asked() throws {
-        _ = try projectRowWithATree()
+        _ = try projectRowWithATree(revealingFolded: false)
         let folded = app.staticTexts["foldedWorktrees"]
         try XCTSkipUnless(
             folded.waitForExistence(timeout: 5),
