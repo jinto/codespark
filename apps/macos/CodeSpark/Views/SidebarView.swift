@@ -100,7 +100,8 @@ struct SidebarView: View {
                                 isSelected: model.selectedProjectID == project.id,
                                 status: model.projectStatus(for: project),
                                 infoLine: projectInfoLine(for: project),
-                                hotkeyIndex: hotkeyIndex(for: project)
+                                hotkeyIndex: hotkeyIndex(for: project),
+                                showsWorktreeRows: model.showsWorktreeRows(for: project)
                             )
                             .contentShape(Rectangle())
                             .overlay(alignment: .top) {
@@ -395,13 +396,21 @@ struct ProjectSidebarRow: View {
     let status: ProjectStatus
     var infoLine: String? = nil
     var hotkeyIndex: Int? = nil
+    /// Whether this row's worktrees are listed underneath it right now.
+    var showsWorktreeRows: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 5) {
+                // Open, the worktrees below each carry their own state and this
+                // row is a heading — a dot here is the same green said twice, one
+                // line apart. Hidden rather than removed: dropping it would slide
+                // the title sideways, and this row toggles on click, so that is
+                // the jitter "선택은 색으로만 말한다" exists to keep out.
                 Circle()
                     .fill(status.color)
                     .frame(width: 7, height: 7)
+                    .opacity(showsWorktreeRows ? 0 : 1)
 
                 Text(project.name)
                     .font(.system(size: 12, weight: .medium))
