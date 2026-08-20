@@ -220,4 +220,39 @@ final class RemoteWorktreeScanTests: XCTestCase {
         )
         XCTAssertFalse(argv.joined().contains("ssh://"), "a URI reached git: \(argv)")
     }
+
+    // MARK: - Queueing
+
+    /// A refresh asked for while another is running used to be dropped on the
+    /// floor. With a slow remote in the mix that is the refresh right after
+    /// creating or removing a worktree — the one whose result the sidebar is
+    /// waiting for.
+    @MainActor
+    func test_a_refresh_during_a_refresh_is_not_dropped() async throws {
+        // A slow stub plus a start marker: the second refresh is issued only
+        // once the first is provably still in flight, so the race is not left
+        // to scheduling luck.
+        let startedFile = stubDirectory.appendingPathComponent("started")
+        let stub = stubDirectory.appendingPathComponent("ssh")
+        try """
+        #!/bin/sh
+        : > '\(startedFile.path)'
+        sleep 0.6
+        echo 'worktree /srv/repo'
+        echo 'branch refs/heads/main'
+        """.write(to: stub, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+        GitWorktreeService.sshExecutablePath = stub.path
+
+        let service = GitWorktreeService()
+        let first = Task { await service.refreshWorktrees(for: ["ssh://box/srv/one"]) }
+        while !FileManager.default.fileExists(atPath: startedFile.path) {
+            await Task.yield()
+        }
+
+        await service.refreshWorktrees(for: ["ssh://box/srv/one", "ssh://box/srv/two"])
+        await first.value
+
+        XCTAssertNotNil(service.worktrees(for: "ssh://box/srv/two"), "the second refresh was dropped")
+    }
 }

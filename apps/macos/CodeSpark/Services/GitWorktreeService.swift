@@ -52,7 +52,11 @@ final class GitWorktreeService: @unchecked Sendable {
     private var cache: [String: CacheEntry] = [:]
     private let normalTTL: TimeInterval = 30
     private let failureTTL: TimeInterval = 60
-    private var isRefreshing = false
+    /// Refreshes queue behind each other instead of being dropped. A queued
+    /// duplicate is nearly free — it finds nothing stale and returns — while a
+    /// dropped one loses the answer the sidebar is waiting for, which is
+    /// exactly the refresh that follows creating or removing a worktree.
+    private var inFlight: Task<Void, Never>?
 
     private struct CacheEntry {
         let worktrees: [GitWorktree]?
@@ -67,10 +71,17 @@ final class GitWorktreeService: @unchecked Sendable {
 
     @MainActor
     func refreshWorktrees(for projectPaths: [String]) async {
-        guard !isRefreshing else { return }
-        isRefreshing = true
-        defer { isRefreshing = false }
+        let previous = inFlight
+        let task = Task { @MainActor [weak self] in
+            await previous?.value
+            await self?.performRefresh(for: projectPaths)
+        }
+        inFlight = task
+        await task.value
+    }
 
+    @MainActor
+    private func performRefresh(for projectPaths: [String]) async {
         let uniquePaths = Set(projectPaths)
         let stale = uniquePaths.filter { path in
             guard let entry = cache[path] else { return true }
