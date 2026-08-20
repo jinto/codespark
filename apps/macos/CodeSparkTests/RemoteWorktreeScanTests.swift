@@ -180,7 +180,9 @@ final class RemoteWorktreeScanTests: XCTestCase {
         XCTAssertTrue(script.contains("\"$HOME\"/'worktrees'"), script)
         XCTAssertTrue(script.contains("exit 3"), script)
         XCTAssertTrue(script.contains("git -C '/srv/repo' worktree add -b 'feat'"), script)
-        XCTAssertTrue(script.contains("printf"), script)
+        // Not the composed path: git records the symlink-resolved one, and two
+        // spellings of a worktree are two workspaces.
+        XCTAssertTrue(script.contains("pwd -P"), script)
     }
 
     func test_creating_a_remote_worktree_returns_its_uri() async throws {

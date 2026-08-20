@@ -162,6 +162,11 @@ final class GitWorktreeService: @unchecked Sendable {
     ///
     /// `git worktree add` chatters on stdout, so it is redirected — stdout
     /// carries exactly one thing, the path.
+    ///
+    /// That path is printed with `pwd -P`, not as it was composed: git records
+    /// the symlink-resolved directory, so composing the address ourselves would
+    /// spell the same worktree differently from every later scan — and two
+    /// spellings are two workspaces, one of which no tab is keyed to.
     static func remoteAddWorktreeScript(
         repoPath: String,
         branch: String,
@@ -175,7 +180,7 @@ final class GitWorktreeService: @unchecked Sendable {
         if [ -e "$p" ]; then exit \(remoteNameTakenExitCode); fi; \
         mkdir -p "$root" || exit 1; \
         git -C \(SSHConnectionInfo.shellQuoted(repoPath)) worktree add -b \(SSHConnectionInfo.shellQuoted(branch)) "$p" 1>&2 || exit 1; \
-        printf '%s\\n' "$p"
+        cd "$p" && pwd -P
         """
     }
 

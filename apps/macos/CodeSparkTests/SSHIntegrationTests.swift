@@ -39,7 +39,64 @@ final class SSHIntegrationTests: XCTestCase {
         XCTAssertEqual(withUser.sshCommand(), "ssh -p 22 testuser@localhost")
     }
 
+    // MARK: - Worktrees over ssh
+
+    /// A stub can only prove the argv we built. This proves the remote shell
+    /// agrees — quoting, tilde expansion, and the path git actually chose.
+    func test_worktrees_scan_create_and_remove_over_a_real_connection() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cs-ssh-wt-\(UUID().uuidString)")
+        let repo = root.appendingPathComponent("my repo")   // a space, on purpose
+        try FileManager.default.createDirectory(at: repo, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+
+        try runLocal("/usr/bin/git", ["-C", repo.path, "init", "-q", "-b", "main"])
+        try runLocal("/usr/bin/git", ["-C", repo.path, "-c", "user.email=t@t", "-c", "user.name=t",
+                                      "commit", "-q", "--allow-empty", "-m", "init"])
+
+        let projectURI = "ssh://localhost\(repo.path)"
+        let worktreeRoot = root.appendingPathComponent("wt").path
+
+        // Create
+        let creation = try await GitWorktreeService.addWorktree(
+            projectPath: projectURI, branch: "feat", worktreeRoot: worktreeRoot
+        )
+        // The address is spelled the way git spells it, which on macOS means
+        // /var resolved to /private/var — so check the shape, and let the scan
+        // below prove the two spellings agree.
+        XCTAssertTrue(creation.path.hasPrefix("ssh://localhost/"), creation.path)
+        XCTAssertTrue(creation.path.hasSuffix("/\(creation.name)"), creation.path)
+
+        // Scan
+        let service = GitWorktreeService()
+        await service.refreshWorktrees(for: [projectURI])
+        let found = try XCTUnwrap(service.worktrees(for: projectURI))
+        XCTAssertEqual(found.count, 2, "expected the repo and its worktree, got \(found.map(\.path))")
+        XCTAssertTrue(found.contains { $0.branch == "feat" && $0.path == creation.path },
+                      "worktrees were \(found.map { "\($0.branch)@\($0.path)" })")
+
+        // Remove
+        try await GitWorktreeService.removeWorktree(projectPath: projectURI, worktreePath: creation.path)
+        service.invalidateCache(for: projectURI)
+        await service.refreshWorktrees(for: [projectURI])
+        XCTAssertEqual(service.worktrees(for: projectURI)?.count, 1)
+    }
+
     // MARK: - Helpers
+
+    private func runLocal(_ executable: String, _ arguments: [String]) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw NSError(domain: "TestSetup", code: Int(process.terminationStatus),
+                          userInfo: [NSLocalizedDescriptionKey: "\(executable) \(arguments.joined(separator: " ")) failed"])
+        }
+    }
 
     private func canSSHToLocalhost() -> Bool {
         let process = Process()
