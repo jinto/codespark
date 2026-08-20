@@ -207,7 +207,10 @@ final class AppModel: ObservableObject {
                 } else {
                     pendingSSHReconnectProjectID = nil
                 }
-                if !detail.path.isEmpty && detail.transport != "ssh" {
+                // Two gates guard remote scanning — this one and the filter in
+                // `worktreeProjectPaths`. Ask the same question in both places
+                // so opening one without the other cannot happen.
+                if worktreeProjectPaths.contains(detail.path) {
                     gitWorktreeService.invalidateCache(for: detail.path)
                     await gitWorktreeService.refreshWorktrees(for: worktreeProjectPaths)
                     recomputeWorkspaces()
@@ -1011,13 +1014,20 @@ final class AppModel: ObservableObject {
         activeWorkspacePath = path
     }
 
-    /// Every local project the sidebar can draw worktrees for. `refreshWorktrees`
+    /// Every project the sidebar can draw worktrees for. `refreshWorktrees`
     /// prunes whatever it is not given, so each refresh has to name them all or
     /// the projects that are merely open lose their rows.
+    ///
+    /// A remote project qualifies once its URI says where the repository is; a
+    /// bare `ssh://host` does not, and guessing would cost a connection on
+    /// every poll.
     var worktreeProjectPaths: [String] {
-        projects
-            .filter { $0.transport != "ssh" && !$0.path.isEmpty }
-            .map(\.path)
+        projects.compactMap { project in
+            guard !project.path.isEmpty else { return nil }
+            guard project.transport == "ssh" else { return project.path }
+            guard let info = SSHConnectionInfo(uri: project.path), info.remotePath != nil else { return nil }
+            return project.path
+        }
     }
 
     /// The branch a tab is currently working in, when that is not the worktree

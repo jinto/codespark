@@ -1443,4 +1443,27 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertTrue(model.closingSessionIDs.contains(legacy.id),
                       "a row with no workspace is placed by its cwd, and let go the same way")
     }
+
+    // MARK: - Remote projects are scanned
+
+    /// Two gates gate this: the path list and the call site in `selectProject`.
+    /// Opening only one leaves remote scanning dead with no visible symptom.
+    @MainActor
+    func test_remote_projects_with_a_path_are_offered_for_scanning() {
+        let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []),
+                             terminalFactory: { _ in MockTerminalHost() })
+        model.projects = [
+            ProjectSummaryViewData(id: "local", name: "local", path: "/tmp/local", transport: "local",
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: []),
+            ProjectSummaryViewData(id: "remote", name: "remote", path: "ssh://jay@box/srv/repo", transport: "ssh",
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: []),
+            ProjectSummaryViewData(id: "pathless", name: "pathless", path: "ssh://box", transport: "ssh",
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: []),
+        ]
+
+        XCTAssertEqual(model.worktreeProjectPaths.sorted(), ["/tmp/local", "ssh://jay@box/srv/repo"])
+    }
 }

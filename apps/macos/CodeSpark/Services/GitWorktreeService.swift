@@ -45,6 +45,10 @@ final class GitWorktreeService: @unchecked Sendable {
     /// remote git does not answer.
     private static let remoteTimeout: TimeInterval = 20
 
+    /// A poll over several remote projects should not open one connection per
+    /// project all at once.
+    private static let maxConcurrentLookups = 4
+
     private var cache: [String: CacheEntry] = [:]
     private let normalTTL: TimeInterval = 30
     private let failureTTL: TimeInterval = 60
@@ -77,8 +81,12 @@ final class GitWorktreeService: @unchecked Sendable {
         guard !stale.isEmpty else { return }
 
         await withTaskGroup(of: (String, [GitWorktree]?).self) { group in
-            for path in stale {
+            let pending = Array(stale)
+            var next = 0
+            while next < pending.count && next < Self.maxConcurrentLookups {
+                let path = pending[next]
                 group.addTask { await Self.fetchWorktrees(at: path) }
+                next += 1
             }
             for await (path, result) in group {
                 cache[path] = CacheEntry(
@@ -86,6 +94,11 @@ final class GitWorktreeService: @unchecked Sendable {
                     fetchedAt: Date(),
                     ttl: result != nil ? normalTTL : failureTTL
                 )
+                if next < pending.count {
+                    let queued = pending[next]
+                    group.addTask { await Self.fetchWorktrees(at: queued) }
+                    next += 1
+                }
             }
         }
     }

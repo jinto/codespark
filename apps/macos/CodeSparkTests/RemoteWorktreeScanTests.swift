@@ -122,4 +122,41 @@ final class RemoteWorktreeScanTests: XCTestCase {
         XCTAssertNil(service.worktrees(for: "ssh://box"))
         XCTAssertFalse(FileManager.default.fileExists(atPath: argvFile.path), "ssh should not have run")
     }
+
+    // MARK: - Concurrency
+
+    /// One slow host must not hold up the others, but neither should every
+    /// project on the list spawn an ssh at once.
+    func test_lookups_run_no_more_than_four_at_a_time() async throws {
+        let liveDirectory = stubDirectory.appendingPathComponent("live")
+        try FileManager.default.createDirectory(at: liveDirectory, withIntermediateDirectories: true)
+        let peakFile = stubDirectory.appendingPathComponent("peak.txt")
+        let stub = stubDirectory.appendingPathComponent("ssh")
+        // Each run drops a marker file, records the high-water count, sleeps,
+        // then clears its marker. A directory listing is the live count.
+        let script = """
+        #!/bin/sh
+        mine='\(liveDirectory.path)'/$$
+        : > "$mine"
+        live=$(ls '\(liveDirectory.path)' | wc -l | tr -d ' ')
+        peak=$(cat '\(peakFile.path)' 2>/dev/null || echo 0)
+        if [ "$live" -gt "$peak" ]; then printf '%s' "$live" > '\(peakFile.path)'; fi
+        sleep 0.5
+        rm -f "$mine"
+        echo 'worktree /srv/repo'
+        echo 'branch refs/heads/main'
+        """
+        try script.write(to: stub, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+        GitWorktreeService.sshExecutablePath = stub.path
+
+        let service = GitWorktreeService()
+        await service.refreshWorktrees(for: (1...8).map { "ssh://box/srv/repo\($0)" })
+
+        let peakText = try String(contentsOf: peakFile, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let peak = Int(peakText) ?? 0
+        XCTAssertGreaterThan(peak, 0, "the stub never ran")
+        XCTAssertLessThanOrEqual(peak, 4, "ran \(peak) ssh processes at once")
+    }
 }
