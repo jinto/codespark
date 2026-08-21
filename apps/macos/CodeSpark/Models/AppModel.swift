@@ -1145,8 +1145,12 @@ final class AppModel: ObservableObject {
     func selectNumberedProject(_ index: Int) async {
         guard index >= 1, index <= numberedProjects.count else { return }
         let projectID = numberedProjects[index - 1]
-        await selectProject(id: projectID, promptForRecovery: true)
+        // Open first, for the same reason the click toggles first: selecting
+        // waits on a git round trip, and anything the row does after that shows
+        // up as a second frame. Arriving already-open is one change; arriving
+        // shut and then opening is a flicker.
         revealWorktrees(projectID: projectID)
+        await selectProject(id: projectID, promptForRecovery: true)
     }
 
     /// Opens a tree that is shut and leaves an open one alone.

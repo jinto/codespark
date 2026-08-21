@@ -2266,6 +2266,35 @@ final class WorkspaceSelectionTests: XCTestCase {
                       "the digit took us there but left the tree shut")
     }
 
+    /// The row must not be drawn in its shut state on the way. Selecting waits
+    /// on a git round trip, so opening after that await lands as a second frame —
+    /// the tree blinks closed and back, which is what the flicker was.
+    @MainActor
+    func test_a_digit_opens_the_tree_before_it_waits_on_the_lookup() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "p1", path: Self.mainWorktree, transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "p1", path: Self.mainWorktree,
+                                            transport: "local", liveSessions: [])],
+            detailLatencyByID: ["p1": 400_000_000]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        // The digits address `projects`, so there has to be a list to address.
+        await model.load()
+
+        let press = Task { await model.selectNumberedProject(1) }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
+                      "the tree was still shut while the lookup ran")
+        await press.value
+    }
+
     /// Arriving somewhere is no reason to shut what was open. A digit pressed
     /// twice — or pressed for the project you are already on — must not make the
     /// tree flap, which is what a plain toggle would do.

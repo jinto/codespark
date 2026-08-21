@@ -388,15 +388,15 @@ struct ProjectSidebarRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 5) {
-                // Open, the worktrees below each carry their own state and this
-                // row is a heading — a dot here is the same green said twice, one
-                // line apart. Hidden rather than removed: dropping it would slide
-                // the title sideways, and this row toggles on click, so that is
-                // the jitter "선택은 색으로만 말한다" exists to keep out.
+                // Every row carries its light, this one included. Hiding it while
+                // the tree was open did stop the project and its main worktree
+                // showing the same green twice — but it read as "this project has
+                // no light", which is worse than saying one thing twice. The two
+                // are not the same claim anyway: this one speaks for the whole
+                // project, the rows below for one worktree each.
                 Circle()
                     .fill(status.color)
                     .frame(width: 7, height: 7)
-                    .opacity(showsWorktreeRows ? 0 : 1)
 
                 Text(project.name)
                     .font(.system(size: 12, weight: .medium))

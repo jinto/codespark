@@ -65,6 +65,36 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertEqual(info.sshCommand(), "ssh 'myhost'")
     }
 
+    // MARK: - A home-relative path
+
+    /// The URI's path component has to start with a slash, so a `~/…` path was
+    /// stored as `/~/…` and came back that way — `cd '/~/projects/x'`, which no
+    /// machine has.
+    func test_a_tilde_path_survives_the_uri_round_trip() {
+        let info = SSHConnectionInfo(host: "box", remotePath: "~/projects/xxx")
+        let parsed = SSHConnectionInfo(uri: info.uri)
+        XCTAssertEqual(parsed?.remotePath, "~/projects/xxx")
+    }
+
+    /// Even spelled correctly, `cd '~/projects/xxx'` fails: quoting is what stops
+    /// the remote shell expanding the tilde, and the quoting is there because the
+    /// rest of the path must survive as one word.
+    func test_a_tilde_is_left_for_the_remote_shell_to_expand() throws {
+        let info = SSHConnectionInfo(host: "box", remotePath: "~/projects/xxx")
+        XCTAssertEqual(
+            try argumentsSSHReceives(from: info.sshCommand()),
+            ["box", "-t", "cd \"$HOME\"/'projects/xxx' && exec $SHELL"]
+        )
+    }
+
+    func test_an_absolute_path_is_untouched() throws {
+        let info = SSHConnectionInfo(host: "box", remotePath: "/srv/app")
+        XCTAssertEqual(
+            try argumentsSSHReceives(from: info.sshCommand()),
+            ["box", "-t", "cd '/srv/app' && exec $SHELL"]
+        )
+    }
+
     // MARK: - What ssh actually receives
     //
     // Ghostty runs a surface command through `/bin/sh -c` (embedded.zig sets

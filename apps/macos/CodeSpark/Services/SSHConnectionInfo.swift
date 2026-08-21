@@ -48,7 +48,10 @@ struct SSHConnectionInfo: Equatable {
         self.user = userHost.0
 
         if let p = pathPart, p != "/" {
-            self.remotePath = p
+            // A URI's path component must begin with a slash, so `~/projects`
+            // was stored as `/~/projects`. Read it back as what was meant, or
+            // the tab tries to `cd` somewhere no machine has.
+            self.remotePath = p.hasPrefix("/~") ? String(p.dropFirst()) : p
         } else {
             self.remotePath = nil
         }
@@ -90,10 +93,22 @@ struct SSHConnectionInfo: Equatable {
         return parts.joined(separator: " ")
     }
 
+    /// The path as the remote shell should read it. Quoting is what keeps a path
+    /// with a space or an apostrophe in one piece, and it is also what stops the
+    /// shell expanding a leading `~` — so the tilde is left outside the quotes
+    /// and everything after it stays inside.
+    static func remotePathExpression(_ path: String) -> String {
+        if path == "~" { return "\"$HOME\"" }
+        if path.hasPrefix("~/") {
+            return "\"$HOME\"/" + shellQuoted(String(path.dropFirst(2)))
+        }
+        return shellQuoted(path)
+    }
+
     private func remoteCommand(replaying replay: String?) -> String? {
         var steps: [String] = []
         if let replay, !replay.isEmpty { steps.append("\(replay); ") }
-        if let remotePath { steps.append("cd \(Self.shellQuoted(remotePath)) && ") }
+        if let remotePath { steps.append("cd \(Self.remotePathExpression(remotePath)) && ") }
         guard !steps.isEmpty else { return nil }
         return steps.joined() + "exec $SHELL"
     }
