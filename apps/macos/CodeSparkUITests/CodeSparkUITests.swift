@@ -244,11 +244,16 @@ final class CodeSparkUITests: XCTestCase {
         return nil
     }
 
+    /// One door now: Cmd+N opens the sheet, and the ssh form is the road taken
+    /// from inside it rather than a second menu item with its own chord.
     private func openNewSSHSheet() {
-        app.typeKey("n", modifierFlags: [.command, .shift])
+        app.typeKey("n", modifierFlags: .command)
+        let remote = app.buttons["newProjectRemote"]
+        XCTAssertTrue(wait { remote.exists }, "the New Project sheet never appeared")
+        remote.click()
         XCTAssertTrue(
             wait { self.app.textFields["newSSHProjectHost"].exists },
-            "the New SSH Project sheet never appeared"
+            "choosing the ssh host did not open its form"
         )
     }
 

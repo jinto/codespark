@@ -89,7 +89,10 @@ final class AppModel: ObservableObject {
     var projectSelectedWorkspaces: [String: String] = [:]  // projectID → workspacePath
     @Published var pendingSSHReconnectProjectID: String?
     @Published var pendingWorkspaceRecoveryProjectID: String?
-    @Published var showNewSSHSheet = false
+    /// One sheet for a new project, wherever it lives. It used to be two flags
+    /// and two menu items, which made "which kind of project is this" the first
+    /// question rather than a detail of the answer.
+    @Published var showNewProjectSheet = false
 
     /// How far a restore has got. Each tab costs a round trip, and an ssh tab
     /// waits on a remote host after that, so the wait is long enough to need
@@ -1131,13 +1134,25 @@ final class AppModel: ObservableObject {
         return "\(project.name) — \(branch)"
     }
 
-    /// A digit lands where clicking that project's row lands: it selects the
-    /// project — which reopens the worktree it was last left in, since
-    /// `apply(detail:)` restores that — and opens or folds its tree, the other
-    /// half of what the click means.
+    /// A digit takes you to a project: it selects it — which reopens the
+    /// worktree it was last left in, since `apply(detail:)` restores that — and
+    /// opens its tree.
+    ///
+    /// Opens, never folds. Clicking a row toggles because the row is what you
+    /// aimed at; a digit means "take me there", and arriving somewhere is no
+    /// reason to shut what was open. Pressing it twice would otherwise make the
+    /// tree flap, and the digits exist to be pressed without looking.
     func selectNumberedProject(_ index: Int) async {
         guard index >= 1, index <= numberedProjects.count else { return }
-        await selectProjectAndToggleWorktrees(id: numberedProjects[index - 1])
+        let projectID = numberedProjects[index - 1]
+        await selectProject(id: projectID, promptForRecovery: true)
+        revealWorktrees(projectID: projectID)
+    }
+
+    /// Opens a tree that is shut and leaves an open one alone.
+    func revealWorktrees(projectID: String) {
+        guard !expandedProjectIDs.contains(projectID) else { return }
+        toggleWorktrees(projectID: projectID)
     }
 
     func toggleWorktrees(projectID: String) {

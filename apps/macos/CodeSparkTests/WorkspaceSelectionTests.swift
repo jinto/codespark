@@ -2253,7 +2253,7 @@ final class WorkspaceSelectionTests: XCTestCase {
     /// Pressing the digit has to land where clicking the row lands — including
     /// opening the tree, which is the other half of what that click means.
     @MainActor
-    func test_pressing_a_digit_does_what_clicking_the_row_does() async {
+    func test_pressing_a_digit_selects_the_project_and_opens_its_tree() async {
         forgetExpandedProjects()
         defer { forgetExpandedProjects() }
         let model = await modelWithTwoProjects()
@@ -2263,6 +2263,23 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         XCTAssertEqual(model.selectedProjectID, "p2")
         XCTAssertTrue(model.expandedProjectIDs.contains("p2"),
-                      "the digit selected the project but did not open it the way a click does")
+                      "the digit took us there but left the tree shut")
+    }
+
+    /// Arriving somewhere is no reason to shut what was open. A digit pressed
+    /// twice — or pressed for the project you are already on — must not make the
+    /// tree flap, which is what a plain toggle would do.
+    @MainActor
+    func test_a_digit_never_folds_a_tree_that_is_already_open() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+
+        await model.selectNumberedProject(1)
+        await model.selectNumberedProject(1)
+
+        XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
+                      "the second press folded the tree the first one opened")
     }
 }

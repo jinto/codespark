@@ -91,7 +91,7 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
   - `Cmd+1…9`는 **프로젝트**를 가리킨다(`numberedProjects`, 사이드바 순서). 탭이 없어도 자기 자리를 갖는다 — 탭이 없는 프로젝트야말로 탭을 열러 가는 곳이다.
   - **워크트리는 번호를 받지 않는다.** 숫자는 손가락 기억이 전부인데 워크트리는 생기고 사라지고 접히므로, 아홉 자리를 먹어치우면 아래쪽 프로젝트가 영영 번호를 못 받는다. 프로젝트 안에서의 이동은 `Cmd+Opt+[`/`]`가 맡는다.
   - 그래서 **트리를 접거나 펴도 번호가 변하지 않고**, 프로젝트 행이 항상 자기 배지를 단다. 예전에는 펼치면 워크트리 행에 배지를 넘겼는데, 이제 넘길 상대가 없다.
-  - **숫자는 클릭과 같은 일을 한다**: 선택 + 트리 토글, 그리고 그 프로젝트를 **떠났던 워크트리로 복귀**(`projectSelectedWorkspaces`를 `apply(detail:)`이 읽는다).
+  - **숫자는 데려다 준다**: 선택 + 그 프로젝트를 **떠났던 워크트리로 복귀**(`projectSelectedWorkspaces`를 `apply(detail:)`이 읽는다) + 트리 **열기**. 클릭은 겨냥한 행을 토글하지만 숫자는 "거기로 가 줘"라서, **접지는 않는다** — 두 번 누르면 트리가 펄럭이고, 숫자는 보지 않고 누르라고 있는 것이다.
   - 단축키 등록 규칙은 아래 "Keyboard Shortcuts" 참고.
 - **원격(ssh) 프로젝트도 워크트리를 갖는다**: 원격 워크트리의 주소는 `ssh://user@host/remote/path` URI다. `workspacePath`가 소속·선택·복원·삭제가 공유하는 단일 키이므로, 원격도 같은 문자열 공간에 넣어 그 로직을 그대로 쓴다.
   - **두 네임스페이스를 섞지 말 것**: `workspacePath`는 URI, `last_cwd`와 git 인자는 원격 raw 경로다. 변환은 `SSHConnectionInfo.workspaceURI(forRemotePath:)` / `remotePath(fromWorkspaceURI:)` **두 함수 밖에서 하지 않는다**. `git -C 'ssh://…'`는 `cannot change to`로 죽는다.

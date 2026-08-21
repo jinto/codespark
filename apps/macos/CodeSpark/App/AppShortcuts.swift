@@ -13,7 +13,6 @@ import SwiftUI
 /// stay out — they are scoped to a presented sheet, not the menu bar.
 enum AppShortcut: String, CaseIterable {
     case newProject
-    case newSSHProject
     case newSession
     case closeSessionOrProject
     case toggleSidebar
@@ -27,7 +26,7 @@ enum AppShortcut: String, CaseIterable {
 
     var key: KeyEquivalent {
         switch self {
-        case .newProject, .newSSHProject: "n"
+        case .newProject: "n"
         case .newSession: "t"
         case .closeSessionOrProject: "w"
         case .toggleSidebar: "s"
@@ -42,7 +41,7 @@ enum AppShortcut: String, CaseIterable {
         switch self {
         case .newProject, .newSession, .closeSessionOrProject, .selectWorkspaceByIndex:
             [.command]
-        case .newSSHProject, .nextTab, .previousTab:
+        case .nextTab, .previousTab:
             [.command, .shift]
         case .toggleSidebar:
             [.command, .control]

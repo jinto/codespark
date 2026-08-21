@@ -57,14 +57,9 @@ struct SidebarView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
-                        Button("Open Project...") {
-                            Task { await model.createProjectFromFolder() }
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        Button("SSH Project...") {
+                        Button("New Project...") {
                             sshHost = ""; sshUser = ""; sshPort = ""; sshRemotePath = ""
-                            model.showNewSSHSheet = true
+                            model.showNewProjectSheet = true
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
@@ -349,20 +344,25 @@ struct SidebarView: View {
                 )
             }
         }
-        .sheet(isPresented: $model.showNewSSHSheet) {
-            NewSSHProjectSheet(
+        .sheet(isPresented: $model.showNewProjectSheet) {
+            NewProjectSheet(
+                onChooseLocal: {
+                    model.showNewProjectSheet = false
+                    Task { await model.createProjectFromFolder() }
+                },
+                onCancel: { model.showNewProjectSheet = false },
                 host: $sshHost,
                 user: $sshUser,
                 port: $sshPort,
                 remotePath: $sshRemotePath,
-                onCreate: {
+                onCreateRemote: {
                     let info = SSHConnectionInfo(
                         host: sshHost,
                         user: sshUser.isEmpty ? nil : sshUser,
                         port: Int(sshPort),
                         remotePath: sshRemotePath.isEmpty ? nil : sshRemotePath
                     )
-                    model.showNewSSHSheet = false
+                    model.showNewProjectSheet = false
                     Task {
                         await model.createProject(
                             name: info.displayLabel,
@@ -370,8 +370,7 @@ struct SidebarView: View {
                             transport: "ssh"
                         )
                     }
-                },
-                onCancel: { model.showNewSSHSheet = false }
+                }
             )
         }
     }
@@ -603,6 +602,109 @@ private struct RenameProjectSheet: View {
         .padding(20)
         .frame(width: 300)
         .onAppear { isFocused = true }
+    }
+}
+
+/// One door for a new project, whichever machine it lives on.
+///
+/// There used to be two — "New Project" opened a file panel, "New SSH Project"
+/// opened a form — so the first thing anyone had to decide was which menu item
+/// their project was. The question is the same either way ("where is it?"), so
+/// it is asked once, here, and the answer picks the rest of the path.
+struct NewProjectSheet: View {
+    let onChooseLocal: () -> Void
+    let onCancel: () -> Void
+
+    /// The SSH form, shown in this same sheet once that road is taken. Held by
+    /// the caller so a cancelled sheet does not lose what was typed.
+    @Binding var host: String
+    @Binding var user: String
+    @Binding var port: String
+    @Binding var remotePath: String
+    let onCreateRemote: () -> Void
+
+    @State private var isRemote = false
+
+    var body: some View {
+        if isRemote {
+            NewSSHProjectSheet(
+                host: $host,
+                user: $user,
+                port: $port,
+                remotePath: $remotePath,
+                onCreate: onCreateRemote,
+                // Back to the question rather than out of the sheet: picking the
+                // wrong road should cost one click, not the whole trip.
+                onCancel: { isRemote = false }
+            )
+        } else {
+            chooser
+        }
+    }
+
+    private var chooser: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("New Project")
+                .font(.headline)
+
+            VStack(spacing: 8) {
+                choice(
+                    icon: "folder",
+                    title: "On this Mac",
+                    subtitle: "A folder or Git repository here",
+                    action: onChooseLocal
+                )
+                .accessibilityIdentifier("newProjectLocal")
+
+                choice(
+                    icon: "network",
+                    title: "On an SSH host",
+                    subtitle: "A folder on another machine you can reach over ssh",
+                    action: { isRemote = true }
+                )
+                .accessibilityIdentifier("newProjectRemote")
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 400)
+    }
+
+    private func choice(
+        icon: String,
+        title: String,
+        subtitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .medium))
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(12)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.white.opacity(0.05))
+        )
     }
 }
 

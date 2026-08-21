@@ -73,15 +73,10 @@ struct CodeSparkApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("New Project") {
-                    Task { await model.createProjectFromFolder() }
+                Button("New Project...") {
+                    model.showNewProjectSheet = true
                 }
                 .keyboardShortcut(.newProject)
-
-                Button("New SSH Project...") {
-                    model.showNewSSHSheet = true
-                }
-                .keyboardShortcut(.newSSHProject)
 
                 Divider()
 
@@ -169,7 +164,7 @@ struct CodeSparkApp: App {
         Button { withAnimation { isSidebarVisible.toggle() } } label: {
             Image(systemName: "sidebar.left")
         }
-        Button { Task { await model.createProjectFromFolder() } } label: {
+        Button { model.showNewProjectSheet = true } label: {
             Image(systemName: "plus")
         }
     }
