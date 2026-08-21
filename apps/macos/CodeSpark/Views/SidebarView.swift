@@ -723,7 +723,7 @@ private struct ChangeRemoteFolderSheet: View {
             user: sshInfo.user,
             port: sshInfo.port,
             remotePath: remotePath.isEmpty ? nil : remotePath
-        ).sshCommand()
+        ).previewCommand
     }
 
     var body: some View {

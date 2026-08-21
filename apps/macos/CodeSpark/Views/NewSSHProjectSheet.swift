@@ -70,7 +70,7 @@ struct NewSSHProjectSheet: View {
 
             if !host.isEmpty {
                 let info = buildConnectionInfo()
-                Text(info.sshCommand())
+                Text(info.previewCommand)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.tertiary)
             }

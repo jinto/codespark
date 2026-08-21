@@ -353,4 +353,44 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertFalse(output.contains("OPENED"),
                        "a shell opened somewhere other than the tab's directory: \(output)")
     }
+
+    // MARK: - What a sheet shows a person
+
+    /// The New SSH Project and Change Remote Folder sheets print the command
+    /// under the path field so the host, port, and folder can be checked at a
+    /// glance. The reporter's launcher is identical for every project and says
+    /// nothing about any of them — printed in full it buries the two lines the
+    /// sheet exists for, and fills the window.
+    func test_the_preview_is_one_readable_line() {
+        let info = SSHConnectionInfo(host: "emac", remotePath: "/Users/jinto/projects/codespark")
+        let preview = info.previewCommand
+        XCTAssertFalse(preview.contains("\n"), "the preview flooded the sheet: \(preview)")
+        XCTAssertFalse(preview.contains("CS_RC_DIR"), preview)
+        XCTAssertTrue(preview.contains("emac"), preview)
+        XCTAssertTrue(preview.contains("/Users/jinto/projects/codespark"), preview)
+    }
+
+    func test_the_preview_still_shows_the_port_and_user() {
+        let info = SSHConnectionInfo(host: "box", user: "jay", port: 2222, remotePath: "/srv/app")
+        XCTAssertTrue(info.previewCommand.contains("-p 2222"), info.previewCommand)
+        XCTAssertTrue(info.previewCommand.contains("jay@box"), info.previewCommand)
+    }
+
+    /// A view that reaches for the real command gets the launcher with it. This
+    /// is the shape of the mistake, not a detail of one sheet — the sheets that
+    /// already made it looked fine until the command grew.
+    func test_no_view_prints_the_raw_ssh_command() throws {
+        let views = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()          // CodeSparkTests
+            .deletingLastPathComponent()          // macos
+            .appendingPathComponent("CodeSpark/Views")
+        let files = try FileManager.default.contentsOfDirectory(at: views, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift" }
+        XCTAssertFalse(files.isEmpty, "no view sources found at \(views.path)")
+        for file in files {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            XCTAssertFalse(source.contains(".sshCommand("),
+                           "\(file.lastPathComponent) prints the whole remote command — use previewCommand")
+        }
+    }
 }

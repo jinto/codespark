@@ -99,6 +99,22 @@ struct SSHConnectionInfo: Equatable {
         return parts.joined(separator: " ")
     }
 
+    /// What a sheet shows a person: the connection and the folder it lands in.
+    ///
+    /// Deliberately not the literal command. That one now carries the cwd
+    /// reporter's launcher, which is the same forty lines for every project and
+    /// says nothing about any of them — printed under a text field it buries the
+    /// host and the path, which are the only two things there to be checked.
+    var previewCommand: String {
+        var parts = ["ssh"]
+        if let port { parts.append(contentsOf: ["-p", "\(port)"]) }
+        parts.append(Self.shellQuoted(user.map { "\($0)@\(host)" } ?? host))
+        if let remotePath {
+            parts.append(contentsOf: ["-t", Self.shellQuoted("cd \(Self.remotePathExpression(remotePath))")])
+        }
+        return parts.joined(separator: " ")
+    }
+
     /// The path as the remote shell should read it. Quoting is what keeps a path
     /// with a space or an apostrophe in one piece, and it is also what stops the
     /// shell expanding a leading `~` — so the tilde is left outside the quotes
