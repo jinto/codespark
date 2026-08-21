@@ -105,16 +105,34 @@ extension AppModel {
 
     // MARK: - Git
 
+    /// The directories worth asking git about.
+    ///
+    /// Project folders as well as the directories tabs are sitting in: the row
+    /// under a project's name reports its branch, and asking only about cwds
+    /// meant a project answered only while some tab happened to stand exactly at
+    /// its root — every other project fell back to its path.
+    ///
+    /// Remote tabs are left out on both counts. Their cwd is a path on the other
+    /// machine, and `git -C` runs here, so a remote `/srv/app` would be answered
+    /// by whatever local directory happens to share the name. Now that a remote
+    /// shell reports every `cd` it makes, that mistake would arrive constantly.
+    var gitBranchQueryPaths: [String] {
+        let cwds = projects
+            .filter { $0.transport != "ssh" }
+            .flatMap { $0.liveSessionDetails.compactMap(\.lastCwd) }
+        return Array(Set(localProjectPaths + cwds))
+    }
+
+    /// Project folders on this machine. Kept apart from the query paths above
+    /// because only a *project* can be labelled "non-git" — a tab that wandered
+    /// into a directory outside any repo says nothing about the project it
+    /// belongs to.
+    var localProjectPaths: [String] {
+        projects.filter { $0.transport != "ssh" && !$0.path.isEmpty }.map(\.path)
+    }
+
     func refreshGitBranches() {
-        // Project folders as well as the directories tabs are sitting in. The
-        // row under a project's name reports its branch, and asking only about
-        // cwds meant a project answered only while some tab happened to stand
-        // exactly at its root — every other project fell back to its path.
-        let projectPaths = projects
-            .filter { $0.transport != "ssh" && !$0.path.isEmpty }
-            .map(\.path)
-        let cwds = projects.flatMap { $0.liveSessionDetails.compactMap(\.lastCwd) }
-        let paths = Array(Set(projectPaths + cwds))
+        let paths = gitBranchQueryPaths
         guard !paths.isEmpty else { return }
         Task {
             await gitBranchService.refreshBranches(for: paths)
@@ -124,7 +142,7 @@ extension AppModel {
                 }
             )
             if updated != gitBranches { gitBranches = updated }
-            let disowned = Set(projectPaths.filter { gitBranchService.isKnownNonRepo($0) })
+            let disowned = Set(localProjectPaths.filter { gitBranchService.isKnownNonRepo($0) })
             if disowned != nonGitProjectPaths { nonGitProjectPaths = disowned }
         }
     }

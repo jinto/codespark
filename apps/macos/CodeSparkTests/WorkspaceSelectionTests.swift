@@ -2311,4 +2311,41 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
                       "the second press folded the tree the first one opened")
     }
+
+    // MARK: - Which directories git is asked about
+
+    /// A remote tab reports a directory on the other machine, and `git -C` runs
+    /// on this one. Handing those paths to git asks about whatever local
+    /// directory happens to share the name — and now that a remote shell reports
+    /// every `cd` it makes, they arrive constantly.
+    @MainActor
+    func test_a_remote_tabs_directory_is_never_handed_to_local_git() {
+        let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []))
+        model.projects = [
+            ProjectSummaryViewData(
+                id: "local", name: "Local", path: "/tmp/local", transport: "local",
+                liveSessions: 1, recentlyClosedSessions: 0, hasInterruptedSessions: false,
+                liveSessionDetails: [
+                    SessionSummary(id: "s1", title: "t", targetLabel: "l",
+                                   lastCwd: "/tmp/local/deep", workspacePath: "/tmp/local")
+                ]
+            ),
+            ProjectSummaryViewData(
+                id: "remote", name: "Remote", path: "ssh://box/srv/app", transport: "ssh",
+                liveSessions: 1, recentlyClosedSessions: 0, hasInterruptedSessions: false,
+                liveSessionDetails: [
+                    SessionSummary(id: "s2", title: "t", targetLabel: "box",
+                                   lastCwd: "/srv/app/somewhere", workspacePath: "ssh://box/srv/app")
+                ]
+            )
+        ]
+
+        let asked = Set(model.gitBranchQueryPaths)
+        XCTAssertTrue(asked.contains("/tmp/local"), "\(asked)")
+        XCTAssertTrue(asked.contains("/tmp/local/deep"),
+                      "a local tab's directory is exactly what the branch label is for: \(asked)")
+        XCTAssertFalse(asked.contains("/srv/app/somewhere"),
+                       "a directory on the other machine was handed to local git: \(asked)")
+        XCTAssertFalse(asked.contains("ssh://box/srv/app"), "\(asked)")
+    }
 }

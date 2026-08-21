@@ -88,7 +88,13 @@ struct SSHConnectionInfo: Equatable {
             // command has to survive as one word. Unquoted, the local shell eats
             // the `&&` and expands `$SHELL` here — ssh then runs a bare `cd`,
             // exits, and the tab lands in a local shell instead of the remote.
-            parts.append(contentsOf: ["-t", Self.shellQuoted(remote)])
+            //
+            // The inner `sh -c` is the same trap one layer further out: ssh joins
+            // what follows into a single string and hands it to the *remote login
+            // shell*, which may be fish or csh. Neither parses the `case` the
+            // reporter is built from, and today's `cd … && exec` only survived
+            // there by being simple enough.
+            parts.append(contentsOf: ["-t", Self.shellQuoted("/bin/sh -c " + Self.shellQuoted(remote))])
         }
         return parts.joined(separator: " ")
     }
@@ -105,12 +111,22 @@ struct SSHConnectionInfo: Equatable {
         return shellQuoted(path)
     }
 
-    private func remoteCommand(replaying replay: String?) -> String? {
-        var steps: [String] = []
-        if let replay, !replay.isEmpty { steps.append("\(replay); ") }
-        if let remotePath { steps.append("cd \(Self.remotePathExpression(remotePath)) && ") }
-        guard !steps.isEmpty else { return nil }
-        return steps.joined() + "exec $SHELL"
+    /// What the remote `sh` runs. Internal so a test can drive it through a
+    /// real zsh, bash, or fish — the reporter's failures live in shell startup
+    /// order, which no comparison of command strings can see.
+    func remoteCommand(replaying replay: String?) -> String? {
+        var lines: [String] = []
+        if let replay, !replay.isEmpty { lines.append(replay) }
+        if let remotePath {
+            // `|| exit` where this once read `&& exec`: the launcher that follows
+            // is several lines, and `&&` would only have guarded the first of
+            // them. A tab whose directory is gone still must not open a shell
+            // somewhere else.
+            lines.append("cd \(Self.remotePathExpression(remotePath)) || exit")
+        }
+        guard !lines.isEmpty else { return nil }
+        lines.append(RemoteCwdReporter.launcher)
+        return lines.joined(separator: "\n")
     }
 
     static func shellQuoted(_ value: String) -> String {
@@ -156,4 +172,80 @@ struct SSHConnectionInfo: Equatable {
         if let user { return "\(user)@\(host)" }
         return host
     }
+}
+
+/// Teaches a remote shell to report its working directory the way a local one
+/// already does.
+///
+/// A tab's cwd is how it finds its way back after a restart, and locally it
+/// arrives by itself: the shell emits OSC 7 at every prompt and Ghostty turns
+/// that into `handleSurfacePwd`. A remote shell has no such integration, so an
+/// ssh tab's cwd froze at whatever directory it was opened with — `cd` on the
+/// far side was lost on every restore.
+///
+/// Two details decide whether this works at all, and neither is guessable from
+/// the outside:
+///
+/// - **The hostname has to be `localhost`.** Ghostty drops any OSC 7 whose host
+///   is not local (`termio/stream_handler.zig`, `os/hostname.zig`) — which is
+///   exactly what a remote shell reporting its own `$HOST` would be, and why
+///   simply shipping Ghostty's own integration over would report nothing.
+/// - **The hook has to survive `exec $SHELL`.** Functions and prompt hooks do
+///   not cross an exec, so each shell gets a startup file of ours instead.
+///
+/// Anything unrecognised falls through to a plain shell, which is what an ssh
+/// tab did before this existed — the worst case is the old behaviour.
+enum RemoteCwdReporter {
+    /// Where the generated startup files live on the far side. A fixed path, not
+    /// a `mktemp -d`: the temporary directory can only be cleaned up by the
+    /// shell that reads it, so a connection that never reaches a prompt would
+    /// leave one behind on every attempt. One directory, rewritten each time.
+    static let directory = #"${XDG_CACHE_HOME:-$HOME/.cache}/codespark/shell"#
+
+    /// A POSIX `sh` script that installs the reporter and then becomes the
+    /// user's shell.
+    ///
+    /// Written into place atomically (`mv` over a pid-suffixed file) because two
+    /// tabs can connect at once, and read back before use so a home directory
+    /// that cannot be written to degrades to a plain shell instead of a broken
+    /// one.
+    static let launcher = #"""
+    __cs_s=${SHELL:-/bin/sh}
+    CS_RC_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/codespark/shell; export CS_RC_DIR
+    case ${__cs_s##*/} in
+    zsh)
+      mkdir -p "$CS_RC_DIR" 2>/dev/null && {
+        CS_RC_HOME=${ZDOTDIR:-$HOME}; export CS_RC_HOME
+        cat > "$CS_RC_DIR/.zshenv.$$" <<'CS_EOF' && mv -f "$CS_RC_DIR/.zshenv.$$" "$CS_RC_DIR/.zshenv"
+    ZDOTDIR=$CS_RC_HOME
+    [ -r "$CS_RC_HOME/.zshenv" ] && . "$CS_RC_HOME/.zshenv"
+    CS_RC_HOME=$ZDOTDIR
+    ZDOTDIR=$CS_RC_DIR
+    CS_EOF
+        cat > "$CS_RC_DIR/.zshrc.$$" <<'CS_EOF' && mv -f "$CS_RC_DIR/.zshrc.$$" "$CS_RC_DIR/.zshrc"
+    ZDOTDIR=$CS_RC_HOME
+    [[ $HISTFILE == $CS_RC_DIR/* ]] && HISTFILE=$CS_RC_HOME/${HISTFILE##*/}
+    [ -r "$CS_RC_HOME/.zshrc" ] && . "$CS_RC_HOME/.zshrc"
+    __cs_report_pwd() { printf '\033]7;file://localhost%s\007' "$PWD"; }
+    precmd_functions+=(__cs_report_pwd)
+    CS_EOF
+        [ -r "$CS_RC_DIR/.zshrc" ] && { ZDOTDIR=$CS_RC_DIR; export ZDOTDIR; }
+      }
+      ;;
+    bash)
+      mkdir -p "$CS_RC_DIR" 2>/dev/null && {
+        cat > "$CS_RC_DIR/bashrc.$$" <<'CS_EOF' && mv -f "$CS_RC_DIR/bashrc.$$" "$CS_RC_DIR/bashrc"
+    [ -r "$HOME/.bashrc" ] && . "$HOME/.bashrc"
+    __cs_report_pwd() { printf '\033]7;file://localhost%s\007' "$PWD"; }
+    PROMPT_COMMAND="__cs_report_pwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+    CS_EOF
+        [ -r "$CS_RC_DIR/bashrc" ] && exec "$__cs_s" --rcfile "$CS_RC_DIR/bashrc" -i
+      }
+      ;;
+    fish)
+      exec "$__cs_s" -i -C 'function __cs_report_pwd --on-variable PWD; printf "\033]7;file://localhost%s\007" $PWD; end; __cs_report_pwd'
+      ;;
+    esac
+    exec "$__cs_s" -i
+    """#
 }

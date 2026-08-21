@@ -134,7 +134,16 @@ Process detection + screen parsing replaces the old hook system:
   - OSC 7은 Ghostty **shell integration이 주입돼야** 나온다. 빌드 페이즈가 `vendor/ghostty/zig-out/share/ghostty/shell-integration`을 `Contents/Resources/ghostty/`로 복사하고, `GhosttyRuntime.initialize()`가 `ghostty_init` **전에** `GHOSTTY_RESOURCES_DIR`를 거기로 설정한다. 이게 빠지면 cwd 추적이 조용히 죽는다.
   - 임베디드 surface는 `ghostty_surface_userdata()`가 nil이다. 탭 식별은 raw surface 포인터 비교로 한다.
   - `sessionDidReportCwd`는 `liveSessions`가 아니라 **`allSessions`**를 본다. 선택되지 않은 프로젝트의 탭도 셸이 살아 있어 `cd`할 수 있고(그 탭에서 도는 에이전트), 좁은 목록을 읽으면 그 보고가 버려져 스토어에 낡은 경로가 남는다.
-  - SSH 탭의 `cwd`는 **원격 경로 그대로** 넘긴다. 그 인자가 Ghostty의 working directory이면서 동시에 스토어에 기록되는 탭 위치인데, 원격에는 shell integration이 없어 OSC 7으로 다시 채워지지 않는다. nil로 바꾸면 다음 복원부터 자리를 잃는다. Ghostty는 열 수 없는 working directory를 경고 로그만 남기고 무시한다(`embedded.zig`).
+  - SSH 탭의 `cwd`는 **원격 경로 그대로** 넘긴다. 그 인자가 Ghostty의 working directory이면서 동시에 스토어에 기록되는 탭 위치다. nil로 바꾸면 다음 복원부터 자리를 잃는다. Ghostty는 열 수 없는 working directory를 경고 로그만 남기고 무시한다(`embedded.zig`).
+  - **원격도 OSC 7을 보낸다 — 우리가 심어서**(`RemoteCwdReporter`). 예전엔 원격에 shell integration이 없어 `last_cwd`가 탭을 연 순간에 얼어붙었고, 원격에서 `cd`한 자리는 복원 때마다 사라졌다. 이제 접속 스크립트가 원격 셸의 시작 파일을 하나 놔두고 프롬프트마다 OSC 7을 찍게 한다.
+    - **hostname은 반드시 `localhost`다.** Ghostty는 local이 아닌 host의 OSC 7을 **버린다**(`termio/stream_handler.zig`의 `hostname.isLocal`). 원격 셸이 자기 `$HOST`를 찍으면 로그 한 줄 남기고 사라진다 — Ghostty 자신의 zsh 통합을 그대로 원격에 갖다 놔도 안 되는 이유이고, 이 한 글자가 기능 전체를 좌우한다.
+    - **셸마다 주입 지점이 다르다**: zsh는 `ZDOTDIR`, bash는 `--rcfile`, fish는 `-C`. 훅은 `exec`을 건너지 못하므로 환경변수로는 안 되고 시작 파일이라야 한다. 모르는 셸은 그냥 셸을 연다 — 최악이 예전 동작이어야 한다.
+    - **fish는 `fish_prompt`가 아니라 `--on-variable PWD`**다. `fish_prompt` 이벤트는 tty가 없으면 아예 안 뜨고, 어차피 우리가 알고 싶은 건 디렉터리가 바뀌는 순간이다.
+    - **`/etc/zshrc`가 우리 두 파일 사이에서 돈다**: 그때의 `ZDOTDIR`로 `HISTFILE`을 잡으므로, 우리 `.zshrc`가 되돌려놓지 않으면 **원격 셸의 히스토리가 우리 캐시로 옮겨간다**. `.zshenv`는 반대로 되돌리면 안 된다 — zsh가 우리 `.zshrc`를 못 찾는다.
+    - 시작 파일은 `~/.cache/codespark/shell`에 **고정 경로**로 둔다. `mktemp -d`는 그걸 읽은 셸만 지울 수 있어서, 프롬프트까지 못 간 접속마다 원격에 쓰레기가 쌓인다.
+    - **테스트는 진짜 셸에 물린다**(`SSHConnectionInfoTests`). 이 기능의 실패는 전부 셸 시작 순서에 있고, 명령 문자열을 비교하는 테스트로는 한 개도 안 보인다 — 위의 HISTFILE 이동도 그렇게 잡혔다.
+    - **알려진 대가**: Ghostty는 이 보고를 로컬 surface의 pwd로도 받으므로, ssh 탭의 proxy icon이 이 기계에 없는 경로를 가리킨다.
+  - **원격 cwd를 로컬 git에 넘기지 말 것**: `git -C`는 이쪽에서 도는데 원격 경로는 저쪽 것이라, 이름이 같은 로컬 디렉터리가 대신 답한다. `gitBranchQueryPaths`가 걸러낸다 — 원격이 이제 `cd`마다 보고하므로 안 거르면 상시로 들어온다.
 - **워크스페이스 소속**: 세션 행의 `workspace_path`에 생성 시점 고정. `cd`로 탭이 사이드바에서 이동하면 안 된다. 빈 값(컬럼 이전 행)만 `last_cwd` 기반 매칭으로 폴백 — 이 판정이 `SessionViewData.belongs(to:)` 하나에 모여 있고, 그룹핑과 **워크트리 삭제가 같은 걸 써야 한다**. 삭제를 cwd로 판정하면 밖으로 `cd`한 탭이 살아남고 남의 워크트리 방문객이 대신 닫힌다. 복원이 `workspaceSelectedSessions`에 쓰는 키도 **`workspace_path`다** — `last_cwd`로 쓰면 워크트리 안쪽 디렉터리에서 끝난 탭이 어떤 워크스페이스도 답하지 않는 키에 기억된다.
 - **종료**: `saveAllSessionsForRestore()`는 최종 스냅샷만 저장하고 **세션을 닫지 않는다**. 행이 `live`로 남아야 다음 실행의 `reconcileInterruptedSessions()`가 `interrupted`로 전환하고, 복원은 그걸 읽는다. 여기서 닫으면 복원이 종료 타이밍에 좌우되는 복불복이 된다.
 - **시작**: `load()`가 자동 복원한다. 각 탭은 자기 `last_cwd`로, SSH는 `remotePath`를 통한 `cd` 주입으로 돌아간다.
