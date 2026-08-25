@@ -215,6 +215,9 @@ git push origin v{VERSION}
 ```
 
 - CI: `.github/workflows/release.yml` (`on: push: tags: ['v*']`)
+- **ghostty는 `.ghostty-version`의 커밋에 고정된다**: `vendor/`는 gitignore라 CI가 직접 받아온다. 예전엔 `main`을 clone해서 **릴리즈가 업스트림과 경주했다** — 우리 쪽 변경이 없어도 어느 날 깨진다(v1.1.4: `read_clipboard_cb`의 인자가 3개에서 6개로 늘었다). 올릴 때는 `vendor/ghostty`를 그 커밋으로 옮기고 `git -C vendor/ghostty rev-parse HEAD > .ghostty-version`, zig 버전도 같이 본다(`build.zig.zon`의 `minimum_zig_version`).
+  - `git clone`은 커밋을 못 가리키고 shallow fetch는 **전체 40자 SHA**만 받는다. `ReleaseWorkflowTests`가 이 두 가지를 지킨다 — 유닛 테스트로는 안 보이고 릴리즈가 죽어야만 드러나는 종류라 워크플로 파일을 직접 검사한다.
+  - **캐시는 적중한 적이 없다**: 캐시는 ref 단위로 격리되는데 릴리즈는 매번 새 태그에서 돈다. `ghosttykit-relfast-*`는 쓰이기만 하고 읽히지 않는다.
 - 서명: Developer ID Application (QN9P7KSSMU)
 - 산출물: `CodeSpark-v{VERSION}.dmg` (릴리즈에 자동 첨부)
 

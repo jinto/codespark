@@ -16,7 +16,10 @@ jobs:
       - name: Install Zig
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.16.0
+          # The pinned ghostty tree declares 0.15.2 as its minimum; that is the
+          # version this commit is known to build with. Bump it with the pin, not
+          # on its own.
+          version: 0.15.2
 
       - name: Cache GhosttyKit xcframework
         id: ghostty-cache
@@ -29,7 +32,15 @@ jobs:
       - name: Build GhosttyKit (ReleaseFast)
         if: steps.ghostty-cache.outputs.cache-hit != 'true'
         run: |
-          git clone --depth 1 https://github.com/ghostty-org/ghostty.git vendor/ghostty
+          # `vendor/` is gitignored, so CI fetches ghostty itself. Cloning main
+          # makes every release race upstream: v1.1.4 died because
+          # `ghostty_runtime_read_clipboard_cb` grew from three arguments to six
+          # with nothing on our side changed. `git clone` cannot take a commit,
+          # so fetch it — and a shallow fetch needs the full 40-char SHA.
+          git init vendor/ghostty
+          git -C vendor/ghostty remote add origin https://github.com/ghostty-org/ghostty.git
+          git -C vendor/ghostty fetch --depth 1 origin "$(cat .ghostty-version)"
+          git -C vendor/ghostty checkout FETCH_HEAD
           cd vendor/ghostty
           zig build -Doptimize=ReleaseFast -Demit-xcframework=true -Dxcframework-target=native -Demit-macos-app=false
 
@@ -39,11 +50,13 @@ jobs:
           # Preserve cached xcframework, clone headers into temp, then merge
           mv vendor/ghostty/macos/GhosttyKit.xcframework /tmp/ghosttykit-cached
           rm -rf vendor/ghostty
-          git clone --depth 1 --filter=blob:none --sparse https://github.com/ghostty-org/ghostty.git vendor/ghostty
-          cd vendor/ghostty
-          git sparse-checkout set include macos/Sources
+          git init vendor/ghostty
+          git -C vendor/ghostty remote add origin https://github.com/ghostty-org/ghostty.git
+          git -C vendor/ghostty sparse-checkout set include macos/Sources
+          git -C vendor/ghostty fetch --depth 1 --filter=blob:none origin "$(cat .ghostty-version)"
+          git -C vendor/ghostty checkout FETCH_HEAD
           # Restore cached xcframework
-          mv /tmp/ghosttykit-cached macos/GhosttyKit.xcframework
+          mv /tmp/ghosttykit-cached vendor/ghostty/macos/GhosttyKit.xcframework
 
       - name: Setup signing keychain
         env:
