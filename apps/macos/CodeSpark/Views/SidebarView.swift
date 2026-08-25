@@ -74,8 +74,7 @@ struct SidebarView: View {
                                 isSelected: model.selectedProjectID == project.id,
                                 status: model.projectStatus(for: project),
                                 infoLine: model.projectInfoLine(for: project),
-                                hotkeyIndex: hotkeyIndex(for: project),
-                                showsWorktreeRows: model.showsWorktreeRows(for: project)
+                                hotkeyIndex: hotkeyIndex(for: project)
                             )
                             .contentShape(Rectangle())
                             .overlay(alignment: .top) {
@@ -279,7 +278,7 @@ struct SidebarView: View {
             Button("Cancel", role: .cancel) { pendingRemoveWorktree = nil }
         } message: {
             if let removal = pendingRemoveWorktree {
-                Text("Its tabs will close and \(model.displayPath(for: removal.path)) will be deleted. The branch itself stays.")
+                Text(model.removeWorktreeMessage(path: removal.path))
             }
         }
         .confirmationDialog(
@@ -299,7 +298,7 @@ struct SidebarView: View {
         } message: {
             if let id = pendingDeleteProjectID,
                let proj = model.projects.first(where: { $0.id == id }) {
-                Text("This will permanently delete \"\(proj.name)\" and all its sessions.")
+                Text(model.deleteProjectMessage(name: proj.name))
             }
         }
         .sheet(isPresented: .init(
@@ -382,8 +381,6 @@ struct ProjectSidebarRow: View {
     let status: ProjectStatus
     var infoLine: String? = nil
     var hotkeyIndex: Int? = nil
-    /// Whether this row's worktrees are listed underneath it right now.
-    var showsWorktreeRows: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -418,11 +415,11 @@ struct ProjectSidebarRow: View {
             }
 
             if let info = infoLine {
-                // Open, the path below belongs to the main worktree row and this
-                // one must not repeat it — but the line keeps its space. Removing
-                // it shortens the row by a whole line under the cursor that just
-                // clicked it, which is the same jitter the dot above is hidden
-                // rather than dropped to avoid.
+                // Never faded out: what this line says changes with the tree
+                // (branch when shut, "3 worktrees" when open — see
+                // `AppModel.projectInfoLine(for:)`), so there is nothing left to
+                // hide, and a line hidden while its children were all folded
+                // away was just an unexplained gap under the name.
                 Text(info)
                     .font(.system(size: 10))
                     .foregroundStyle(
@@ -433,7 +430,6 @@ struct ProjectSidebarRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .padding(.leading, 12)
-                    .opacity(showsWorktreeRows ? 0 : 1)
                     .accessibilityIdentifier("projectInfoLine")
             }
         }

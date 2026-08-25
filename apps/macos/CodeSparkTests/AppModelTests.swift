@@ -511,4 +511,84 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertTrue(client.recordedCwds.isEmpty)
     }
+
+    // MARK: - Destructive confirmation copy
+
+    /// Deleting a project unregisters it — the SQLite row and its session
+    /// history — and never touches the filesystem. The old copy said only
+    /// "permanently delete", which reads like the folder goes too.
+    ///
+    /// Asserted whole rather than by keyword: here the sentence *is* the
+    /// feature, and a fragment check passes on copy that has lost the half that
+    /// matters.
+    @MainActor
+    func test_delete_project_copy_says_files_on_disk_survive() {
+        let model = AppModel(core: MockProjectCoreClient(summaries: []))
+
+        XCTAssertEqual(
+            model.deleteProjectMessage(name: "nightly"),
+            "This will permanently delete \"nightly\" and all its sessions. "
+                + "Files on disk are not affected."
+        )
+    }
+
+    /// Removing a worktree runs `git worktree remove`, which does delete the
+    /// directory. Say so with the word the user is afraid of.
+    @MainActor
+    func test_remove_worktree_copy_says_the_folder_is_deleted_from_disk() {
+        let model = AppModel(core: MockProjectCoreClient(summaries: []))
+
+        XCTAssertEqual(
+            model.removeWorktreeMessage(path: "/Volumes/work/worktrees/feature"),
+            "Its tabs will close and the folder /Volumes/work/worktrees/feature "
+                + "will be deleted from disk. The branch itself stays."
+        )
+    }
+
+    /// The path in the message is the one the sidebar shows, so it goes through
+    /// `displayPath`: home collapses to `~`, and a remote worktree reads as the
+    /// directory on the other machine rather than as its `ssh://` URI.
+    @MainActor
+    func test_remove_worktree_copy_spells_the_path_the_way_the_sidebar_does() {
+        let model = AppModel(core: MockProjectCoreClient(summaries: []))
+
+        let home = model.removeWorktreeMessage(
+            path: NSHomeDirectory() + "/worktrees/feature")
+        XCTAssertTrue(home.contains("the folder ~/worktrees/feature will be"), home)
+
+        let remote = model.removeWorktreeMessage(path: "ssh://localhost/srv/repo-feature")
+        XCTAssertTrue(remote.contains("the folder /srv/repo-feature will be"), remote)
+    }
+
+    /// The two tests above read the model, and the model is not what the user
+    /// sees. Nothing in them notices a dialog that goes back to spelling its own
+    /// copy inline — the strings in a view body are invisible to every test we
+    /// can run, so the gate has to be the source itself.
+    func test_destructive_dialogs_read_their_copy_from_the_model() throws {
+        let views = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()  // CodeSparkTests
+            .deletingLastPathComponent()  // macos
+            .appendingPathComponent("CodeSpark/Views")
+        let sidebar = try String(
+            contentsOf: views.appendingPathComponent("SidebarView.swift"), encoding: .utf8)
+
+        XCTAssertTrue(sidebar.contains("model.deleteProjectMessage(name:"), "SidebarView.swift")
+        XCTAssertTrue(sidebar.contains("model.removeWorktreeMessage(path:"), "SidebarView.swift")
+
+        // The phrases only the model may own. A reverted wiring brings them
+        // back into a view body, and this is what notices.
+        let files = FileManager.default.enumerator(at: views, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL } ?? []
+        var offenders: [String] = []
+        for file in files where file.pathExtension == "swift" {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            for phrase in ["permanently delete", "will be deleted"] where source.contains(phrase) {
+                offenders.append("\(file.lastPathComponent): \(phrase)")
+            }
+        }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "삭제 다이얼로그 문구는 AppModel이 갖는다. 뷰에 다시 쓰면 테스트가 못 읽는다:\n"
+                + offenders.joined(separator: "\n"))
+    }
 }

@@ -1217,7 +1217,8 @@ final class WorkspaceSelectionTests: XCTestCase {
     private static let otherProject = "/tmp/other"
 
     /// Two projects: `p1` has two worktrees, `p2` is a plain one. The cache is
-    /// primed after `load()` because `selectProject` invalidates on the way in.
+    /// primed after `load()` because `selectProject` expires the entry on the
+    /// way in — expired, not dropped, so the count on the row survives a click.
     @MainActor
     private func modelWithTwoProjects() async -> AppModel {
         func summary(id: String, path: String) -> ProjectSummaryViewData {
@@ -2149,7 +2150,9 @@ final class WorkspaceSelectionTests: XCTestCase {
     /// A repo collects worktrees, and the ones with no tabs are the ones nobody
     /// is in. They fold behind a count rather than pushing the rest off screen.
     /// Only those: a worktree with tabs carries a `Cmd` digit, and hiding it
-    /// would leave a number with nothing on screen to point at.
+    /// would leave a number with nothing on screen to point at. `main` is
+    /// exempt too — an open tree has to show at least one row, or it reads as a
+    /// blank space rather than as a fold.
     @MainActor
     private func modelWithFourWorktrees() async -> AppModel {
         let (model, _) = await modelWithTwoWorktrees()
@@ -2172,14 +2175,15 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         let rows = model.sidebarWorktreeRows(for: project)
 
-        XCTAssertEqual(rows.shown.map(\.branch), ["feature"],
-                       "only the worktree with a tab should be standing")
-        XCTAssertEqual(rows.foldedCount, 3)
+        XCTAssertEqual(rows.shown.map(\.branch), ["main", "feature"],
+                       "the worktree with a tab stands, and main always does")
+        XCTAssertEqual(rows.foldedCount, 2)
     }
 
     /// You can be standing in a worktree you have not opened a tab in yet, and
     /// folding away the row you are on would leave the tree with nothing
-    /// selected on screen.
+    /// selected on screen. Read from `projectSelectedWorkspaces` so the answer
+    /// does not change when the selection moves to another project.
     @MainActor
     func test_the_worktree_you_are_standing_in_never_folds() async {
         let model = await modelWithFourWorktrees()
@@ -2189,8 +2193,8 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         let rows = model.sidebarWorktreeRows(for: project)
 
-        XCTAssertEqual(rows.shown.map(\.branch), ["feature", "idle-a"])
-        XCTAssertEqual(rows.foldedCount, 2)
+        XCTAssertEqual(rows.shown.map(\.branch), ["main", "feature", "idle-a"])
+        XCTAssertEqual(rows.foldedCount, 1)
     }
 
     @MainActor
@@ -2348,4 +2352,208 @@ final class WorkspaceSelectionTests: XCTestCase {
                        "a directory on the other machine was handed to local git: \(asked)")
         XCTAssertFalse(asked.contains("ssh://box/srv/app"), "\(asked)")
     }
+    // MARK: - The project row's subtitle never goes blank
+
+    /// Closed, the row *is* that worktree, so it names it — and says how many
+    /// others are inside, which is what tells the user there is a tree to open.
+    @MainActor
+    func test_a_closed_project_row_names_its_branch_and_how_many_worktrees() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        model.gitBranches[Self.mainWorktree] = "main"
+        let p1 = model.projects.first { $0.id == "p1" }!
+
+        XCTAssertEqual(model.projectInfoLine(for: p1), "main · 2 worktrees")
+    }
+
+    /// Open, the branch is spelled by the `main` worktree row one line below.
+    /// Repeating it there was why this line used to be hidden — and a hidden
+    /// line with every child folded away is the blank space the user reported.
+    @MainActor
+    func test_an_open_project_row_says_only_how_many_worktrees() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        model.gitBranches[Self.mainWorktree] = "main"
+        model.toggleWorktrees(projectID: "p1")
+        let p1 = model.projects.first { $0.id == "p1" }!
+
+        XCTAssertEqual(model.projectInfoLine(for: p1), "2 worktrees")
+    }
+
+    /// One worktree stays flat: the project row is that worktree, there are no
+    /// child rows, and a count of one is not news.
+    @MainActor
+    func test_a_flat_project_row_says_only_its_branch() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        model.gitWorktreeService.primeCache(
+            [GitWorktree(path: Self.otherProject, branch: "main", isMainWorktree: true)],
+            for: Self.otherProject)
+        model.gitBranches[Self.otherProject] = "main"
+        let p2 = model.projects.first { $0.id == "p2" }!
+
+        XCTAssertEqual(model.projectInfoLine(for: p2), "main")
+        model.toggleWorktrees(projectID: "p2")
+        XCTAssertEqual(model.projectInfoLine(for: p2), "main",
+                       "opening a repo with one worktree changes nothing")
+        XCTAssertFalse(model.showsWorktreeRows(for: p2))
+    }
+
+    /// A number we do not have yet is not written down — the same rule that
+    /// keeps "non-git" off the row until the lookup lands. The line fills in
+    /// when the answer arrives.
+    @MainActor
+    func test_a_project_row_omits_the_count_until_the_worktrees_are_known() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        model.gitBranches[Self.otherProject] = "main"
+        let p2 = model.projects.first { $0.id == "p2" }!
+
+        XCTAssertEqual(model.projectInfoLine(for: p2), "main", "cold cache: identity only")
+
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.otherProject, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.otherProject + "-x", branch: "x", isMainWorktree: false),
+            GitWorktree(path: Self.otherProject + "-y", branch: "y", isMainWorktree: false)
+        ], for: Self.otherProject)
+
+        XCTAssertEqual(model.projectInfoLine(for: p2), "main · 3 worktrees")
+    }
+
+    /// A remote project is addressed by host, not by branch, and it keeps that
+    /// address in every state. The count joins it only once a scan has answered
+    /// — and a `ssh://host` with no path is never scanned at all.
+    @MainActor
+    func test_a_remote_project_row_keeps_its_host() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let withPath = "ssh://jinto@kt-server/srv/repo"
+        let pathless = "ssh://kt-server"
+        func summary(id: String, path: String) -> ProjectSummaryViewData {
+            ProjectSummaryViewData(id: id, name: id, path: path, transport: "ssh",
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: [])
+        }
+        let model = AppModel(
+            core: MockProjectCoreClient(summaries: [summary(id: "r1", path: withPath),
+                                                    summary(id: "r2", path: pathless)]),
+            terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        let label = SSHConnectionInfo(uri: withPath)!.displayLabel
+        let r1 = model.projects.first { $0.id == "r1" }!
+        let r2 = model.projects.first { $0.id == "r2" }!
+
+        XCTAssertEqual(model.projectInfoLine(for: r1), label, "before the scan answers")
+        XCTAssertEqual(model.projectInfoLine(for: r2),
+                       SSHConnectionInfo(uri: pathless)!.displayLabel)
+
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: withPath, branch: "main", isMainWorktree: true),
+            GitWorktree(path: withPath + "-feature", branch: "feature", isMainWorktree: false)
+        ], for: withPath)
+
+        XCTAssertEqual(model.projectInfoLine(for: r1), "\(label) · 2 worktrees")
+    }
+
+    // MARK: - An open tree always has something in it
+
+    /// Folding hides the worktrees nobody is working in. Folding *all* of them
+    /// leaves an open project showing one grey "2 more" and a blank line, which
+    /// is indistinguishable from a rendering bug — and it was the state every
+    /// relaunch started in, since the tree's expansion is remembered while the
+    /// "show me the rest" flag is not.
+    @MainActor
+    func test_an_open_tree_always_shows_at_least_the_main_worktree() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        model.toggleWorktrees(projectID: "p1")
+        await model.selectProject(id: "p2")
+        model.projectSelectedWorkspaces.removeValue(forKey: "p1")
+        let p1 = model.projects.first { $0.id == "p1" }!
+
+        let rows = model.sidebarWorktreeRows(for: p1)
+
+        XCTAssertEqual(rows.shown.map(\.path), [Self.mainWorktree],
+                       "no tabs, no remembered worktree — main still stands for the tree")
+        XCTAssertEqual(rows.foldedCount, 1)
+    }
+
+    /// The rows must not depend on where the selection stands. They used to:
+    /// the "do not fold the worktree being stood in" exception only applied to
+    /// the selected project, so clicking a row grew the list by one and turned
+    /// "2 more" into "1 more" with no other change on screen.
+    @MainActor
+    func test_the_shown_worktrees_do_not_change_when_the_project_is_selected() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        model.toggleWorktrees(projectID: "p1")
+        await model.selectProject(id: "p2")
+        let unselected = model.sidebarWorktreeRows(
+            for: model.projects.first { $0.id == "p1" }!)
+
+        await model.selectProject(id: "p1")
+        let selected = model.sidebarWorktreeRows(
+            for: model.projects.first { $0.id == "p1" }!)
+
+        XCTAssertEqual(unselected.shown.map(\.path), selected.shown.map(\.path))
+        XCTAssertEqual(unselected.foldedCount, selected.foldedCount)
+    }
+
+    /// What the plan deliberately keeps: a worktree made elsewhere is found by
+    /// polling and appears. The count on the project row moves with it, so the
+    /// list growing has a reason written next to it.
+    @MainActor
+    func test_a_worktree_discovered_later_appears_and_the_count_says_so() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        model.gitBranches[Self.mainWorktree] = "main"
+        model.toggleWorktrees(projectID: "p1")
+        let before = model.sidebarWorktreeRows(for: model.projects.first { $0.id == "p1" }!)
+        XCTAssertEqual(model.projectInfoLine(for: model.projects.first { $0.id == "p1" }!),
+                       "2 worktrees")
+
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.featureWorktree, branch: "feature", isMainWorktree: false),
+            GitWorktree(path: Self.mainWorktree + "-scratch", branch: "scratch",
+                        isMainWorktree: false)
+        ], for: Self.mainWorktree)
+        model.recomputeWorkspaces()
+        let p1 = model.projects.first { $0.id == "p1" }!
+
+        XCTAssertEqual(model.projectInfoLine(for: p1), "3 worktrees")
+        XCTAssertEqual(model.sidebarWorktreeRows(for: p1).foldedCount, before.foldedCount + 1)
+    }
+
+    /// The subtitle is a string in a view body, and no test that renders the
+    /// view can read it. What a test *can* read is the source: the row must
+    /// never fade its own line out again.
+    func test_the_project_row_never_hides_its_own_subtitle() throws {
+        let views = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("CodeSpark/Views")
+        let files = FileManager.default.enumerator(at: views, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL } ?? []
+        var offenders: [String] = []
+        for file in files where file.pathExtension == "swift" {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            for (index, line) in source.components(separatedBy: .newlines).enumerated()
+            where line.contains(".opacity(") && line.contains("showsWorktreeRows") {
+                offenders.append("\(file.lastPathComponent):\(index + 1)")
+            }
+        }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "열렸을 때 부제를 감추면 설명 없는 빈 줄이 된다. 줄은 상태에 따라 다른 사실을 말할 것:\n"
+                + offenders.joined(separator: "\n"))
+    }
+
 }

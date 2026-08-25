@@ -369,10 +369,14 @@ final class CodeSparkUITests: XCTestCase {
 
     // MARK: - The path belongs to the row that is that worktree
 
-    /// A collapsed project row shows its path; opening the tree puts a "main"
-    /// row right under it, and the two would then name the same directory one
-    /// line apart. The handoff is decided in the sidebar's view body, so only a
-    /// running app can prove the path actually moved.
+    /// Opening the tree puts a "main" row right under the project row, and the
+    /// path belongs to that row — the two would otherwise name the same
+    /// directory one line apart. The project row's own line does not go away
+    /// while that happens; it changes what it says ("3 worktrees" instead of
+    /// the branch). It used to be faded out instead, and a tree whose rows had
+    /// all folded away then left an unexplained gap under the name. The handoff
+    /// is decided in the sidebar's view body, so only a running app can prove
+    /// it.
     func test_opening_a_tree_moves_the_path_onto_the_main_worktree_row() throws {
         let infoLines = app.staticTexts.matching(identifier: "projectInfoLine")
         let worktreePaths = app.staticTexts.matching(identifier: "worktreePath")
@@ -389,8 +393,8 @@ final class CodeSparkUITests: XCTestCase {
             "folding the tree left the path on a worktree row that is gone"
         )
         XCTAssertTrue(
-            wait { infoLines.count == infoLinesOpen + 1 },
-            "the collapsed project row never took its path back"
+            wait { infoLines.count == infoLinesOpen },
+            "a project row's line must be there in both states — never a blank gap"
         )
     }
 

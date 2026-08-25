@@ -133,23 +133,50 @@ final class AppModel: ObservableObject {
         return .empty
     }
 
-    /// The line under a project's name. Every project is its own main worktree,
-    /// so what belongs there is the branch it is on — or, for a folder that is
-    /// not a repository, that fact.
+    /// The line under a project's name — and it says something in every state.
+    ///
+    /// Closed, the row *is* its main worktree, so the line names it: the branch,
+    /// or for a folder that is no repository, that fact. A repo with more than
+    /// one worktree adds how many, which is the only warning that clicking will
+    /// unfold a tree.
+    ///
+    /// Open, the branch is spelled by the `main` row one line below, so this
+    /// line drops it and keeps the count — the one thing no child row can say,
+    /// and the only mark left that the tree is open now that the disclosure
+    /// triangle is gone. It used to be faded out instead, and with every
+    /// worktree folded away that left a blank line under the name with nothing
+    /// on screen to explain it.
     ///
     /// Never the path. The row's title is the folder's name, and spelling the
-    /// same folder out again underneath tells nobody anything. It also read as
-    /// the main worktree's path while the tree below was open, which is the
-    /// worktree row's line to say.
+    /// same folder out again underneath tells nobody anything.
     func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
+        let scale = worktreeCount(for: project).flatMap { $0 > 1 ? "\($0) worktrees" : nil }
+        if showsWorktreeRows(for: project), let scale { return scale }
+        guard let identity = projectIdentityLine(for: project) else { return scale }
+        guard let scale else { return identity }
+        return "\(identity) · \(scale)"
+    }
+
+    private func projectIdentityLine(for project: ProjectSummaryViewData) -> String? {
         if project.transport == "ssh" {
             return SSHConnectionInfo(uri: project.path)?.displayLabel ?? project.path
         }
         guard !project.path.isEmpty else { return nil }
         if let branch = gitBranches[project.path] { return branch }
-        // Blank until the lookup lands: "non-git" before asking would be a guess,
-        // and the line holds its space either way.
+        // Blank until the lookup lands: "non-git" before asking would be a guess.
         return nonGitProjectPaths.contains(project.path) ? "non-git" : nil
+    }
+
+    /// How many worktrees a project has, or nil while nobody has answered yet.
+    ///
+    /// Straight from the cache rather than through `sidebarWorktrees(for:)`,
+    /// which reads the live grouping for the selected project and the cache for
+    /// every other one — a number that changed on selection would say the repo
+    /// grew when all that happened was a click. And nil is not zero: a count we
+    /// do not have yet is left off the row, the same way "non-git" waits for its
+    /// lookup instead of guessing.
+    func worktreeCount(for project: ProjectSummaryViewData) -> Int? {
+        gitWorktreeService.worktrees(for: project.path)?.count
     }
 
     /// The strip above a terminal, for the tabs still on their way back.
@@ -1054,19 +1081,31 @@ final class AppModel: ObservableObject {
     /// is working in. They fold behind a count rather than pushing everything
     /// else off the screen.
     ///
-    /// Only those. A worktree with tabs carries a `Cmd` digit, and folding it
-    /// would leave a number pointing at nothing on screen — the same reason a
-    /// folded project row wears the digit that leads inside it. The worktree
-    /// being *stood in* stays too, even before it has a tab: it is the selected
-    /// row, and a tree whose selection is hidden reads as no selection at all.
+    /// Three never fold. A worktree with tabs, because it carries a `Cmd` digit
+    /// and folding it would leave a number pointing at nothing on screen — the
+    /// same reason a folded project row wears the digit that leads inside it.
+    /// The worktree the project was last left standing in, because coming back
+    /// to a tree whose selection is hidden reads as no selection at all. And
+    /// `main`, always: an open tree with every row folded away shows one grey
+    /// "2 more" under a blank line, which reads as a rendering fault rather than
+    /// as a fold — and since the expansion is remembered across launches while
+    /// the "show me the rest" flag is not, that was the state the sidebar came
+    /// back in every morning.
+    ///
+    /// The remembered worktree is read from `projectSelectedWorkspaces`, not
+    /// from the live selection: the old test only held for the selected project,
+    /// so a click that changed nothing else grew the list by a row and turned
+    /// "2 more" into "1 more".
     func sidebarWorktreeRows(for project: ProjectSummaryViewData) -> SidebarWorktreeRows {
         let all = sidebarWorktrees(for: project)
         guard !projectsShowingEveryWorktree.contains(project.id) else {
             return SidebarWorktreeRows(shown: all, foldedCount: 0)
         }
+        let remembered = projectSelectedWorkspaces[project.id]
         let shown = all.filter { workspace in
             !workspace.sessions.isEmpty
-                || (selectedProjectID == project.id && workspace.path == activeWorkspacePath)
+                || workspace.isMainWorktree
+                || workspace.path == remembered
         }
         return SidebarWorktreeRows(shown: shown, foldedCount: all.count - shown.count)
     }
@@ -1100,6 +1139,22 @@ final class AppModel: ObservableObject {
             return remote
         }
         return (workspacePath as NSString).abbreviatingWithTildeInPath
+    }
+
+    /// What the two destructive confirmations say. Here rather than in the view
+    /// body so a test can read it: a dialog's wording is the whole of what the
+    /// user has to go on, and it is invisible from anywhere else.
+    ///
+    /// The distinction the copy has to carry is that these two deletions are not
+    /// the same kind. Deleting a project drops a row from the store; the folder
+    /// stays where it was. Removing a worktree runs `git worktree remove`, and
+    /// that directory is gone.
+    func deleteProjectMessage(name: String) -> String {
+        "This will permanently delete \"\(name)\" and all its sessions. Files on disk are not affected."
+    }
+
+    func removeWorktreeMessage(path: String) -> String {
+        "Its tabs will close and the folder \(displayPath(for: path)) will be deleted from disk. The branch itself stays."
     }
 
     /// Where Cmd+1…9 go: every workspace that has a tab, in sidebar order. A
