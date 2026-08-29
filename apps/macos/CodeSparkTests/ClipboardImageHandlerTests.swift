@@ -78,6 +78,7 @@ final class ClipboardImageHandlerTests: XCTestCase {
             sshInfo: info
         )
         XCTAssertEqual(args, [
+            "--",
             "/tmp/clipboard-2026-04-08-120000-ABCD1234.png",
             "alice@example.com:/tmp/clipboard-2026-04-08-120000-ABCD1234.png"
         ])
@@ -90,7 +91,7 @@ final class ClipboardImageHandlerTests: XCTestCase {
             localPath: "/var/folders/xx/T/clipboard-test.png",
             sshInfo: info
         )
-        XCTAssertEqual(args, ["-P", "2222", "/var/folders/xx/T/clipboard-test.png", "bob@example.com:/tmp/clipboard-test.png"])
+        XCTAssertEqual(args, ["-P", "2222", "--", "/var/folders/xx/T/clipboard-test.png", "bob@example.com:/tmp/clipboard-test.png"])
         XCTAssertEqual(remotePath, "/tmp/clipboard-test.png")
     }
 
@@ -100,7 +101,7 @@ final class ClipboardImageHandlerTests: XCTestCase {
             localPath: "/tmp/test.png",
             sshInfo: info
         )
-        XCTAssertEqual(args, ["/tmp/test.png", "myserver.local:/tmp/test.png"])
+        XCTAssertEqual(args, ["--", "/tmp/test.png", "myserver.local:/tmp/test.png"])
     }
 
     func test_saveImageToTempFile_handles_tiff_clipboard() {

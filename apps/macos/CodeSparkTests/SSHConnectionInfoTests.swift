@@ -9,7 +9,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertNil(info.user)
         XCTAssertNil(info.port)
         XCTAssertNil(info.remotePath)
-        XCTAssertEqual(info.sshCommand(), "ssh 'myhost'")
+        XCTAssertEqual(info.sshCommand(), "ssh -- 'myhost'")
         XCTAssertEqual(info.displayLabel, "myhost")
     }
 
@@ -17,7 +17,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         let info = SSHConnectionInfo(uri: "ssh://jinto@myhost")!
         XCTAssertEqual(info.host, "myhost")
         XCTAssertEqual(info.user, "jinto")
-        XCTAssertEqual(info.sshCommand(), "ssh 'jinto@myhost'")
+        XCTAssertEqual(info.sshCommand(), "ssh -- 'jinto@myhost'")
         XCTAssertEqual(info.displayLabel, "jinto@myhost")
     }
 
@@ -35,7 +35,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertEqual(info.user, "jinto")
         XCTAssertEqual(info.port, 2222)
         XCTAssertEqual(info.remotePath, "/srv/app")
-        XCTAssertTrue(info.sshCommand().hasPrefix("ssh -p 2222 'jinto@myhost' -t "), info.sshCommand())
+        XCTAssertTrue(info.sshCommand().hasPrefix("ssh -p 2222 -- 'jinto@myhost' -t "), info.sshCommand())
         XCTAssertEqual(firstLine(info.remoteCommand(replaying: nil)), "cd '/srv/app' || exit")
     }
 
@@ -44,7 +44,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertEqual(info.host, "myhost")
         XCTAssertEqual(info.port, 8022)
         XCTAssertNil(info.user)
-        XCTAssertEqual(info.sshCommand(), "ssh -p 8022 'myhost'")
+        XCTAssertEqual(info.sshCommand(), "ssh -p 8022 -- 'myhost'")
     }
 
     func test_uri_roundtrip() {
@@ -63,7 +63,56 @@ final class SSHConnectionInfoTests: XCTestCase {
     func test_root_path_ignored() {
         let info = SSHConnectionInfo(uri: "ssh://myhost/")!
         XCTAssertNil(info.remotePath)
-        XCTAssertEqual(info.sshCommand(), "ssh 'myhost'")
+        XCTAssertEqual(info.sshCommand(), "ssh -- 'myhost'")
+    }
+
+    // MARK: - A host is not an option
+    //
+    // ssh reads any argv element beginning with `-` as an option, wherever it
+    // sits. The host is free text from the New SSH Project sheet, it is stored,
+    // and the 10-second worktree poll re-reads it — so `-oProxyCommand=…` would
+    // run a local command over and over, unattended.
+    //
+    // The host was already shell-quoted, with a comment explaining why. Quoting
+    // defends the shell; it does nothing about the argv position. Two layers
+    // here: refuse it at the parser so it can never be stored, and separate the
+    // destination with `--` so a value that reaches ssh anyway is still data.
+
+    func test_a_host_that_would_be_read_as_an_option_is_refused() {
+        XCTAssertNil(SSHConnectionInfo(uri: "ssh://-oProxyCommand=id/srv/repo"))
+        XCTAssertNil(SSHConnectionInfo(uri: "ssh://-oProxyCommand=id"))
+        XCTAssertNil(SSHConnectionInfo(uri: "ssh://user@-oProxyCommand=id/srv"))
+    }
+
+    func test_a_user_that_would_be_read_as_an_option_is_refused() {
+        XCTAssertNil(SSHConnectionInfo(uri: "ssh://-l@box/srv"))
+    }
+
+    /// A hyphen inside the name is fine — only a leading one is an option.
+    func test_an_ordinary_hyphenated_host_still_parses() {
+        let info = SSHConnectionInfo(uri: "ssh://build-box-01/srv")
+        XCTAssertEqual(info?.host, "build-box-01")
+    }
+
+    func test_every_ssh_invocation_separates_its_destination() throws {
+        let info = try XCTUnwrap(SSHConnectionInfo(uri: "ssh://jinto@box:2222/srv/repo"))
+
+        for (label, argv) in [
+            ("worktree scan", GitWorktreeService.remoteSSHArguments(info, remoteCommand: "true")),
+            ("folder picker", RemoteDirectoryLister.arguments(for: info, script: "true")),
+            ("image paste", ClipboardImageHandler.scpArguments(localPath: "/tmp/a.png", sshInfo: info).args),
+        ] {
+            let separator = try XCTUnwrap(
+                argv.firstIndex(of: "--"),
+                "\(label): no `--` before the destination — a host beginning with a dash is an option")
+            XCTAssertTrue(
+                argv[(separator + 1)...].contains { $0.contains("box") },
+                "\(label): `--` does not precede the destination")
+        }
+
+        XCTAssertTrue(
+            info.sshCommand().contains(" -- "),
+            "sshCommand: the tab's own ssh line has no `--`")
     }
 
     // MARK: - A home-relative path
@@ -101,9 +150,10 @@ final class SSHConnectionInfoTests: XCTestCase {
     func test_the_remote_command_reaches_ssh_as_a_single_argument() throws {
         let info = SSHConnectionInfo(uri: "ssh://myhost/srv/app")!
         let argv = try argumentsSSHReceives(from: info.sshCommand())
-        XCTAssertEqual(argv.count, 3, "the remote command must reach ssh whole: \(argv)")
-        XCTAssertEqual(argv.first, "myhost")
-        XCTAssertEqual(argv.dropFirst().first, "-t")
+        XCTAssertEqual(argv.count, 4, "the remote command must reach ssh whole: \(argv)")
+        XCTAssertEqual(argv.first, "--", "the destination must be separated from the options")
+        XCTAssertEqual(argv.dropFirst().first, "myhost")
+        XCTAssertEqual(argv.dropFirst(2).first, "-t")
         let remote = try XCTUnwrap(argv.last)
         XCTAssertTrue(remote.hasPrefix("/bin/sh -c "), remote)
     }
@@ -112,7 +162,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         let info = SSHConnectionInfo(uri: "ssh://myhost/srv/app")!
         XCTAssertEqual(firstLine(info.remoteCommand(replaying: "printf '%b' 'screen'")),
                        "printf '%b' 'screen'")
-        XCTAssertEqual(try argumentsSSHReceives(from: info.sshCommand(replaying: "printf '%b' 'screen'")).count, 3)
+        XCTAssertEqual(try argumentsSSHReceives(from: info.sshCommand(replaying: "printf '%b' 'screen'")).count, 4)
     }
 
     func test_a_replay_opens_a_shell_even_without_a_remote_path() throws {
@@ -129,8 +179,8 @@ final class SSHConnectionInfoTests: XCTestCase {
         let info = SSHConnectionInfo(host: "box; touch /tmp/codespark-should-not-exist",
                                      remotePath: "/srv/app")
         let argv = try argumentsSSHReceives(from: info.sshCommand())
-        XCTAssertEqual(argv.first, "box; touch /tmp/codespark-should-not-exist")
-        XCTAssertEqual(argv.count, 3, "\(argv)")
+        XCTAssertEqual(argv.dropFirst().first, "box; touch /tmp/codespark-should-not-exist")
+        XCTAssertEqual(argv.count, 4, "\(argv)")
         XCTAssertFalse(FileManager.default.fileExists(atPath: "/tmp/codespark-should-not-exist"),
                        "the local shell ran what was typed into the host field")
     }
@@ -138,8 +188,8 @@ final class SSHConnectionInfoTests: XCTestCase {
     func test_a_user_with_a_shell_metacharacter_stays_one_argument() throws {
         let info = SSHConnectionInfo(host: "box", user: "jay$(id -u)", remotePath: "/srv/app")
         let argv = try argumentsSSHReceives(from: info.sshCommand())
-        XCTAssertEqual(argv.first, "jay$(id -u)@box")
-        XCTAssertEqual(argv.count, 3, "\(argv)")
+        XCTAssertEqual(argv.dropFirst().first, "jay$(id -u)@box")
+        XCTAssertEqual(argv.count, 4, "\(argv)")
     }
 
     func test_a_remote_path_with_a_quote_stays_one_argument() throws {

@@ -33,14 +33,15 @@ struct SSHConnectionInfo: Equatable {
         }
 
         let hostPort = userHost.1
+        if let candidate = userHost.0, !Self.isAddressable(candidate) { return nil }
         if let colonIndex = hostPort.lastIndex(of: ":") {
             let h = String(hostPort[..<colonIndex])
             let p = String(hostPort[hostPort.index(after: colonIndex)...])
-            guard !h.isEmpty else { return nil }
+            guard Self.isAddressable(h) else { return nil }
             self.host = h
             self.port = Int(p)
         } else {
-            guard !hostPort.isEmpty else { return nil }
+            guard Self.isAddressable(hostPort) else { return nil }
             self.host = hostPort
             self.port = nil
         }
@@ -82,6 +83,7 @@ struct SSHConnectionInfo: Equatable {
         // Quoted for the same reason the remote command is: Ghostty hands this
         // whole string to `/bin/sh -c`, and the host is free text from the New
         // SSH Project sheet. Unquoted, everything a `;` introduces runs here.
+        parts.append("--")
         parts.append(Self.shellQuoted(user.map { "\($0)@\(host)" } ?? host))
         if let remote = remoteCommand(replaying: replay) {
             // Ghostty runs this whole string through `/bin/sh -c`, so the remote
@@ -108,6 +110,7 @@ struct SSHConnectionInfo: Equatable {
     var previewCommand: String {
         var parts = ["ssh"]
         if let port { parts.append(contentsOf: ["-p", "\(port)"]) }
+        parts.append("--")
         parts.append(Self.shellQuoted(user.map { "\($0)@\(host)" } ?? host))
         if let remotePath {
             parts.append(contentsOf: ["-t", Self.shellQuoted("cd \(Self.remotePathExpression(remotePath))")])
@@ -143,6 +146,20 @@ struct SSHConnectionInfo: Equatable {
         guard !lines.isEmpty else { return nil }
         lines.append(RemoteCwdReporter.launcher)
         return lines.joined(separator: "\n")
+    }
+
+    /// ssh reads *any* argv element beginning with `-` as an option, whatever
+    /// position it is in, so `-oProxyCommand=…` as a host runs a command on this
+    /// machine. The host is free text from the New SSH Project sheet, it is
+    /// stored, and the worktree poll re-reads it every ten seconds — one bad
+    /// value would fire repeatedly with nobody watching.
+    ///
+    /// Quoting the host, which this file already did and explained, defends the
+    /// *shell*. It says nothing about the argv position, so the defence was one
+    /// layer off the thing it was aimed at. A leading hyphen is refused here and
+    /// the destination is separated with `--` at every call site.
+    static func isAddressable(_ component: String) -> Bool {
+        !component.isEmpty && !component.hasPrefix("-")
     }
 
     static func shellQuoted(_ value: String) -> String {

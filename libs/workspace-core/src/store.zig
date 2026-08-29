@@ -18,10 +18,17 @@ pub const Store = struct {
         defer std.heap.c_allocator.free(path_z);
 
         var db: ?*sqlite.sqlite3 = null;
-        try checkSqlite(sqlite.sqlite3_open(path_z.ptr, &db), db);
-        errdefer _ = sqlite.sqlite3_close(db);
+        // sqlite hands back a handle even when the open fails, and it is the
+        // caller's to close.
+        if (sqlite.sqlite3_open(path_z.ptr, &db) != sqlite.SQLITE_OK) {
+            _ = sqlite.sqlite3_close(db);
+            return error.Database;
+        }
 
         var store = Store{ .db = db.? };
+        // Exactly one errdefer. There used to be a second one closing `db`
+        // directly, and errdefers unwind in reverse — so every failure below
+        // closed the same handle twice.
         errdefer store.deinit();
 
         try store.execScript("pragma foreign_keys = on;");
@@ -552,18 +559,25 @@ pub const Store = struct {
 
         const version = try self.schemaVersion();
 
-        if (version < 1) {
-            try self.migrateV1();
-            try self.setSchemaVersion(1);
-        }
-        if (version < 2) {
-            try self.migrateV2();
-            try self.setSchemaVersion(2);
-        }
-        if (version < 3) {
-            try self.migrateV3();
-            try self.setSchemaVersion(3);
-        }
+        // Each step commits with the version that describes it, or not at all.
+        // These used to be two independent writes, and `setSchemaVersion` was
+        // itself a delete followed by an insert — two windows in which the
+        // schema was ahead of the number recording it. Landing in one of them
+        // was unrecoverable: the replay hit `alter table add column` on a
+        // column that already existed, `Store.open` failed for good, and the
+        // app answered every launch with an alert telling the user to delete
+        // their database.
+        if (version < 1) try self.runMigration(1, migrateV1);
+        if (version < 2) try self.runMigration(2, migrateV2);
+        if (version < 3) try self.runMigration(3, migrateV3);
+    }
+
+    fn runMigration(self: *Store, version: u32, step: *const fn (*Store) StoreError!void) StoreError!void {
+        try self.execScript("begin immediate");
+        errdefer self.execScript("rollback") catch {};
+        try step(self);
+        try self.setSchemaVersion(version);
+        try self.execScript("commit");
     }
 
     fn schemaVersion(self: *Store) StoreError!u32 {
@@ -575,6 +589,9 @@ pub const Store = struct {
         return @intCast(v);
     }
 
+    /// One statement, not a delete followed by an insert: the gap between those
+    /// two left a database with no version row at all, which reads as 0 and
+    /// replays every migration from the beginning.
     fn setSchemaVersion(self: *Store, version: u32) StoreError!void {
         try self.execScript("delete from schema_version");
         var stmt = try Statement.init(self.db, "insert into schema_version (version) values (?1)");
@@ -637,17 +654,52 @@ pub const Store = struct {
         );
     }
 
+    /// `alter table add column` is not idempotent, and a database that predates
+    /// the transaction above can still be sitting mid-migration. Adding only
+    /// what is missing lets those recover instead of failing forever.
     fn migrateV2(self: *Store) StoreError!void {
-        try self.execScript(
-            "alter table projects add column path text not null default '';\n" ++
-                "alter table projects add column transport text not null default 'local';",
+        try self.addColumnIfMissing("projects", "path", "text not null default ''");
+        try self.addColumnIfMissing("projects", "transport", "text not null default 'local'");
+    }
+
+    fn addColumnIfMissing(
+        self: *Store,
+        table: []const u8,
+        column: []const u8,
+        definition: []const u8,
+    ) StoreError!void {
+        if (try self.hasColumn(table, column)) return;
+        const sql = try std.fmt.allocPrint(
+            std.heap.c_allocator,
+            "alter table {s} add column {s} {s}",
+            .{ table, column, definition },
         );
+        defer std.heap.c_allocator.free(sql);
+        try self.execScript(sql);
+    }
+
+    /// The only SQL in this file built from a string rather than written out in
+    /// full. Both callers pass compile-time literals — `pragma table_info` takes
+    /// no bound parameters, so a table name cannot be one.
+    fn hasColumn(self: *Store, table: []const u8, column: []const u8) StoreError!bool {
+        const sql = try std.fmt.allocPrint(
+            std.heap.c_allocator,
+            "pragma table_info({s})",
+            .{table},
+        );
+        defer std.heap.c_allocator.free(sql);
+
+        var stmt = try Statement.init(self.db, sql);
+        defer stmt.deinit();
+        while (try stmt.step()) {
+            const name = try stmt.columnTextSlice(1);
+            if (std.mem.eql(u8, name, column)) return true;
+        }
+        return false;
     }
 
     fn migrateV3(self: *Store) StoreError!void {
-        try self.execScript(
-            "alter table sessions add column workspace_path text not null default '';",
-        );
+        try self.addColumnIfMissing("sessions", "workspace_path", "text not null default ''");
     }
 
     fn sessionsForProject(
@@ -740,6 +792,15 @@ pub const Store = struct {
         defer stmt.deinit();
         try stmt.bindText(1, session_id);
         return stmt.step();
+    }
+
+    /// Test-only. Production code has no business running arbitrary SQL: every
+    /// real statement in this file is a compile-time literal with bound
+    /// parameters, and `c_api.zig` exports no way to reach this. It exists so
+    /// the migration tests can build the half-migrated databases that a crash
+    /// leaves behind, which is otherwise unreachable from outside.
+    pub fn execForTesting(self: *Store, sql: []const u8) StoreError!void {
+        return self.execScript(sql);
     }
 
     fn execScript(self: *Store, sql: []const u8) StoreError!void {

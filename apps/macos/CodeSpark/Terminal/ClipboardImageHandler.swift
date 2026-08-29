@@ -36,6 +36,9 @@ enum ClipboardImageHandler {
         var args: [String] = []
         if let port = sshInfo.port { args.append(contentsOf: ["-P", "\(port)"]) }
         let target = sshInfo.user.map { "\($0)@\(sshInfo.host)" } ?? sshInfo.host
+        // Guards both positionals: the destination, and a local path that could
+        // itself begin with a dash.
+        args.append("--")
         args.append(contentsOf: [localPath, "\(target):\(remotePath)"])
         return (args, remotePath)
     }

@@ -111,6 +111,7 @@ final class RemoteDirectoryLister: @unchecked Sendable {
             "-o", "ServerAliveCountMax=2",
         ]
         if let port = info.port { args.append(contentsOf: ["-p", "\(port)"]) }
+        args.append("--")
         args.append(info.user.map { "\($0)@\(info.host)" } ?? info.host)
         args.append(contentsOf: ["/bin/sh", "-c", shellQuoted(script)])
         return args

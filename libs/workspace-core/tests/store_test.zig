@@ -1254,3 +1254,75 @@ fn expectSqliteDone(stmt: ?*sqlite.sqlite3_stmt, db: ?*sqlite.sqlite3) !void {
     _ = db;
     return error.Database;
 }
+
+// A store that will not open takes every project and every session with it —
+// `ProjectCoreClient.live` shows an alert telling the user to delete the
+// database, and then calls fatalError. So the migration path is the one place
+// in this file where "it has never happened" is not an argument.
+//
+// It had never been tested at all: nothing here touched `schema_version`,
+// `migrate`, `alter table`, or a database written by an older build.
+
+test "a version row lost mid-write does not brick the store" {
+    const path = try uniqueDbPath("migration-lost-version");
+    defer std.testing.allocator.free(path);
+    defer std.fs.cwd().deleteFile(path) catch {};
+
+    {
+        var store = try core.Store.open(path);
+        defer store.deinit();
+        // Exactly the state a crash inside setSchemaVersion leaves behind: it
+        // deletes the row and then inserts the new one, as two statements.
+        try store.execForTesting("delete from schema_version");
+    }
+
+    var reopened = try core.Store.open(path);
+    reopened.deinit();
+}
+
+test "a migration replayed over its own columns does not brick the store" {
+    const path = try uniqueDbPath("migration-replayed");
+    defer std.testing.allocator.free(path);
+    defer std.fs.cwd().deleteFile(path) catch {};
+
+    {
+        var store = try core.Store.open(path);
+        defer store.deinit();
+        // A crash between migrateV2's ALTERs and its version bump: the columns
+        // are there, the recorded version says they are not. `alter table add
+        // column` is not idempotent, so the replay used to fail with
+        // "duplicate column name" — for good.
+        try store.execForTesting("delete from schema_version");
+        try store.execForTesting("insert into schema_version (version) values (1)");
+    }
+
+    var reopened = try core.Store.open(path);
+    defer reopened.deinit();
+
+    // And the store still works, rather than merely opening.
+    const project_id = try reopened.createProject(std.testing.allocator, "spark3", "/tmp/spark3", .local);
+    defer std.testing.allocator.free(project_id);
+    const summaries = try reopened.listProjectSummaries(std.testing.allocator);
+    defer freeProjectSummaries(summaries);
+    try std.testing.expectEqual(@as(usize, 1), summaries.len);
+    try std.testing.expectEqualStrings("/tmp/spark3", summaries[0].path);
+}
+
+// `Store.open` registered two errdefers that closed the same sqlite handle, so
+// any failure after the connection opened closed it twice. Under guard malloc
+// that is a segfault in libsqlite3; in the shipped ReleaseFast build it is
+// undefined behaviour that happens to look fine.
+test "a store that fails to migrate closes its handle exactly once" {
+    const path = try uniqueDbPath("migration-refused");
+    defer std.testing.allocator.free(path);
+    defer std.fs.cwd().deleteFile(path) catch {};
+
+    {
+        var store = try core.Store.open(path);
+        defer store.deinit();
+        try store.execForTesting("delete from schema_version");
+        try store.execForTesting("insert into schema_version (version) values (-5)");
+    }
+
+    try std.testing.expectError(error.InvalidData, core.Store.open(path));
+}

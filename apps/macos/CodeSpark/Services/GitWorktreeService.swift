@@ -143,6 +143,9 @@ final class GitWorktreeService: @unchecked Sendable {
     static func remoteSSHArguments(_ info: SSHConnectionInfo, remoteCommand: String) -> [String] {
         var argv = remoteSSHOptions
         if let port = info.port { argv.append(contentsOf: ["-p", "\(port)"]) }
+        // Anything after `--` is a destination, never an option — see
+        // `SSHConnectionInfo.isAddressable`.
+        argv.append("--")
         if let user = info.user {
             argv.append("\(user)@\(info.host)")
         } else {
