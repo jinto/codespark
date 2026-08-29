@@ -73,13 +73,15 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
     - 개수의 출처는 `worktreeCount(for:)` = `gitWorktreeService.worktrees(for:)`. `sidebarWorktrees(for:)`를 쓰면 안 된다 — 그건 선택된 프로젝트만 라이브 그룹핑을 읽어서, 클릭 한 번에 숫자가 변한다.
 - **펼침**: **프로젝트 행 클릭이 곧 토글이다**(`selectProjectAndToggleWorktrees`). 디스클로저 삼각형(▶/▼)은 없앴다 — 8pt짜리 과녁이라 조준이 어렵고, 있고 없고에 따라 제목이 가로로 밀렸다. 행 전체가 과녁이고 클릭은 선택 + 펼치기를 겸한다.
   - **트리 유무를 먼저 묻지 않고 토글한다.** 선택이 git으로 워크트리 목록을 새로 읽으므로 캐시가 비어 있는 첫 클릭에는 "없음"으로 보인다 — 가드를 두면 이번 세션에 처음 여는 프로젝트마다 첫 클릭을 삼킨다. 워크트리가 1개면 아무것도 안 그리는 플래그만 저장될 뿐이다.
-  - `expandedProjectIDs`(UserDefaults 저장)가 기준이고 **다른 프로젝트의 선택과는 무관하다** — Cmd+1로 옮겨가도 열어둔 트리는 그대로다. 선택된 프로젝트는 `workspaces`(라이브)를, 나머지는 `liveSessionDetails`를 그룹핑해 행을 만든다.
+  - `expandedProjectIDs`(UserDefaults 저장)가 기준이고 **다른 프로젝트의 선택과는 무관하다** — Cmd+1로 옮겨가도 열어둔 트리는 그대로다. detail이 도착한 프로젝트는 `workspaces`(라이브)를, 나머지는 `liveSessionDetails`를 그룹핑해 행을 만든다(아래 `selectedProject` 항목).
   - **UI 테스트 주의**: 삼각형이 사라지면서 "워크트리 여러 개인 프로젝트"를 공짜로 걸러주던 수단도 사라졌다. 이제 모든 행이 클릭을 받으므로 `projectRowWithATree()`가 눌러보고 `worktreeBranch` 개수가 변하는 행을 찾는다. `worktreeDisclosure`를 찾던 옛 방식대로 두면 테스트가 **조용히 skip되며 통과**한다.
   - **탭 없는 워크트리는 접힌다**(`sidebarWorktreeRows(for:)`, `·· N more`). 접히지 않는 것 셋: 탭이 있는 것(= `Cmd` 숫자가 가리키는 곳), **`projectSelectedWorkspaces`에 기록된 마지막으로 서 있던 워크트리**, 그리고 **`main`은 언제나**. 앞의 둘을 "지금 선택된 워크트리"로 판정하면 선택이 행 개수를 바꾼다 — 클릭 한 번에 `2 more`가 `1 more`가 되고 화면엔 다른 변화가 없다. main이 예외인 이유는 위와 같다: 펼친 트리는 최소 한 줄의 실체를 보여야 한다.
   - **밖에서 만든 워크트리는 폴링으로만 발견된다**: 앱이 만든 것(`addWorktree`)은 즉시 반영되지만, 에이전트가 탭 안에서 만든 것이나 다른 체크아웃의 것은 10초 타이머가 찾는다. 타이머는 `NSApp.isActive`일 때만 돌고 TTL은 30초(실패 60초)라 최대 ~40초. **앱이 배경에 있으면 아예 돌지 않으므로** 활성화되는 순간(`didBecomeActiveNotification`) 한 번 더 묻는다 — 안 그러면 몇 시간 자리를 비운 뒤 돌아와도 다음 tick까지 낡은 목록을 본다.
   - **조회 실패는 로그로 남긴다**: 실패하면 그 프로젝트의 워크트리 행이 조용히 하나로 접힌다. stderr를 버리던 동안에는 왜 그런지 알아낼 방법이 아무 데도 없었다.
   - **캐시 주의**: `GitWorktreeService.refreshWorktrees(for:)`는 **넘기지 않은 경로의 캐시를 지운다**. 선택된 프로젝트 하나만 넘기면 나머지 프로젝트의 워크트리 행이 통째로 사라진다 — 항상 `worktreeProjectPaths`(워크트리를 가질 수 있는 프로젝트 전부, 원격 포함)를 넘길 것.
 - **스코프**: 탭바·`Cmd+[/]`·새 탭은 전부 `activeWorkspacePath` 기준(`visibleSessions`). 안 보이는 워크트리의 Ghostty surface는 계속 살아 있다 — `terminalContent`는 여전히 `allSessions`를 순회해야 한다.
+- **`workspaces`는 `selectedProject`의 것이다 — `selectedProjectID`의 것이 아니다**. ID는 클릭/숫자를 누른 즉시 움직이고 detail은 git 왕복 뒤에 온다. 그 사이 `workspaces`는 **떠나온 프로젝트**를 설명하므로, `workspaces(for:)`가 ID로 판정하면 두 행이 동시에 거짓말한다 — 펼쳐둔 트리가 한 프레임 접혔다 펴지고(`showsWorktreeRows`가 빈 목록을 보므로), 워크트리가 없는 프로젝트가 남의 워크트리 네 줄을 잠깐 입는다(숫자가 들어오는 길에 트리를 열어두므로). 배지도 같은 그룹핑을 읽으니 `Cmd`를 누른 채로 번호가 출렁인다. detail이 도착하기 전까지 프로젝트는 **자기 요약**이다 — 선택 안 된 행들이 이미 읽는 그것.
+  - 눈으로만 보이는 한 프레임이라 테스트는 왕복 중간에 들여다본다(`modelWithASlowLookup`). 끝난 뒤 상태를 보는 테스트로는 한 개도 안 잡힌다.
 - **순서 (중요)**: `recomputeWorkspaces()`는 **선택 대입보다 먼저** 실행해야 한다. `activeWorkspacePath`의 `didSet`이 `workspaces`를 읽기 때문에, 낡은 그룹핑이면 방금 만든 탭을 못 보고 선택을 옛 탭으로 되돌린다.
   - **탭을 만들었으면 그 자리에서 다시 그룹핑한다**: 탭바는 `visibleSessions`를 거쳐 그룹핑을 읽으므로, `liveSessions`에만 넣고 recompute를 안 하면 **아무도 못 보는 탭**이 된다. `startAndAttachSession`이 직접 하는 이유다 — 예전엔 `newSession`만 따로 부르고 복원 경로는 안 불러서, 복원된 탭이 cwd 보고 같은 엉뚱한 계기가 지나갈 때까지 안 보였다.
 - **재귀**: `activeSessionID`와 `activeWorkspacePath`의 `didSet`이 서로를 부른다. `workspaceSelectedSessions`를 **먼저** 쓰고 부등호 가드로 끊는 순서가 종료 조건이다.
@@ -93,10 +95,12 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - **메인 영역은 탭바를 따른다**: 렌더 분기는 `liveSessions`가 아니라 `visibleSessions` 기준. 프로젝트에 탭이 있어도 *지금 워크트리*에 없으면 "New Terminal"을 내밀어야 한다.
   - 그 판단은 **`AppModel.mainAreaContent`** 한 곳에 있다(`sshReconnect` / `restoring` / `empty` / `terminals`). 뷰에서 조건을 다시 늘어놓지 말 것 — 어느 화면이 뜨는지는 앱을 띄워야만 보이는 종류라, 모델에 두어야 테스트가 본다. 실제로 그 덕에 "이미 돌아와 쓸 수 있는 터미널을 진행 화면이 덮는" 순서 실수가 잡혔다.
 - **전환 수단**: 사이드바 행 클릭 + `Cmd+Opt+[`/`]` 순환 + `Cmd+1…9`. 사이드바를 숨기면 클릭 경로가 사라지므로 핫키가 없으면 다른 워크트리의 탭이 고립된다.
-  - `Cmd+1…9`는 **프로젝트**를 가리킨다(`numberedProjects`, 사이드바 순서). 탭이 없어도 자기 자리를 갖는다 — 탭이 없는 프로젝트야말로 탭을 열러 가는 곳이다.
-  - **워크트리는 번호를 받지 않는다.** 숫자는 손가락 기억이 전부인데 워크트리는 생기고 사라지고 접히므로, 아홉 자리를 먹어치우면 아래쪽 프로젝트가 영영 번호를 못 받는다. 프로젝트 안에서의 이동은 `Cmd+Opt+[`/`]`가 맡는다.
-  - 그래서 **트리를 접거나 펴도 번호가 변하지 않고**, 프로젝트 행이 항상 자기 배지를 단다. 예전에는 펼치면 워크트리 행에 배지를 넘겼는데, 이제 넘길 상대가 없다.
-  - **숫자는 데려다 준다**: 선택 + 그 프로젝트를 **떠났던 워크트리로 복귀**(`projectSelectedWorkspaces`를 `apply(detail:)`이 읽는다) + 트리 **열기**. 클릭은 겨냥한 행을 토글하지만 숫자는 "거기로 가 줘"라서, **접지는 않는다** — 두 번 누르면 트리가 펄럭이고, 숫자는 보지 않고 누르라고 있는 것이다.
+  - `Cmd+1…9`는 **탭이 있는 자리**를 가리킨다(`numberedPlaces`, 사이드바 순서). 자리는 프로젝트이거나 그 안의 워크트리다(`NumberedPlace`).
+    - 워크트리가 여럿인 리포에서는 **탭이 있는 워크트리들이** 각각 번호를 받는다. 일이 벌어지는 곳이 그 워크트리이므로. 빈 워크트리는 받지 않는다 — 뛰어들 데가 아니다.
+    - 워크트리가 전부 비었으면 **프로젝트가 자기 이름으로** 번호를 받는다. 탭이 하나도 없는 프로젝트도 마찬가지다 — 탭이 없는 프로젝트야말로 탭을 열러 가는 곳이다.
+  - **접힘은 번호를 바꾸지 않는다.** `numberedPlaces`는 `expandedProjectIDs`를 보지 않는다. 워크트리 사이를 걸어다녀도 마찬가지 — 배지가 두 행 사이를 왔다갔다하면 안 되므로 `projectSelectedWorkspaces`도 보지 않는다. 대신 **탭을 열고 닫으면 아래 번호들이 밀린다**; 손가락 기억보다 "일하는 자리로 한 번에"를 택한 거래다.
+  - **배지만 화면을 따라간다**(`numberedIndex(forProject:)`): 자기 이름으로 번호를 받은 프로젝트 행은 언제나 자기 배지를 단다. 번호가 워크트리 행에 있는 프로젝트는 **펼치면 배지를 놓고**(그 행이 화면에 있으므로), **접히면 자기 안의 첫 번호를 대신 단다** — 접힌 상태에서 그 숫자가 가리킬 수 있는 유일한 행이 그것이다.
+  - **숫자는 데려다 준다**: 선택 + 트리 **열기** + 워크트리 번호면 **그 워크트리에 서기**. 프로젝트 번호는 **떠났던 워크트리로 복귀**한다(`projectSelectedWorkspaces`를 `apply(detail:)`이 읽는다). 클릭은 겨냥한 행을 토글하지만 숫자는 "거기로 가 줘"라서, **접지는 않는다** — 두 번 누르면 트리가 펄럭이고, 숫자는 보지 않고 누르라고 있는 것이다.
   - 단축키 등록 규칙은 아래 "Keyboard Shortcuts" 참고.
 - **원격(ssh) 프로젝트도 워크트리를 갖는다**: 원격 워크트리의 주소는 `ssh://user@host/remote/path` URI다. `workspacePath`가 소속·선택·복원·삭제가 공유하는 단일 키이므로, 원격도 같은 문자열 공간에 넣어 그 로직을 그대로 쓴다.
   - **두 네임스페이스를 섞지 말 것**: `workspacePath`는 URI, `last_cwd`와 git 인자는 원격 raw 경로다. 변환은 `SSHConnectionInfo.workspaceURI(forRemotePath:)` / `remotePath(fromWorkspaceURI:)` **두 함수 밖에서 하지 않는다**. `git -C 'ssh://…'`는 `cannot change to`로 죽는다.
@@ -142,12 +146,18 @@ Process detection + screen parsing replaces the old hook system:
   - SSH 탭의 `cwd`는 **원격 경로 그대로** 넘긴다. 그 인자가 Ghostty의 working directory이면서 동시에 스토어에 기록되는 탭 위치다. nil로 바꾸면 다음 복원부터 자리를 잃는다. Ghostty는 열 수 없는 working directory를 경고 로그만 남기고 무시한다(`embedded.zig`).
   - **원격도 OSC 7을 보낸다 — 우리가 심어서**(`RemoteCwdReporter`). 예전엔 원격에 shell integration이 없어 `last_cwd`가 탭을 연 순간에 얼어붙었고, 원격에서 `cd`한 자리는 복원 때마다 사라졌다. 이제 접속 스크립트가 원격 셸의 시작 파일을 하나 놔두고 프롬프트마다 OSC 7을 찍게 한다.
     - **hostname은 반드시 `localhost`다.** Ghostty는 local이 아닌 host의 OSC 7을 **버린다**(`termio/stream_handler.zig`의 `hostname.isLocal`). 원격 셸이 자기 `$HOST`를 찍으면 로그 한 줄 남기고 사라진다 — Ghostty 자신의 zsh 통합을 그대로 원격에 갖다 놔도 안 되는 이유이고, 이 한 글자가 기능 전체를 좌우한다.
-    - **셸마다 주입 지점이 다르다**: zsh는 `ZDOTDIR`, bash는 `--rcfile`, fish는 `-C`. 훅은 `exec`을 건너지 못하므로 환경변수로는 안 되고 시작 파일이라야 한다. 모르는 셸은 그냥 셸을 연다 — 최악이 예전 동작이어야 한다.
+    - **셸마다 주입 지점이 다르다**: zsh는 `ZDOTDIR`, bash는 `PROMPT_COMMAND`(환경변수), fish는 `-C`. 함수는 `exec`을 건너지 못하므로 zsh·fish는 시작 파일/초기 명령이라야 하지만, bash의 `PROMPT_COMMAND`는 문자열이라 환경변수로 건너간다 — 그게 bash를 로그인 셸로 만들 수 있는 유일한 이유다(아래). 모르는 셸은 그냥 셸을 연다 — 최악이 예전 동작이어야 한다.
     - **fish는 `fish_prompt`가 아니라 `--on-variable PWD`**다. `fish_prompt` 이벤트는 tty가 없으면 아예 안 뜨고, 어차피 우리가 알고 싶은 건 디렉터리가 바뀌는 순간이다.
     - **`/etc/zshrc`가 우리 두 파일 사이에서 돈다**: 그때의 `ZDOTDIR`로 `HISTFILE`을 잡으므로, 우리 `.zshrc`가 되돌려놓지 않으면 **원격 셸의 히스토리가 우리 캐시로 옮겨간다**. `.zshenv`는 반대로 되돌리면 안 된다 — zsh가 우리 `.zshrc`를 못 찾는다.
     - 시작 파일은 `~/.cache/codespark/shell`에 **고정 경로**로 둔다. `mktemp -d`는 그걸 읽은 셸만 지울 수 있어서, 프롬프트까지 못 간 접속마다 원격에 쓰레기가 쌓인다.
     - **테스트는 진짜 셸에 물린다**(`SSHConnectionInfoTests`). 이 기능의 실패는 전부 셸 시작 순서에 있고, 명령 문자열을 비교하는 테스트로는 한 개도 안 보인다 — 위의 HISTFILE 이동도 그렇게 잡혔다.
     - **알려진 대가**: Ghostty는 이 보고를 로컬 surface의 pwd로도 받으므로, ssh 탭의 proxy icon이 이 기계에 없는 경로를 가리킨다.
+  - **원격 셸은 로그인 셸이다**(`exec $SHELL -l -i`). macOS의 기본 PATH는 `/usr/libexec/path_helper`가 만들고 그걸 부르는 건 `/etc/zprofile` 한 곳뿐이라, 로그인이 아니면 `/etc/paths.d/*`를 아예 안 읽는다 — `.zshrc`는 돌아서 `vi`가 `nvim`으로 별칭되는데 `nvim`은 PATH에 없는 상태가 된다. `~/.zprofile`·`~/.bash_profile`에 넣어둔 것(Homebrew 공식 안내 위치)도 전부 같이 사라진다. Ghostty가 로컬 셸을 `login(1)`으로 여는 게 정확히 이 이유이므로(`termio/Exec.zig`), 원격만 아니면 한 앱의 두 반쪽이 서로 다른 기계가 된다.
+    - **`-l`은 셸마다 주입 지점과 다르게 충돌한다. 셋 다 재봤다**:
+      - **zsh**: `.zprofile`과 `.zlogin`도 `$ZDOTDIR`에서 읽는다 — 우리 것. `.zprofile`은 `.zshenv`와 같은 왕복을 하는 시임을 하나 더 놔야 한다. **`.zlogin`은 필요 없다** — 우리 `.zshrc`가 이미 `ZDOTDIR`를 사용자에게 돌려준 뒤라 사용자 것이 그대로 잡힌다.
+      - **bash**: 로그인 셸이 되는 순간 **`--rcfile`이 무시된다**. 그래서 훅을 환경으로 넘긴다. 대가: 시작 파일이 `PROMPT_COMMAND`를 이어붙이지 않고 **대입**하면 리포터가 죽는다(셸은 멀쩡, cwd만 멈춤). 그리고 로그인 bash는 `.bashrc`가 아니라 `.bash_profile`을 읽는다 — 이 기계의 다른 모든 터미널과 같은 동작이다.
+      - **fish**: 충돌 없음. `-C`가 `-l` 아래서 그대로 돈다.
+    - **모르는 셸에는 `-l`을 붙이지 않는다**: `dash`는 `-l`을 거부하고, `exec`이 실패하면 사용자가 터미널을 잃는다.
   - **원격 cwd를 로컬 git에 넘기지 말 것**: `git -C`는 이쪽에서 도는데 원격 경로는 저쪽 것이라, 이름이 같은 로컬 디렉터리가 대신 답한다. `gitBranchQueryPaths`가 걸러낸다 — 원격이 이제 `cd`마다 보고하므로 안 거르면 상시로 들어온다.
 - **워크스페이스 소속**: 세션 행의 `workspace_path`에 생성 시점 고정. `cd`로 탭이 사이드바에서 이동하면 안 된다. 빈 값(컬럼 이전 행)만 `last_cwd` 기반 매칭으로 폴백 — 이 판정이 `SessionViewData.belongs(to:)` 하나에 모여 있고, 그룹핑과 **워크트리 삭제가 같은 걸 써야 한다**. 삭제를 cwd로 판정하면 밖으로 `cd`한 탭이 살아남고 남의 워크트리 방문객이 대신 닫힌다. 복원이 `workspaceSelectedSessions`에 쓰는 키도 **`workspace_path`다** — `last_cwd`로 쓰면 워크트리 안쪽 디렉터리에서 끝난 탭이 어떤 워크스페이스도 답하지 않는 키에 기억된다.
 - **종료**: `saveAllSessionsForRestore()`는 최종 스냅샷만 저장하고 **세션을 닫지 않는다**. 행이 `live`로 남아야 다음 실행의 `reconcileInterruptedSessions()`가 `interrupted`로 전환하고, 복원은 그걸 읽는다. 여기서 닫으면 복원이 종료 타이밍에 좌우되는 복불복이 된다.

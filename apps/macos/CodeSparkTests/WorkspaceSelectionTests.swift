@@ -1014,41 +1014,71 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree)
     }
 
-    // MARK: - Cmd+1…9 addresses the projects
+    // MARK: - Cmd+1…9 addresses the places that have tabs
 
-    /// Digits belong to projects, not worktrees. A digit is only worth having if
-    /// it stays where your finger left it, and worktrees come and go, fold away,
-    /// and would eat all nine places before the projects below ever got one.
-
-    @MainActor
-    func test_every_project_gets_a_digit_whether_or_not_it_has_tabs() async {
-        let model = await modelWithTwoProjects()
-        await model.newSession(inWorkspacePath: Self.featureWorktree)
-
-        XCTAssertEqual(model.numberedProjects, ["p1", "p2"],
-                       "a project you have not opened a tab in yet is still somewhere to go")
-    }
+    /// A digit points at a place with tabs, and inside a repo with several
+    /// worktrees that place is the worktree, not the project heading. An empty
+    /// worktree is not somewhere to jump to. A project with no tabs anywhere
+    /// still is — that is where you go to open one.
 
     @MainActor
-    func test_worktrees_do_not_take_digits_of_their_own() async {
+    func test_each_worktree_with_tabs_takes_a_digit_of_its_own() async {
         let (model, _) = await modelWithTwoWorktrees()
         await model.newSession(inWorkspacePath: Self.mainWorktree)
         await model.newSession(inWorkspacePath: Self.featureWorktree)
 
-        XCTAssertEqual(model.numberedProjects.count, 1,
-                       "two worktrees took two digits from one project")
+        XCTAssertEqual(model.numberedPlaces, [
+            .worktree(projectID: "p1", path: Self.mainWorktree),
+            .worktree(projectID: "p1", path: Self.featureWorktree)
+        ], "both worktrees are being worked in, so both are worth a digit")
     }
 
     @MainActor
-    func test_collapsing_a_tree_does_not_renumber_anything() async {
+    func test_a_worktree_with_no_tabs_takes_no_digit() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+
+        XCTAssertEqual(model.numberedPlaces,
+                       [.worktree(projectID: "p1", path: Self.mainWorktree)],
+                       "an empty worktree would spend a digit on nothing")
+    }
+
+    @MainActor
+    func test_a_repo_whose_worktrees_are_all_empty_is_addressed_as_itself() async {
+        let (model, _) = await modelWithTwoWorktrees()
+
+        XCTAssertEqual(model.numberedPlaces, [.project("p1")],
+                       "no worktree has earned the digit, so the project keeps it")
+    }
+
+    /// The mapping is blind to expansion. Only the badge follows what is on
+    /// screen — a digit that changed meaning when a tree opened would be the
+    /// finger memory the digits exist to protect.
+    @MainActor
+    func test_folding_a_tree_does_not_renumber_anything() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
         let (model, _) = await modelWithTwoWorktrees()
         await model.newSession(inWorkspacePath: Self.featureWorktree)
-        let before = model.numberedProjects
+        let before = model.numberedPlaces
 
         model.toggleWorktrees(projectID: "p1")
 
-        XCTAssertEqual(model.numberedProjects, before,
+        XCTAssertEqual(model.numberedPlaces, before,
                        "numbers must not move when a tree is opened or closed")
+    }
+
+    @MainActor
+    func test_a_digit_means_the_same_worktree_wherever_the_selection_stands() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let before = model.numberedPlaces
+
+        model.activeWorkspacePath = Self.featureWorktree
+
+        XCTAssertEqual(model.numberedPlaces, before,
+                       "walking between worktrees must not swap their digits")
     }
 
     @MainActor
@@ -1060,25 +1090,8 @@ final class WorkspaceSelectionTests: XCTestCase {
                                    hasInterruptedSessions: false, liveSessionDetails: [])
         }
 
-        XCTAssertEqual(model.numberedProjects.count, 9, "there are only nine digits")
+        XCTAssertEqual(model.numberedPlaces.count, 9, "there are only nine digits")
     }
-
-    /// The digit reopens the worktree the project was last left in — the same
-    /// place clicking its row would land you.
-    @MainActor
-    func test_a_digit_returns_to_the_worktree_that_project_was_left_in() async {
-        let model = await modelWithTwoProjects()
-        await model.newSession(inWorkspacePath: Self.featureWorktree)
-        model.activeWorkspacePath = Self.featureWorktree
-        await model.selectProject(id: "p2")
-
-        await model.selectNumberedProject(1)
-
-        XCTAssertEqual(model.selectedProjectID, "p1")
-        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree,
-                       "it went to the project but not to where that project was left")
-    }
-
 
     @MainActor
     func test_an_index_with_nothing_behind_it_does_nothing() async {
@@ -1086,38 +1099,101 @@ final class WorkspaceSelectionTests: XCTestCase {
         await model.newSession(inWorkspacePath: Self.mainWorktree)
         let selected = model.selectedProjectID
 
-        await model.selectNumberedProject(7)
+        await model.selectNumberedPlace(7)
 
         XCTAssertEqual(model.selectedProjectID, selected)
     }
 
     @MainActor
-    func test_a_folded_project_wears_the_digit_hiding_inside_it() async {
+    func test_a_digit_goes_straight_to_its_worktree() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        model.activeWorkspacePath = Self.mainWorktree
+
+        await model.selectNumberedPlace(2)
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
+    }
+
+    /// The digit of a project addressed as itself still reopens the worktree it
+    /// was last left in — that is what selecting a project does.
+    @MainActor
+    func test_a_project_digit_returns_to_the_worktree_that_project_was_left_in() async {
+        let model = await modelWithTwoProjects()
+        model.activeWorkspacePath = Self.featureWorktree
+        await model.selectProject(id: "p2")
+
+        await model.selectNumberedPlace(1)
+
+        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree,
+                       "it went to the project but not to where that project was left")
+    }
+
+    /// A digit lands on a row, so the row has to be on screen when it gets
+    /// there.
+    @MainActor
+    func test_a_worktree_digit_opens_the_tree_it_points_into() async {
         forgetExpandedProjects()
         defer { forgetExpandedProjects() }
-        let model = await modelWithTwoProjects()
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        XCTAssertFalse(model.expandedProjectIDs.contains("p1"), "precondition: folded")
+
+        await model.selectNumberedPlace(1)
+
+        XCTAssertTrue(model.expandedProjectIDs.contains("p1"))
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
+    }
+
+    // MARK: - Where the badge draws
+
+    @MainActor
+    func test_an_open_tree_hands_its_digit_to_the_worktree_row() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let p1 = model.projects.first { $0.id == "p1" }!
+        model.toggleWorktrees(projectID: "p1")
+
+        XCTAssertNil(model.numberedIndex(forProject: p1),
+                     "an open project row is a heading; the digit belongs to the row it names")
+        let feature = model.sidebarWorktrees(for: p1).first { $0.path == Self.featureWorktree }!
+        XCTAssertEqual(model.numberedIndex(forWorktree: feature, in: p1), 1)
+    }
+
+    @MainActor
+    func test_a_folded_project_wears_the_first_digit_hiding_inside_it() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let (model, _) = await modelWithTwoWorktrees()
         await model.newSession(inWorkspacePath: Self.featureWorktree)
         let p1 = model.projects.first { $0.id == "p1" }!
 
         XCTAssertEqual(model.numberedIndex(forProject: p1), 1,
-                       "a folded tree hides the row that would carry the digit")
+                       "folded, the project row is the only thing on screen that digit can point at")
     }
 
-    /// The project row keeps its digit with the tree open. Worktree rows have no
-    /// digits of their own to take it, and a badge that came and went as the
-    /// tree opened would be the same finger memory the digits exist to protect.
     @MainActor
-    func test_an_open_tree_leaves_the_project_row_wearing_its_digit() async {
+    func test_a_project_addressed_as_itself_keeps_its_badge_with_the_tree_open() async {
         forgetExpandedProjects()
         defer { forgetExpandedProjects() }
-        let model = await modelWithTwoProjects()
-        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let (model, _) = await modelWithTwoWorktrees()
         let p1 = model.projects.first { $0.id == "p1" }!
-        let folded = model.numberedIndex(forProject: p1)
-
         model.toggleWorktrees(projectID: "p1")
 
-        XCTAssertEqual(model.numberedIndex(forProject: p1), folded)
+        XCTAssertEqual(model.numberedIndex(forProject: p1), 1,
+                       "no worktree row took the digit, so nothing may take it away")
+    }
+
+    @MainActor
+    func test_the_menu_names_the_worktree_a_digit_lands_in() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+
+        XCTAssertEqual(model.numberedPlaceLabel(model.numberedPlaces[0]), "Proj — feature")
     }
 
     // MARK: - Removing a worktree
@@ -1248,6 +1324,100 @@ final class WorkspaceSelectionTests: XCTestCase {
 
     private func forgetExpandedProjects() {
         UserDefaults.standard.removeObject(forKey: StorageKeys.expandedProjectIDs)
+    }
+
+    // MARK: - Nothing blinks while a project is loading
+
+    /// `p1` has two worktrees, `p2` is flat, and asking for either takes long
+    /// enough that a test can look at the sidebar mid-flight — which is the only
+    /// place these faults exist.
+    @MainActor
+    private func modelWithASlowLookup() async -> AppModel {
+        func summary(id: String, path: String) -> ProjectSummaryViewData {
+            ProjectSummaryViewData(id: id, name: id, path: path, transport: "local",
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: [])
+        }
+        let core = MockProjectCoreClient(
+            summaries: [summary(id: "p1", path: Self.mainWorktree),
+                        summary(id: "p2", path: Self.otherProject)],
+            details: [
+                ProjectDetailViewData(id: "p1", name: "p1", path: Self.mainWorktree,
+                                      transport: "local", liveSessions: []),
+                ProjectDetailViewData(id: "p2", name: "p2", path: Self.otherProject,
+                                      transport: "local", liveSessions: [])
+            ],
+            detailLatencyByID: ["p1": 400_000_000, "p2": 400_000_000]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.featureWorktree, branch: "feature", isMainWorktree: false)
+        ], for: Self.mainWorktree)
+        model.recomputeWorkspaces()
+        return model
+    }
+
+    /// `selectedProjectID` moves the instant the key is pressed; the worktrees
+    /// arrive a git round trip later. In between, `workspaces` still holds the
+    /// project you came *from* — and reading it for the one you are going to
+    /// showed the new project with someone else's worktrees, or with none.
+    ///
+    /// On screen: the tree you had open blinked shut and back. One frame of it,
+    /// which is why only a mid-flight test can see it.
+    @MainActor
+    func test_an_open_tree_does_not_blink_shut_while_its_project_loads() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithASlowLookup()
+        model.toggleWorktrees(projectID: "p1")
+        await model.selectProject(id: "p2")
+        let p1 = model.projects.first { $0.id == "p1" }!
+        XCTAssertTrue(model.showsWorktreeRows(for: p1), "precondition: the tree is open")
+
+        let press = Task { await model.selectProject(id: "p1") }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(model.showsWorktreeRows(for: p1),
+                      "the tree folded away while the lookup ran")
+        await press.value
+    }
+
+    /// The other half of the same window: a project that has no worktrees of its
+    /// own briefly wore the ones belonging to the project just left. Pressing a
+    /// digit opens the tree on the way in, so those rows were drawn — the
+    /// sidebar grew by four rows and shrank again.
+    @MainActor
+    func test_a_loading_project_does_not_borrow_the_last_ones_worktrees() async {
+        let model = await modelWithASlowLookup()
+        await model.selectProject(id: "p1")
+        let p2 = model.projects.first { $0.id == "p2" }!
+
+        let press = Task { await model.selectProject(id: "p2") }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(model.sidebarWorktrees(for: p2).isEmpty,
+                      "a project still loading drew the previous project's worktrees")
+        await press.value
+    }
+
+    /// And so the digits held still. They are read off the same grouping, so a
+    /// project wearing borrowed worktrees renumbered everything below it — with
+    /// `Cmd` still held down, which is exactly when the badges are on screen.
+    @MainActor
+    func test_the_digits_hold_still_while_a_project_loads() async {
+        let model = await modelWithASlowLookup()
+        await model.selectProject(id: "p1")
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let before = model.numberedPlaces
+
+        let press = Task { await model.selectProject(id: "p2") }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(model.numberedPlaces, before,
+                       "the badges moved while the lookup ran")
+        await press.value
     }
 
     @MainActor
@@ -2245,6 +2415,8 @@ final class WorkspaceSelectionTests: XCTestCase {
     /// it had and the empty one takes the next.
     @MainActor
     func test_digits_follow_the_sidebar_not_the_tabs() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
         let model = await modelWithTwoProjects()
         await model.newSession(inWorkspacePath: Self.mainWorktree)
         let p1 = model.projects.first { $0.id == "p1" }!
@@ -2263,7 +2435,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         let model = await modelWithTwoProjects()
         await model.newSession(inWorkspacePath: Self.mainWorktree)
 
-        await model.selectNumberedProject(2)
+        await model.selectNumberedPlace(2)
 
         XCTAssertEqual(model.selectedProjectID, "p2")
         XCTAssertTrue(model.expandedProjectIDs.contains("p2"),
@@ -2291,7 +2463,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         // The digits address `projects`, so there has to be a list to address.
         await model.load()
 
-        let press = Task { await model.selectNumberedProject(1) }
+        let press = Task { await model.selectNumberedPlace(1) }
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
@@ -2309,8 +2481,8 @@ final class WorkspaceSelectionTests: XCTestCase {
         let model = await modelWithTwoProjects()
         await model.newSession(inWorkspacePath: Self.mainWorktree)
 
-        await model.selectNumberedProject(1)
-        await model.selectNumberedProject(1)
+        await model.selectNumberedPlace(1)
+        await model.selectNumberedPlace(1)
 
         XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
                       "the second press folded the tree the first one opened")

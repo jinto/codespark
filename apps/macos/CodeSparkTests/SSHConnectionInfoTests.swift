@@ -247,12 +247,20 @@ final class SSHConnectionInfoTests: XCTestCase {
     private func runRemoteScript(
         shell: String,
         remotePath: String? = nil,
+        planting dotfiles: [String: String] = [:],
+        path: String = "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin",
         typing input: String
     ) throws -> String {
         let home = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("cs-remote-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: home) }
+        for (name, body) in dotfiles {
+            let file = home.appendingPathComponent(name)
+            try FileManager.default.createDirectory(
+                at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try body.write(to: file, atomically: true, encoding: .utf8)
+        }
 
         let info = SSHConnectionInfo(host: "box", remotePath: remotePath ?? home.path)
         let script = try XCTUnwrap(info.remoteCommand(replaying: nil))
@@ -264,7 +272,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         // directory so the reporter's cache lands there and the developer's own
         // dotfiles never take part.
         process.environment = [
-            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin",
+            "PATH": path,
             "HOME": home.path,
             "SHELL": shell,
             "TERM": "dumb",
@@ -293,10 +301,11 @@ final class SSHConnectionInfoTests: XCTestCase {
                       "bash never reported a directory: \(output.debugDescription)")
     }
 
+    static let installedFish = ["/opt/homebrew/bin/fish", "/usr/local/bin/fish", "/usr/bin/fish"]
+        .first { FileManager.default.isExecutableFile(atPath: $0) }
+
     func test_a_real_fish_reports_the_directory_it_moved_to() throws {
-        let fish = ["/opt/homebrew/bin/fish", "/usr/local/bin/fish", "/usr/bin/fish"]
-            .first { FileManager.default.isExecutableFile(atPath: $0) }
-        let shell = try XCTUnwrap(fish, "fish is not installed here")
+        let shell = try XCTUnwrap(Self.installedFish, "fish is not installed here")
         let output = try runRemoteScript(shell: shell, typing: "cd /tmp\nexit\n")
         XCTAssertTrue(reportedDirectories(in: output).contains("/tmp"),
                       "fish never reported a directory: \(output.debugDescription)")
@@ -331,6 +340,90 @@ final class SSHConnectionInfoTests: XCTestCase {
         let output = try runRemoteScript(shell: "/bin/zsh", typing: "echo \"Z=[$ZDOTDIR]\"\nexit\n")
         XCTAssertFalse(output.contains("codespark/shell"),
                        "ZDOTDIR still points at our cache: \(output)")
+    }
+
+    // MARK: - The remote shell is a login shell
+    //
+    // On macOS the base PATH is assembled by `/usr/libexec/path_helper`, and the
+    // only thing that calls it is `/etc/zprofile` — a login file. A remote shell
+    // that was merely interactive got none of it: `.zshrc` still aliased `vi` to
+    // `nvim` while `nvim` itself was nowhere on `$PATH`, because
+    // `/etc/paths.d/homebrew` had never been read. Everything a person puts in
+    // `~/.zprofile` or `~/.bash_profile` — which is where Homebrew's own
+    // instructions put it — was missing for the same reason.
+    //
+    // Ghostty runs local shells through `login(1)` for exactly this reason
+    // (`termio/Exec.zig`: "macOS users expect all their terminals to be login
+    // shells"), so a remote tab that is not one makes two halves of the same app
+    // behave like two different machines.
+
+    func test_a_real_zsh_runs_the_users_login_profile() throws {
+        let output = try runRemoteScript(
+            shell: "/bin/zsh",
+            planting: [".zprofile": "echo CS_PROFILE_RAN"],
+            typing: "exit\n"
+        )
+        XCTAssertTrue(output.contains("CS_PROFILE_RAN"),
+                      "~/.zprofile never ran: \(output.debugDescription)")
+    }
+
+    /// `$ZDOTDIR` points into our cache while zsh looks for `.zprofile`, so the
+    /// shim has to hand the directory back and take it again — the same dance
+    /// `.zshenv` does, one file later.
+    func test_a_real_zsh_still_runs_the_users_rc() throws {
+        let output = try runRemoteScript(
+            shell: "/bin/zsh",
+            planting: [".zprofile": "echo CS_PROFILE_RAN", ".zshrc": "echo CS_RC_RAN"],
+            typing: "exit\n"
+        )
+        XCTAssertTrue(output.contains("CS_RC_RAN"),
+                      "the profile shim lost the rc that follows it: \(output.debugDescription)")
+    }
+
+    func test_a_real_zsh_runs_the_users_login_file() throws {
+        let output = try runRemoteScript(
+            shell: "/bin/zsh",
+            planting: [".zlogin": "echo CS_LOGIN_RAN"],
+            typing: "exit\n"
+        )
+        XCTAssertTrue(output.contains("CS_LOGIN_RAN"),
+                      "~/.zlogin never ran: \(output.debugDescription)")
+    }
+
+    /// The complaint itself, measured rather than inferred: `path_helper` reads
+    /// `/etc/paths` and `/etc/paths.d/*` and is called from `/etc/zprofile`
+    /// alone, so a shell that is not a login shell starts with whatever `sshd`
+    /// handed it. `/usr/local/bin` is in `/etc/paths` on every macOS and in no
+    /// bare environment, which makes it the marker.
+    func test_a_real_zsh_gets_the_path_the_system_builds_for_it() throws {
+        let output = try runRemoteScript(
+            shell: "/bin/zsh",
+            path: "/usr/bin:/bin",
+            typing: "echo \"P=$PATH\"\nexit\n"
+        )
+        XCTAssertTrue(output.contains("/usr/local/bin"),
+                      "path_helper never ran, so /etc/paths.d was never read: \(output)")
+    }
+
+    func test_a_real_bash_runs_the_users_login_profile() throws {
+        let output = try runRemoteScript(
+            shell: "/bin/bash",
+            planting: [".bash_profile": "echo CS_PROFILE_RAN"],
+            typing: "exit\n"
+        )
+        XCTAssertTrue(output.contains("CS_PROFILE_RAN"),
+                      "~/.bash_profile never ran: \(output.debugDescription)")
+    }
+
+    func test_a_real_fish_runs_as_a_login_shell() throws {
+        let shell = try XCTUnwrap(Self.installedFish, "fish is not installed here")
+        let output = try runRemoteScript(
+            shell: shell,
+            planting: [".config/fish/config.fish": "if status is-login\necho CS_PROFILE_RAN\nend"],
+            typing: "exit\n"
+        )
+        XCTAssertTrue(output.contains("CS_PROFILE_RAN"),
+                      "fish did not start as a login shell: \(output.debugDescription)")
     }
 
     /// Anything we do not recognise has to end in a shell anyway. Before the

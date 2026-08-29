@@ -39,6 +39,14 @@ struct SidebarView: View {
         return model.numberedIndex(forProject: project)
     }
 
+    private func hotkeyIndex(
+        for workspace: WorkspaceViewData,
+        in project: ProjectSummaryViewData
+    ) -> Int? {
+        guard showHotkeys else { return nil }
+        return model.numberedIndex(forWorktree: workspace, in: project)
+    }
+
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -139,6 +147,7 @@ struct SidebarView: View {
                                         isSelected: model.selectedProjectID == project.id
                                             && model.activeWorkspacePath == workspace.path,
                                         status: model.workspaceStatus(for: workspace),
+                                        hotkeyIndex: hotkeyIndex(for: workspace, in: project),
                                         pathLine: model.worktreePathLine(for: workspace).map(model.displayPath)
                                     )
                                     .contentShape(Rectangle())

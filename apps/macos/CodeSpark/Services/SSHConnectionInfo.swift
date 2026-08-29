@@ -206,11 +206,41 @@ struct SSHConnectionInfo: Equatable {
 ///   is not local (`termio/stream_handler.zig`, `os/hostname.zig`) — which is
 ///   exactly what a remote shell reporting its own `$HOST` would be, and why
 ///   simply shipping Ghostty's own integration over would report nothing.
-/// - **The hook has to survive `exec $SHELL`.** Functions and prompt hooks do
-///   not cross an exec, so each shell gets a startup file of ours instead.
+/// - **The hook has to survive `exec $SHELL`.** A function does not cross an
+///   exec, so zsh gets a startup file of ours and fish an init command. Bash's
+///   `PROMPT_COMMAND` is a plain string, and a plain string crosses as an
+///   environment variable — which is the only reason bash can be a login shell
+///   and still report, see below.
 ///
-/// Anything unrecognised falls through to a plain shell, which is what an ssh
-/// tab did before this existed — the worst case is the old behaviour.
+/// And the shell it execs is a **login** shell. On macOS the base `PATH` is
+/// assembled by `/usr/libexec/path_helper`, called from `/etc/zprofile` and
+/// nowhere else, so a merely-interactive remote shell never saw
+/// `/etc/paths.d/*` — `.zshrc` still aliased `vi` to `nvim` while `nvim` itself
+/// was off `$PATH`. Everything a person keeps in `~/.zprofile` or
+/// `~/.bash_profile`, which is where Homebrew's own instructions put it, was
+/// missing for the same reason. Ghostty runs local shells through `login(1)`
+/// over this exact complaint (`termio/Exec.zig`), so anything less made the two
+/// halves of one app behave like two machines.
+///
+/// `-l` collides with each shell's injection point differently, and each answer
+/// below was measured rather than reasoned:
+///
+/// - **zsh** reads `.zprofile` and `.zlogin` from `$ZDOTDIR` too — ours. The
+///   profile gets a shim doing the same hand-back dance as `.zshenv`; `.zlogin`
+///   needs none, because `.zshrc` has already returned `ZDOTDIR` to the user by
+///   the time zsh looks for it.
+/// - **bash** ignores `--rcfile` the moment the shell is a login shell, so the
+///   hook travels in the environment instead. The cost: a startup file that
+///   *assigns* `PROMPT_COMMAND` rather than appending drops the reporter — the
+///   shell is fine, the cwd stops moving. A login bash also reads
+///   `.bash_profile` rather than `.bashrc`, which is what every other terminal
+///   on this machine does.
+/// - **fish** has no conflict; `-C` runs under `-l` unchanged.
+///
+/// Anything unrecognised falls through to a plain interactive shell — no `-l`,
+/// because `dash` rejects it and an exec that fails costs the user the terminal.
+/// That is what an ssh tab did before this existed: the worst case is the old
+/// behaviour.
 enum RemoteCwdReporter {
     /// Where the generated startup files live on the far side. A fixed path, not
     /// a `mktemp -d`: the temporary directory can only be cleaned up by the
@@ -238,6 +268,12 @@ enum RemoteCwdReporter {
     CS_RC_HOME=$ZDOTDIR
     ZDOTDIR=$CS_RC_DIR
     CS_EOF
+        cat > "$CS_RC_DIR/.zprofile.$$" <<'CS_EOF' && mv -f "$CS_RC_DIR/.zprofile.$$" "$CS_RC_DIR/.zprofile"
+    ZDOTDIR=$CS_RC_HOME
+    [ -r "$CS_RC_HOME/.zprofile" ] && . "$CS_RC_HOME/.zprofile"
+    CS_RC_HOME=$ZDOTDIR
+    ZDOTDIR=$CS_RC_DIR
+    CS_EOF
         cat > "$CS_RC_DIR/.zshrc.$$" <<'CS_EOF' && mv -f "$CS_RC_DIR/.zshrc.$$" "$CS_RC_DIR/.zshrc"
     ZDOTDIR=$CS_RC_HOME
     [[ $HISTFILE == $CS_RC_DIR/* ]] && HISTFILE=$CS_RC_HOME/${HISTFILE##*/}
@@ -245,21 +281,17 @@ enum RemoteCwdReporter {
     __cs_report_pwd() { printf '\033]7;file://localhost%s\007' "$PWD"; }
     precmd_functions+=(__cs_report_pwd)
     CS_EOF
-        [ -r "$CS_RC_DIR/.zshrc" ] && { ZDOTDIR=$CS_RC_DIR; export ZDOTDIR; }
+        [ -r "$CS_RC_DIR/.zshrc" ] && [ -r "$CS_RC_DIR/.zprofile" ] && { ZDOTDIR=$CS_RC_DIR; export ZDOTDIR; }
       }
+      exec "$__cs_s" -l -i
       ;;
     bash)
-      mkdir -p "$CS_RC_DIR" 2>/dev/null && {
-        cat > "$CS_RC_DIR/bashrc.$$" <<'CS_EOF' && mv -f "$CS_RC_DIR/bashrc.$$" "$CS_RC_DIR/bashrc"
-    [ -r "$HOME/.bashrc" ] && . "$HOME/.bashrc"
-    __cs_report_pwd() { printf '\033]7;file://localhost%s\007' "$PWD"; }
-    PROMPT_COMMAND="__cs_report_pwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
-    CS_EOF
-        [ -r "$CS_RC_DIR/bashrc" ] && exec "$__cs_s" --rcfile "$CS_RC_DIR/bashrc" -i
-      }
+      PROMPT_COMMAND='printf "\033]7;file://localhost%s\007" "$PWD"'${PROMPT_COMMAND:+;$PROMPT_COMMAND}
+      export PROMPT_COMMAND
+      exec "$__cs_s" -l -i
       ;;
     fish)
-      exec "$__cs_s" -i -C 'function __cs_report_pwd --on-variable PWD; printf "\033]7;file://localhost%s\007" $PWD; end; __cs_report_pwd'
+      exec "$__cs_s" -l -i -C 'function __cs_report_pwd --on-variable PWD; printf "\033]7;file://localhost%s\007" $PWD; end; __cs_report_pwd'
       ;;
     esac
     exec "$__cs_s" -i

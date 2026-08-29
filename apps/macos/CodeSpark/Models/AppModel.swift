@@ -1050,8 +1050,17 @@ final class AppModel: ObservableObject {
     /// Every workspace of a project, whether it is the selected one or not. The
     /// selected project reads the live grouping; the rest are grouped from their
     /// summaries, so their tabs stay accounted for while focus is elsewhere.
+    ///
+    /// Keyed on `selectedProject` — the detail that has *landed* — and not on
+    /// `selectedProjectID`, which moves the instant a row is clicked or a digit
+    /// pressed. `workspaces` belongs to the project it was computed for, so
+    /// through the round trip in between it still describes the project you came
+    /// from, and handing it to the one you are going to made both rows lie: the
+    /// tree you had open blinked shut, and a flat project briefly wore four
+    /// worktrees that were not its own. Until the detail arrives, a project is
+    /// its summary — the same thing every unselected row already reads.
     func workspaces(for project: ProjectSummaryViewData) -> [WorkspaceViewData] {
-        guard project.id != selectedProjectID else { return workspaces }
+        guard project.id != selectedProject?.id else { return workspaces }
         return WorkspaceViewData.groupSessions(
             project.liveSessionDetails,
             into: gitWorktreeService.worktrees(for: project.path),
@@ -1157,55 +1166,105 @@ final class AppModel: ObservableObject {
         "Its tabs will close and the folder \(displayPath(for: path)) will be deleted from disk. The branch itself stays."
     }
 
-    /// Where Cmd+1…9 go: every workspace that has a tab, in sidebar order. A
-    /// worktree standing empty is not somewhere to jump to, and a repo with one
-    /// worktree is addressed as the project itself.
+    /// One place a `Cmd` digit can take you.
     ///
-    /// Deliberately blind to whether a tree is expanded — folding a project must
-    /// not shuffle the digits out from under the user's fingers.
-    /// Where `Cmd+1…9` go: the projects, in sidebar order.
-    ///
-    /// Projects rather than worktrees, because a digit is only worth having if
-    /// it stays put. Worktrees come and go, fold away, and empty ones would eat
-    /// the nine places before the projects further down ever got one. Moving
-    /// between the worktrees of a project is what `Cmd+Opt+[`/`]` is for.
-    var numberedProjects: [String] {
-        orderedProjects.prefix(9).map(\.id)
+    /// A digit is for where work is happening, and inside a repo with several
+    /// worktrees that is the worktree, not the project heading. A repo whose
+    /// worktrees are all empty has nothing to single out and is addressed as
+    /// itself — so is a project with no tabs at all, which is precisely where
+    /// you go to open one.
+    enum NumberedPlace: Hashable {
+        case project(String)
+        case worktree(projectID: String, path: String)
+
+        var projectID: String {
+            switch self {
+            case .project(let id): id
+            case .worktree(let id, _): id
+            }
+        }
     }
 
-    /// 1-based position of a project, for the Cmd-held overlay.
+    /// Where `Cmd+1…9` go, in sidebar order.
+    ///
+    /// Blind to whether a tree is expanded: folding must not shuffle the digits
+    /// out from under the user's fingers, and neither may walking between
+    /// worktrees. Only the badge follows what is on screen — see
+    /// `numberedIndex(forProject:)`.
+    var numberedPlaces: [NumberedPlace] {
+        Array(orderedProjects.flatMap(numberedPlaces(in:)).prefix(9))
+    }
+
+    private func numberedPlaces(in project: ProjectSummaryViewData) -> [NumberedPlace] {
+        let worked = sidebarWorktrees(for: project).filter { !$0.sessions.isEmpty }
+        guard !worked.isEmpty else { return [.project(project.id)] }
+        return worked.map { .worktree(projectID: project.id, path: $0.path) }
+    }
+
+    /// The digit the project row wears, for the Cmd-held overlay.
+    ///
+    /// A project addressed as itself always wears its own. One whose digits live
+    /// on its worktree rows lets go of the badge when the tree opens — the row
+    /// it names is on screen now, and a heading wearing its child's number says
+    /// the digit leads somewhere it does not. Folded, it stands in for the first
+    /// digit inside: that row is not on screen, and the project row is the only
+    /// thing that digit can point at.
     func numberedIndex(forProject project: ProjectSummaryViewData) -> Int? {
-        numberedProjects.firstIndex(of: project.id).map { $0 + 1 }
+        let places = numberedPlaces
+        if let own = places.firstIndex(of: .project(project.id)) { return own + 1 }
+        guard !showsWorktreeRows(for: project) else { return nil }
+        return places.firstIndex { $0.projectID == project.id }.map { $0 + 1 }
     }
 
-    /// Menu wording: the project, and the worktree the digit will land in when
+    /// The digit a worktree row wears. Only rows with tabs have one, and a row
+    /// with tabs never folds, so the badge is never drawn out of reach.
+    func numberedIndex(
+        forWorktree workspace: WorkspaceViewData,
+        in project: ProjectSummaryViewData
+    ) -> Int? {
+        numberedPlaces
+            .firstIndex(of: .worktree(projectID: project.id, path: workspace.path))
+            .map { $0 + 1 }
+    }
+
+    /// Menu wording: the project, and the branch the digit will land in when
     /// that is not simply the project itself.
-    func numberedProjectLabel(_ projectID: String) -> String {
-        guard let project = projects.first(where: { $0.id == projectID }) else { return "" }
-        guard let remembered = projectSelectedWorkspaces[projectID],
-              let branch = sidebarWorktrees(for: project)
-                  .first(where: { $0.path == remembered })?.branch
+    func numberedPlaceLabel(_ place: NumberedPlace) -> String {
+        guard let project = projects.first(where: { $0.id == place.projectID }) else { return "" }
+        let path: String? = switch place {
+        case .project: projectSelectedWorkspaces[project.id]
+        case .worktree(_, let path): path
+        }
+        guard let path,
+              let branch = sidebarWorktrees(for: project).first(where: { $0.path == path })?.branch
         else { return project.name }
         return "\(project.name) — \(branch)"
     }
 
-    /// A digit takes you to a project: it selects it — which reopens the
-    /// worktree it was last left in, since `apply(detail:)` restores that — and
-    /// opens its tree.
+    /// A digit takes you somewhere and shows you where you landed: it selects
+    /// the project — which reopens the worktree it was last left in, since
+    /// `apply(detail:)` restores that — opens its tree, and stands in the
+    /// worktree when the digit names one.
     ///
     /// Opens, never folds. Clicking a row toggles because the row is what you
     /// aimed at; a digit means "take me there", and arriving somewhere is no
     /// reason to shut what was open. Pressing it twice would otherwise make the
     /// tree flap, and the digits exist to be pressed without looking.
-    func selectNumberedProject(_ index: Int) async {
-        guard index >= 1, index <= numberedProjects.count else { return }
-        let projectID = numberedProjects[index - 1]
+    func selectNumberedPlace(_ index: Int) async {
+        let places = numberedPlaces
+        guard index >= 1, index <= places.count else { return }
+        let place = places[index - 1]
         // Open first, for the same reason the click toggles first: selecting
         // waits on a git round trip, and anything the row does after that shows
         // up as a second frame. Arriving already-open is one change; arriving
         // shut and then opening is a flicker.
-        revealWorktrees(projectID: projectID)
-        await selectProject(id: projectID, promptForRecovery: true)
+        revealWorktrees(projectID: place.projectID)
+        switch place {
+        case .project(let id):
+            await selectProject(id: id, promptForRecovery: true)
+        case .worktree(let id, let path):
+            await selectWorktree(projectID: id, path: path)
+        }
     }
 
     /// Opens a tree that is shut and leaves an open one alone.
