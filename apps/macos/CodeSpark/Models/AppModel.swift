@@ -1432,18 +1432,28 @@ extension AppModel: TerminalHostDelegate {
 
         // Update current project's live sessions if applicable
         if liveSessions.contains(where: { $0.id == sessionID }) {
-            // Find sibling sessions in the same workspace before removal
-            let siblingIDs: [String] = {
-                guard let ws = workspaces.first(where: { $0.sessions.contains(where: { $0.id == sessionID }) }) else {
-                    return liveSessions.filter { $0.id != sessionID }.map(\.id)
-                }
-                return ws.sessions.filter { $0.id != sessionID }.map(\.id)
+            // Where focus goes next, decided before the tab is gone — the tab
+            // bar's order is the only thing that can answer it.
+            //
+            // The neighbour on the left, which is where the eye already is. It
+            // used to be whichever tab was leftmost, so closing the one you were
+            // working in threw you to the far end of the bar to walk back. The
+            // leftmost tab has nothing on its left and hands over to its right,
+            // the tab that is leftmost now.
+            let neighbourID: String? = {
+                let bar = workspaces.first { $0.sessions.contains { $0.id == sessionID } }?
+                    .sessions.map(\.id) ?? liveSessions.map(\.id)
+                guard let index = bar.firstIndex(of: sessionID) else { return nil }
+                var rest = bar
+                rest.remove(at: index)
+                guard !rest.isEmpty else { return nil }
+                return rest[max(0, index - 1)]
             }()
 
             liveSessions.removeAll { $0.id == sessionID }
             recomputeWorkspaces()
             if activeSessionID == sessionID {
-                activeSessionID = siblingIDs.first
+                activeSessionID = neighbourID
             }
         }
         syncProjectSessionDetails()

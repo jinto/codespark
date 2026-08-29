@@ -550,6 +550,66 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(model.activeSessionID, session1)
     }
 
+    /// Closing a tab hands focus to the one on its left. Every close used to
+    /// jump to the leftmost tab instead, so closing the one you were working in
+    /// threw you across the tab bar and left you to walk back.
+    ///
+    /// The third of three, not the second: closing the second, the leftmost tab
+    /// *is* the left neighbour, and a test that closes it passes either way.
+    @MainActor
+    func test_closing_a_tab_falls_back_to_the_one_on_its_left() async {
+        let (model, host) = await modelWithThreeTabs()
+        let tabs = model.liveSessions.map(\.id)
+        XCTAssertEqual(model.activeSessionID, tabs[2], "precondition: on the newest tab")
+
+        host.finishClose(sessionID: tabs[2], snapshot: .fixture(lines: []), closeReason: .userClosed)
+
+        XCTAssertEqual(model.activeSessionID, tabs[1],
+                       "focus jumped past the neighbour to the far end of the bar")
+    }
+
+    @MainActor
+    func test_closing_a_middle_tab_falls_back_to_the_one_on_its_left() async {
+        let (model, host) = await modelWithThreeTabs()
+        let tabs = model.liveSessions.map(\.id)
+        model.activeSessionID = tabs[1]
+
+        host.finishClose(sessionID: tabs[1], snapshot: .fixture(lines: []), closeReason: .userClosed)
+
+        XCTAssertEqual(model.activeSessionID, tabs[0])
+    }
+
+    /// The leftmost tab has nothing on its left, so focus goes the only way it
+    /// can — to the tab that is the leftmost now.
+    @MainActor
+    func test_closing_the_leftmost_tab_falls_back_to_its_right() async {
+        let (model, host) = await modelWithThreeTabs()
+        let tabs = model.liveSessions.map(\.id)
+        model.activeSessionID = tabs[0]
+
+        host.finishClose(sessionID: tabs[0], snapshot: .fixture(lines: []), closeReason: .userClosed)
+
+        XCTAssertEqual(model.activeSessionID, tabs[1])
+    }
+
+    @MainActor
+    private func modelWithThreeTabs() async -> (AppModel, MockTerminalHost) {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "Proj", path: "/tmp/proj", transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "Proj", path: "/tmp/proj",
+                                            transport: "local", liveSessions: [])]
+        )
+        let host = MockTerminalHost()
+        let model = AppModel(core: core, terminalFactory: { _ in host })
+        await model.load()
+        for _ in 0..<3 { await model.newSession() }
+        return (model, host)
+    }
+
     // MARK: - Hotkey overlay logic
 
     func test_project_sidebar_row_shows_hotkey_when_set() {
