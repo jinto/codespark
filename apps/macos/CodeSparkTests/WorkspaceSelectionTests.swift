@@ -2596,11 +2596,17 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(model.projectInfoLine(for: p2), "main · 3 worktrees")
     }
 
-    /// A remote project is addressed by host, not by branch, and it keeps that
-    /// address in every state. The count joins it only once a scan has answered
-    /// — and a `ssh://host` with no path is never scanned at all.
+    /// A remote row said only its host, and a person with several projects on
+    /// one box read the same word down the whole sidebar while every local row
+    /// named a branch. The host is what makes the row remote, so it stays — but
+    /// it trails the branch, which is the part that differs from row to row.
+    ///
+    /// The branch comes from the worktree scan, so before that lands, or on a
+    /// `ssh://host` with no path that is never scanned at all, the line is the
+    /// host alone. Naming a branch we have not been told is the same guess as
+    /// saying "non-git" before asking.
     @MainActor
-    func test_a_remote_project_row_keeps_its_host() async {
+    func test_a_remote_project_row_names_its_branch_on_its_host() async {
         forgetExpandedProjects()
         defer { forgetExpandedProjects() }
         let withPath = "ssh://jinto@kt-server/srv/repo"
@@ -2628,7 +2634,13 @@ final class WorkspaceSelectionTests: XCTestCase {
             GitWorktree(path: withPath + "-feature", branch: "feature", isMainWorktree: false)
         ], for: withPath)
 
-        XCTAssertEqual(model.projectInfoLine(for: r1), "\(label) · 2 worktrees")
+        XCTAssertEqual(model.projectInfoLine(for: r1), "main on \(label) · 2 worktrees")
+
+        model.gitWorktreeService.primeCache(
+            [GitWorktree(path: withPath, branch: "main", isMainWorktree: true)], for: withPath)
+
+        XCTAssertEqual(model.projectInfoLine(for: r1), "main on \(label)",
+                       "one worktree has no scale to add")
     }
 
     // MARK: - An open tree always has something in it

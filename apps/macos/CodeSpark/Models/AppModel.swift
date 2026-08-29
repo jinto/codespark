@@ -157,9 +157,23 @@ final class AppModel: ObservableObject {
         return "\(identity) · \(scale)"
     }
 
+    /// A remote row leads with the branch and trails the host, the same way a
+    /// local row leads with the branch and has no host to trail. Several
+    /// projects on one box otherwise repeated that one word down the sidebar
+    /// while saying nothing about any of them.
+    ///
+    /// The branch is the main worktree's, from the scan — the remote answer to
+    /// what `gitBranches` is locally, since `git -C` here cannot be asked about
+    /// a directory over there. Until the scan lands, or on a `ssh://host` with
+    /// no path that is never scanned, the host stands alone: naming a branch
+    /// nobody has told us is the guess that "non-git" waits to avoid.
     private func projectIdentityLine(for project: ProjectSummaryViewData) -> String? {
         if project.transport == "ssh" {
-            return SSHConnectionInfo(uri: project.path)?.displayLabel ?? project.path
+            let host = SSHConnectionInfo(uri: project.path)?.displayLabel ?? project.path
+            guard let branch = gitWorktreeService.worktrees(for: project.path)?
+                .first(where: \.isMainWorktree)?.branch
+            else { return host }
+            return "\(branch) on \(host)"
         }
         guard !project.path.isEmpty else { return nil }
         if let branch = gitBranches[project.path] { return branch }
