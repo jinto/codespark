@@ -15,22 +15,43 @@ targets:
       - name: Build workspace-core (Zig)
         basedOnDependencyAnalysis: false
         script: |
+          # Without this the phase reports the status of its LAST command — `rm -rf` —
+          # so a Zig compile error left the build green and linked whatever stale
+          # libworkspace-core.a happened to be on disk.
+          set -euo pipefail
           export ZIG_GLOBAL_CACHE_DIR="$SRCROOT/../../libs/workspace-core/.zig-global-cache"
           export ZIG_LOCAL_CACHE_DIR="$SRCROOT/../../libs/workspace-core/.zig-cache"
           cd "$SRCROOT/../../libs/workspace-core"
+          # Xcode inherits the PATH of whatever launched it, and on macOS /opt/homebrew/bin
+          # is only on PATH in a *login* shell. So `zig` was routinely not found here —
+          # and until `set -e` above, the phase reported success anyway and linked
+          # whatever libworkspace-core.a happened to be on disk.
+          if [ -z "${ZIG:-}" ]; then
+            ZIG=$(command -v zig || true)
+          fi
+          for candidate in /opt/homebrew/bin/zig /usr/local/bin/zig; do
+            [ -n "$ZIG" ] && break
+            [ -x "$candidate" ] && ZIG=$candidate
+          done
+          if [ -z "$ZIG" ]; then
+            echo "error: zig not found. Install it (brew install zig) or set ZIG=/path/to/zig."
+            exit 1
+          fi
           if [ "$CONFIGURATION" = "Release" ]; then
-            zig build -Doptimize=ReleaseFast
+            "$ZIG" build -Doptimize=ReleaseFast
           else
-            zig build -Doptimize=Debug
+            "$ZIG" build -Doptimize=Debug
           fi
           # Re-archive with Apple libtool to fix Zig archive alignment
           LIBPATH="zig-out/lib/libworkspace-core.a"
-          TMPDIR=$(mktemp -d)
-          cd "$TMPDIR"
+          # Not TMPDIR: that is the environment variable every tool reads, and this
+          # reassigned it and then `rm -rf`ed it.
+          ARCHIVE_TMP=$(mktemp -d)
+          cd "$ARCHIVE_TMP"
           ar x "$OLDPWD/$LIBPATH"
           chmod 644 *.o
           libtool -static -o "$OLDPWD/$LIBPATH" *.o
-          rm -rf "$TMPDIR"
+          rm -rf "$ARCHIVE_TMP"
     postBuildScripts:
       - name: Bundle Ghostty shell integration
         basedOnDependencyAnalysis: false

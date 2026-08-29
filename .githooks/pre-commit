@@ -11,6 +11,25 @@ if grep -rn --include='*.swift' 'keyboardShortcut("' apps/macos/CodeSpark; then
   exit 1
 fi
 
+echo "🧪 Pre-commit: workspace-core tests..."
+
+# The store holds every project and every session, and its 39 tests ran in no
+# hook and no CI job — so `store.zig` could be broken end to end while this hook
+# and the release both stayed green.
+# Same PATH trap as the Xcode phase: /opt/homebrew/bin is login-shell only.
+ZIG=${ZIG:-$(command -v zig || true)}
+[ -n "$ZIG" ] || for c in /opt/homebrew/bin/zig /usr/local/bin/zig; do
+  [ -x "$c" ] && ZIG=$c && break
+done
+if [ -z "$ZIG" ]; then
+  echo "❌ zig not found. brew install zig, or set ZIG=/path/to/zig"
+  exit 1
+fi
+( cd libs/workspace-core \
+  && ZIG_GLOBAL_CACHE_DIR="$PWD/.zig-global-cache" \
+     ZIG_LOCAL_CACHE_DIR="$PWD/.zig-cache" \
+     "$ZIG" build test --summary failures )
+
 echo "🔨 Pre-commit: building + unit tests..."
 
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \

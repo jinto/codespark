@@ -21,16 +21,18 @@ jobs:
           # on its own.
           version: 0.15.2
 
-      - name: Cache GhosttyKit xcframework
-        id: ghostty-cache
-        uses: actions/cache@v4
-        with:
-          path: vendor/ghostty/macos/GhosttyKit.xcframework
-          key: ghosttykit-relfast-${{ hashFiles('.ghostty-version') }}
-          restore-keys: ghosttykit-relfast-
+      # No cache step here on purpose. Actions caches are scoped by ref, and this
+      # workflow only ever runs from a fresh tag, so a `ghosttykit-relfast-*`
+      # entry written by one release was unreadable by the next — it never hit
+      # once. Its restore-keys prefix would also have matched an xcframework
+      # built from a *different* ghostty commit.
+      - name: Test workspace-core
+        working-directory: libs/workspace-core
+        # The store is the only thing holding every project and session, and
+        # until now its 39 tests ran in no hook and no CI job.
+        run: zig build test --summary all
 
       - name: Build GhosttyKit (ReleaseFast)
-        if: steps.ghostty-cache.outputs.cache-hit != 'true'
         run: |
           # `vendor/` is gitignored, so CI fetches ghostty itself. Cloning main
           # makes every release race upstream: v1.1.4 died because
@@ -43,20 +45,6 @@ jobs:
           git -C vendor/ghostty checkout FETCH_HEAD
           cd vendor/ghostty
           zig build -Doptimize=ReleaseFast -Demit-xcframework=true -Dxcframework-target=native -Demit-macos-app=false
-
-      - name: Clone Ghostty headers (cache hit)
-        if: steps.ghostty-cache.outputs.cache-hit == 'true'
-        run: |
-          # Preserve cached xcframework, clone headers into temp, then merge
-          mv vendor/ghostty/macos/GhosttyKit.xcframework /tmp/ghosttykit-cached
-          rm -rf vendor/ghostty
-          git init vendor/ghostty
-          git -C vendor/ghostty remote add origin https://github.com/ghostty-org/ghostty.git
-          git -C vendor/ghostty sparse-checkout set include macos/Sources
-          git -C vendor/ghostty fetch --depth 1 --filter=blob:none origin "$(cat .ghostty-version)"
-          git -C vendor/ghostty checkout FETCH_HEAD
-          # Restore cached xcframework
-          mv /tmp/ghosttykit-cached vendor/ghostty/macos/GhosttyKit.xcframework
 
       - name: Setup signing keychain
         env:
@@ -141,12 +129,16 @@ jobs:
             --app-drop-link 450 185 \
             --no-internet-enable \
             "CodeSpark-${GITHUB_REF_NAME}.dmg" \
-            "$APP_PATH" || true
+            "$APP_PATH"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: CodeSpark-*.dmg
+          # Both halves matter. `create-dmg ... || true` swallowed a failed
+          # build, and this action defaults to false — together they published a
+          # green release with no DMG attached to it.
+          fail_on_unmatched_files: true
           generate_release_notes: true
 
       - name: Cleanup keychain
