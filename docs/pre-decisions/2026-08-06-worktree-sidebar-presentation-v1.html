@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeSpark worktree 표시 구조 — 결정 워크시트</title>
+<style>
+  /* ── 폰트 & 기본 ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Pretendard Variable", Pretendard, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    color: #1f2937;
+    background: #fff;
+  }
+  code, pre {
+    font-family: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", "Fira Code", monospace;
+    font-size: 13px;
+  }
+
+  /* ── 레이아웃 ── */
+  .page-wrap {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 32px 80px;
+  }
+  section { margin-bottom: 52px; }
+  h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 4px; }
+  .subtitle { font-size: 14px; color: #6b7280; margin-bottom: 0; }
+  h2 { font-size: 20px; font-weight: 700; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 2px solid #e5e7eb; }
+  h3 { font-size: 16px; font-weight: 700; margin: 24px 0 10px; }
+  h4 { font-size: 14px; font-weight: 700; margin: 18px 0 8px; color: #374151; }
+  p { margin-bottom: 10px; }
+  ul, ol { padding-left: 20px; margin-bottom: 10px; }
+  li { margin-bottom: 4px; }
+  a { color: #2563eb; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  hr { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
+
+  /* ── Sticky TOC ── */
+  .toc-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #fff;
+    border-bottom: 1px solid #e5e7eb;
+    padding: 8px 0;
+    margin-bottom: 14px;
+  }
+  .toc-inner {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 32px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    align-items: center;
+  }
+  .toc-label { font-size: 11px; font-weight: 700; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+  .toc-link {
+    font-size: 12px; color: #4b5563; white-space: nowrap;
+    padding: 2px 0;
+  }
+  .toc-link:hover { color: #2563eb; text-decoration: none; }
+
+  /* ── 헤더 영역 ── */
+  .page-header {
+    padding: 22px 0 24px;
+    border-bottom: 2px solid #e5e7eb;
+    margin-bottom: 32px;
+  }
+  .meta-row { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
+  .meta-tag {
+    font-size: 12px; color: #6b7280; background: #f3f4f6;
+    padding: 2px 8px; border-radius: 4px;
+  }
+
+  /* ── Stat 카드 ── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 14px 16px;
+    background: #f9fafb;
+  }
+  .stat-number { font-size: 28px; font-weight: 700; line-height: 1.1; color: #111827; }
+  .stat-label { font-size: 12px; color: #6b7280; margin-top: 4px; line-height: 1.4; }
+  .stat-card.red { border-color: #fca5a5; background: #fef2f2; }
+  .stat-card.red .stat-number { color: #dc2626; }
+  .stat-card.amber { border-color: #fcd34d; background: #fffbeb; }
+  .stat-card.amber .stat-number { color: #d97706; }
+
+  /* ── 배지 ── */
+  .badge {
+    display: inline-block;
+    font-size: 11px; font-weight: 600; padding: 1px 7px;
+    border-radius: 4px; vertical-align: middle;
+  }
+  .badge-rec { background: #ecfdf5; color: #059669; border: 1px solid #6ee7b7; }
+  .badge-done { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+  .badge-open { background: #fffbeb; color: #b45309; border: 1px solid #fcd34d; }
+
+  /* ── 결정 포인트 섹션 ── */
+  .dp-section {
+    border-left: 4px solid #d97706;
+    padding-left: 20px;
+    margin-bottom: 32px;
+  }
+  .dp-title {
+    font-size: 18px; font-weight: 700; color: #d97706;
+    margin-bottom: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .dp-tag {
+    display: inline-block;
+    background: #fffbeb; color: #d97706;
+    border: 1px solid #fcd34d;
+    font-size: 12px; font-weight: 700; padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  /* ── 옵션 카드 ── */
+  .option-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 14px 0; }
+  .option-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 14px 16px;
+    position: relative;
+    background: #fff;
+    cursor: pointer;
+  }
+  .option-card.recommended,
+  .option-card.selected {
+    border: 2px solid #059669;
+    background: #f0fdf4;
+  }
+  .option-card input[type="radio"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .option-card .opt-label {
+    font-size: 13px; font-weight: 700; color: #111827; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .option-card p { font-size: 13px; color: #374151; margin-bottom: 0; }
+  .option-card .impl { font-size: 12px; color: #6b7280; margin-top: 6px; display: block; }
+  .option-card:focus-within { outline: 2px solid #bfdbfe; outline-offset: 2px; }
+
+  /* ── 테이블 ── */
+  .table-wrap { overflow-x: auto; margin: 12px 0 20px; border-radius: 6px; border: 1px solid #e5e7eb; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead tr { background: #f3f4f6; }
+  th { padding: 9px 12px; text-align: left; font-weight: 700; color: #374151; border-bottom: 1px solid #e5e7eb; white-space: nowrap; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; color: #374151; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(even) { background: #f9fafb; }
+
+  /* ── 정보 박스 ── */
+  .info-box {
+    background: #eff6ff;
+    border-left: 4px solid #2563eb;
+    border-radius: 0 6px 6px 0;
+    padding: 14px 18px;
+    margin: 14px 0;
+    font-size: 14px;
+  }
+  .info-box strong { color: #1d4ed8; }
+  .warning-box {
+    background: #fffbeb;
+    border-left: 4px solid #d97706;
+    border-radius: 0 6px 6px 0;
+    padding: 14px 18px;
+    margin: 14px 0;
+    font-size: 14px;
+  }
+  .warning-box strong { color: #b45309; }
+  .danger-box {
+    background: #fef2f2;
+    border-left: 4px solid #dc2626;
+    border-radius: 0 6px 6px 0;
+    padding: 14px 18px;
+    margin: 14px 0;
+    font-size: 14px;
+  }
+  .danger-box strong { color: #b91c1c; }
+  .evidence { font-size: 12px; color: #6b7280; font-family: "Geist Mono", ui-monospace, "SF Mono", monospace; }
+
+  pre.snippet {
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;
+    padding: 12px 14px; margin: 10px 0; overflow-x: auto; line-height: 1.55;
+  }
+  .ascii {
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px;
+    padding: 12px 14px; margin: 10px 0; overflow-x: auto; line-height: 1.5;
+    font-family: "Geist Mono", ui-monospace, "SF Mono", monospace; font-size: 12px;
+    white-space: pre; color: #374151;
+  }
+
+  /* ── 접이식 ── */
+  details { border: 1px solid #e5e7eb; border-radius: 6px; margin: 10px 0; }
+  summary {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    color: #374151;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▶"; font-size: 10px; color: #9ca3af; transition: transform 0.15s; }
+  details[open] summary::before { transform: rotate(90deg); }
+  details .details-body { padding: 14px 16px; border-top: 1px solid #e5e7eb; font-size: 13px; }
+
+  /* ── 대안제시 + 결정 회신 템플릿 ── */
+  .alt-field { margin-top: 12px; }
+  .alt-field label { display: block; font-size: 13px; font-weight: 700; color: #374151; margin-bottom: 6px; }
+  .alt-field textarea {
+    width: 100%; min-height: 78px; resize: vertical;
+    border: 1px solid #d1d5db; border-radius: 6px;
+    padding: 10px 12px; font: inherit; font-size: 13px; line-height: 1.55;
+  }
+  .reply-template {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 18px 20px;
+    margin-top: 14px;
+  }
+  .reply-template pre {
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    font-size: 14px;
+    line-height: 2;
+    white-space: pre-wrap;
+  }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  button {
+    border: 1px solid #d1d5db; background: #fff; color: #374151;
+    border-radius: 6px; padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  button.primary { border-color: #2563eb; background: #2563eb; color: #fff; }
+
+  @media (max-width: 720px) {
+    .page-wrap { padding: 0 16px 40px; }
+    .toc-inner { padding: 0 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toc-sticky">
+  <div class="toc-inner">
+    <span class="toc-label">이동</span>
+    <a href="#sec-header" class="toc-link">Document Header</a>
+    <a href="#sec-snapshot" class="toc-link">Decision Snapshot</a>
+    <a href="#sec-evidence" class="toc-link">Grounding Evidence</a>
+    <a href="#sec-questions" class="toc-link">Decision Questions</a>
+    <a href="#sec-risks" class="toc-link">Cross-Cutting Risks and Open Items</a>
+    <a href="#sec-summary" class="toc-link">Decision Summary Generator</a>
+  </div>
+</div>
+
+<div class="page-wrap">
+
+  <header class="page-header">
+    <h1>CodeSpark worktree 표시 구조 — 결정 워크시트</h1>
+    <p class="subtitle">"하나의 repo 아래에 여러 worktree가 보이는" 구조를 CodeSpark에 어떻게 들일지, 사이드바 구조·탭바 스코프·폭 처리·도달 불가 기능을 구현 전에 잠급니다</p>
+    <div class="meta-row">
+      <span class="meta-tag">작성일: 2026-08-06</span>
+      <span class="meta-tag">slug: worktree-sidebar-presentation</span>
+      <span class="meta-tag">버전: v1</span>
+      <span class="meta-tag">상태: Needs decision</span>
+      <span class="meta-tag">모드: codebase-present</span>
+    </div>
+  </header>
+
+  <section id="sec-header">
+    <h2>Document Header</h2>
+    <p>사용자가 다른 도구(orca)에서 "repo 아래에 worktree들이 나열되는" 구조가 관리하기 편하다고 판단했고, CodeSpark에 같은 개념을 들일지와 그 형태를 정하는 문서입니다.</p>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-number">v1</div>
+        <div class="stat-label">버전<br>명시적 후속 요청 전까지 기본값 유지</div>
+      </div>
+      <div class="stat-card amber">
+        <div class="stat-number">15</div>
+        <div class="stat-label">decision cards<br>filler 없이 실제 분기만</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-number">0</div>
+        <div class="stat-label"><code>model.workspaces</code> 렌더링 지점<br>계산만 되고 화면에 없음</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-number">0</div>
+        <div class="stat-label"><code>removeWorktree</code> UI 호출자<br>앱에서 도달 불가</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">16</div>
+        <div class="stat-label">기존 worktree/workspace 테스트<br>UI 없는 모델 동작을 이미 검증 중</div>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>필드</th><th>값</th><th>비고</th></tr></thead>
+        <tbody>
+          <tr><td><strong>path</strong></td><td><code>docs/pre-decisions/2026-08-06-worktree-sidebar-presentation-v1.html</code></td><td>repo-root docs 트리</td></tr>
+          <tr><td><strong>title</strong></td><td>CodeSpark worktree 표시 구조 — 결정 워크시트</td><td>결정 범위를 제목에 고정</td></tr>
+          <tr><td><strong>date</strong></td><td>2026-08-06</td><td>summary generator와 동일</td></tr>
+          <tr><td><strong>semantic slug</strong></td><td><code>worktree-sidebar-presentation</code></td><td>파일명 ↔ 제목 연결자</td></tr>
+          <tr><td><strong>version</strong></td><td>v1</td><td>명시적 요청 시에만 v2+</td></tr>
+          <tr><td><strong>purpose</strong></td><td>worktree를 UI에 어떤 계층으로 노출할지와 탭바 스코프를 구현 전에 잠근다</td><td>한 문장 목표</td></tr>
+          <tr><td><strong>current status</strong></td><td><span class="badge badge-open">Needs decision</span></td><td>Q-01/Q-02가 나머지를 종속시킴</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="sec-snapshot">
+    <h2>Decision Snapshot</h2>
+    <p>지금 무엇을 정하고 무엇을 열어두는지에 대한 스냅샷입니다. 선택은 아래 카드에서 바꿀 수 있고 맨 아래 generator가 그대로 텍스트로 묶어 줍니다.</p>
+
+    <div class="info-box"><strong>범위 경계:</strong> 이번 문서는 <em>worktree를 어떻게 보여줄지</em>에 대한 UI 계층·탭바 스코프·도달 불가 기능 정리까지입니다. git worktree 생성/삭제 로직 자체의 재설계, 원격(SSH) worktree 지원, 브랜치 관리 기능 확장은 범위 밖입니다.</div>
+
+    <ul>
+      <li><strong>이미 고정된 것:</strong> 워크스페이스 = 워크트리 1:1 매핑 규칙, 세션의 워크스페이스 소속을 생성 시점에 고정하는 <code>sessions.workspace_path</code>(오늘 도입), flat worktree 명명 <code>&lt;repo&gt;-&lt;branch&gt;-&lt;id&gt;</code>.</li>
+      <li><strong>핵심 오픈 항목:</strong> 표시 계층(사이드바 트리 / 스트립 / 탭바 그룹), 탭바가 활성 워크트리만 보여줄지, 좁은 사이드바(최대 180pt)를 어떻게 감당할지.</li>
+      <li><strong>드러난 결함:</strong> <code>model.workspaces</code>는 계산만 되고 렌더링되지 않으며, <code>removeWorktree</code>는 UI 호출자가 없어 앱에서 워크트리를 지울 수 없습니다. 워크트리로 연 탭 제목은 전부 <code>Terminal</code>이라 구분이 불가능합니다.</li>
+      <li><strong>구현 전에 정해야 하는 이유:</strong> Q-01(표시 계층)과 Q-02(탭바 스코프)가 나머지 13개 카드의 전제입니다. 이 둘이 흔들리면 사이드바·탭바·단축키·저장 스키마가 연쇄로 재작업됩니다.</li>
+    </ul>
+
+    <div class="info-box"><strong>Smallest safe slice:</strong> Q-01에서 고른 표시 계층 + Q-07 탭 제목(브랜치명)만 먼저 낸다. 이 조합은 읽기 전용 변경이라 저장 스키마·git 조작을 건드리지 않고, 되돌리기 비용이 거의 0입니다.</div>
+
+    <div class="danger-box"><strong>NO-GO 경계:</strong> 같은 슬라이스에서 (1) 탭바 스코프 변경, (2) <code>workspace_path</code> 저장 스키마 변경, (3) 워크트리 삭제/입양 같은 파괴적 git 조작을 함께 넣지 않습니다. 특히 <code>git worktree remove</code>를 UI에 노출하는 작업은 되돌릴 수 없는 파일 삭제를 동반하므로 별도 슬라이스에서 확인 대화상자와 함께 다룹니다.</div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>카드</th><th>결정 대상</th><th>왜 지금 중요한가</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Q-01</strong></td><td>worktree 표시 계층</td><td>나머지 전 카드의 전제</td></tr>
+          <tr><td><strong>Q-02</strong></td><td>탭바 스코프</td><td>"관리 편함"의 실체가 여기서 갈림</td></tr>
+          <tr><td><strong>Q-03</strong></td><td>사이드바 폭</td><td>트리를 고르면 즉시 물리적 제약</td></tr>
+          <tr><td><strong>Q-04</strong></td><td>사이드바 숨김 시 전환 수단</td><td>사이드바는 토글로 사라짐</td></tr>
+          <tr><td><strong>Q-05</strong></td><td>접기 기본값 / inactive 축약</td><td>ISSUES.md 기존 요구와 충돌 조율</td></tr>
+          <tr><td><strong>Q-06</strong></td><td>탭 0개 워크트리 노출</td><td>"자리" 개념의 일관성</td></tr>
+          <tr><td><strong>Q-07</strong></td><td>탭 제목 기본값</td><td>현재 전부 <code>Terminal</code></td></tr>
+          <tr><td><strong>Q-08</strong></td><td>사라진 워크트리의 탭 처리</td><td>현재 조용히 main으로 흡수</td></tr>
+          <tr><td><strong>Q-09</strong></td><td>워크트리 캐시 미스 처리</td><td>구조가 1개로 접혔다 갈라지는 깜빡임</td></tr>
+          <tr><td><strong>Q-10</strong></td><td>외부 생성 worktree 취급</td><td>ID 규칙이 안 맞음</td></tr>
+          <tr><td><strong>Q-11</strong></td><td>워크트리 삭제 진입점</td><td>현재 앱에서 도달 불가</td></tr>
+          <tr><td><strong>Q-12</strong></td><td>SSH·비-git 프로젝트 표시</td><td>합성 워크스페이스가 노출됨</td></tr>
+          <tr><td><strong>Q-13</strong></td><td>Cmd+1~9 매핑</td><td>계층이 늘면 의미가 모호해짐</td></tr>
+          <tr><td><strong>Q-14</strong></td><td>죽은 코드 처리</td><td><code>SessionSidebarRow</code> 미사용</td></tr>
+          <tr><td><strong>Q-15</strong></td><td>1차 구현 범위</td><td>슬라이스 경계 확정</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="sec-evidence">
+    <h2>Grounding Evidence</h2>
+
+    <div class="info-box"><strong>모드:</strong> codebase-present. 아래 근거는 현재 작업 트리(<code>main</code>, <code>085d268</code> 이후)를 직접 조회해 확인한 것입니다.</div>
+
+    <h3>현재 구조 요약</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>계층</th><th>현재 렌더링 대상</th><th>앵커</th></tr></thead>
+        <tbody>
+          <tr><td>사이드바</td><td><code>model.orderedProjects</code> — 프로젝트 평면 목록</td><td class="evidence">SidebarView.swift:72</td></tr>
+          <tr><td>탭바</td><td><code>model.liveSessions</code> — 프로젝트의 <strong>전체</strong> 세션</td><td class="evidence">MainContentView.swift:16</td></tr>
+          <tr><td>워크스페이스</td><td><strong>없음</strong> — <code>model.workspaces</code>를 읽는 뷰가 0개</td><td class="evidence">grep: Views/ 전체</td></tr>
+          <tr><td>사이드바 폭</td><td><code>min 100 / ideal 120 / max 180</code></td><td class="evidence">CodeSparkApp.swift:43</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>모델은 이미 "워크스페이스 선택 → 그 탭들" 구조로 만들어져 있음</h3>
+    <p>화면에만 안 붙어 있을 뿐, 전환 시맨틱이 이미 구현되어 있고 테스트도 있습니다.</p>
+    <pre class="snippet">// AppModel.swift:34-48 — 워크스페이스를 바꾸면 그 워크스페이스에서 마지막에 보던 탭으로 복귀
+@Published var activeWorkspacePath: String? {
+    didSet {
+        if let path = activeWorkspacePath {
+            if let savedID = workspaceSelectedSessions[path],
+               liveSessions.contains(where: { $0.id == savedID }) {
+                activeSessionID = savedID
+            } else if let ws = workspaces.first(where: { $0.path == path }),
+                      let first = ws.sessions.first {
+                activeSessionID = first.id
+                workspaceSelectedSessions[path] = first.id
+            }
+        }
+    }
+}</pre>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>남아 있는 스캐폴딩</th><th>상태</th><th>의미</th></tr></thead>
+        <tbody>
+          <tr><td><code>workspaceSelectedSessions</code></td><td>사용 중 (모델 내부)</td><td>워크스페이스별 선택 탭 기억 — 트리/스트립 UI를 전제한 설계</td></tr>
+          <tr><td><code>StorageKeys.expandedProjectIDs</code></td><td><strong>선언만, 미사용</strong></td><td>접기/펴기 UI가 계획되었다가 미완</td></tr>
+          <tr><td><code>SessionSidebarRow.swift</code></td><td><strong>완전한 죽은 코드</strong></td><td>사이드바에 세션 행을 그리려던 흔적</td></tr>
+          <tr><td><code>removeWorktree(path:)</code></td><td><strong>UI 호출자 0개</strong></td><td>워크트리 삭제가 앱에서 도달 불가</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>워크스페이스 ↔ 워크트리 매핑 규칙</h3>
+    <pre class="snippet">// ProjectViewData.swift:167-176 — 워크트리 0/1개이거나 목록이 nil이면 합성 워크스페이스 1개
+guard let worktrees, worktrees.count > 1 else {
+    let ws = worktrees?.first
+    return [WorkspaceViewData(
+        path: ws?.path ?? projectPath,
+        branch: ws?.branch ?? "default",
+        isMainWorktree: true,
+        sessions: sessions,
+        worktreeID: ws?.worktreeID
+    )]
+}
+// :199-207 — 2개 이상이면 워크트리 목록을 그대로 1:1 매핑 (탭 0개인 워크트리도 포함)</pre>
+
+    <div class="warning-box"><strong>파생·부분 상태 위험:</strong> <code>worktrees(for:)</code>는 캐시 조회일 뿐이라 미스 시 <code>nil</code>을 반환합니다(<span class="evidence">GitWorktreeService.swift:43-45</span>). <code>recomputeWorkspaces()</code>가 캐시가 채워지기 전에 호출되면 워크트리 5개짜리 프로젝트도 <strong>합성 워크스페이스 1개로 접혔다가</strong> 로드 후 5개로 갈라집니다. <code>selectProject</code>는 <code>refreshWorktrees</code>를 await한 뒤 호출하지만, <code>newSession</code>·<code>addWorktree</code>·<code>sessionDidReportCwd</code> 경로는 캐시를 그대로 씁니다.</div>
+
+    <div class="warning-box"><strong>소속 키가 경로라는 점:</strong> 세션의 <code>workspace_path</code>는 worktreeID가 아니라 <strong>경로</strong>를 저장하고, <code>groupSessions</code>도 경로 동일성으로 매칭합니다. 워크트리를 지웠다 같은 브랜치로 다시 만들면 id 4자리가 달라져(<code>...-a3f1</code> → <code>...-9c2e</code>) 이전 탭들은 <strong>조용히 main 워크트리로 흡수</strong>됩니다. 이 동작은 이미 테스트로 고정되어 있습니다(<span class="evidence">WorkspaceSelectionTests.swift:367</span>).</div>
+
+    <h3>워크트리로 연 탭이 구분되지 않음</h3>
+    <p><code>addWorktree</code>는 워크트리 생성 후 그 안에서 새 세션을 여는데, 제목이 고정 문자열입니다.</p>
+    <pre class="snippet">// AppModel.swift:636-648
+let creation = try await GitWorktreeService.addWorktree(projectPath: project.path, branch: branch)
+...
+await newSession(inWorkspacePath: creation.path)   // → title: "Terminal" (AppModel.swift:506)</pre>
+    <p>결과적으로 워크트리 3개에 탭이 하나씩 있으면 탭바에 <code>Terminal Terminal Terminal</code>이 나열되고, 어느 워크트리인지 알 방법이 없습니다.</p>
+
+    <h3>테스트 근거</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>영역</th><th>기존 커버리지</th><th>빠진 커버리지</th></tr></thead>
+        <tbody>
+          <tr><td>워크트리 명명/ID</td><td><code>test_worktree_name_is_flat_repo_branch_and_id</code>, <code>test_worktree_id_is_recovered_from_generated_path</code>, <code>test_existing_worktree_without_generated_id_uses_path_as_id</code></td><td>외부 생성 워크트리의 표시 이름 규칙</td></tr>
+          <tr><td>그룹핑</td><td><code>test_single_worktree_returns_one_workspace</code>, <code>test_nil_worktrees_returns_default_workspace</code>, <code>test_cd_into_another_worktree_does_not_move_the_tab</code>, <code>test_workspace_path_pointing_at_a_removed_worktree_falls_back_to_main</code></td><td>캐시 미스 시 구조 접힘/복원</td></tr>
+          <tr><td>전환 시맨틱</td><td><code>test_switching_workspace_restores_selected_session</code>, <code>test_switching_workspace_falls_back_to_first_session_when_no_mapping</code>, <code>test_closing_last_session_makes_workspace_inactive</code></td><td>탭바 스코프가 활성 워크스페이스를 따르는지</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="info-box"><strong>가장 가치 높은 baseline 테스트:</strong> Q-02를 "활성 워크트리만"으로 정할 경우, <em>탭바에 보이는 세션 집합이 <code>activeWorkspacePath</code>를 따른다</em>는 테스트를 먼저 추가해야 합니다. 지금은 전환 시맨틱만 검증되고 "무엇이 보이는가"는 검증되지 않습니다.</div>
+
+    <div class="info-box"><strong>범위상 해당 없음:</strong> 이번 결정에는 접근 제한·자격증명 모드·계정 복구 같은 보안 수명주기 분기가 없습니다. 서비스 계층 강제 지점을 별도로 지정할 대상이 없어 해당 항목은 의도적으로 비워 둡니다. 대신 파괴적 git 조작(Q-11)이 그 자리를 대신하는 위험 항목입니다.</div>
+  </section>
+
+  <section id="sec-questions">
+    <h2>Decision Questions</h2>
+    <p>15개 카드입니다. Q-01과 Q-02가 상위 결정이고 나머지는 그에 종속되거나 독립적으로 정리 가능한 항목입니다.</p>
+
+    <!-- Q-01 -->
+    <div class="dp-section" id="dp-q01">
+      <div class="dp-title">
+        <span class="dp-tag">Q-01</span>
+        worktree 표시 계층
+        <span class="badge badge-open">상위 결정</span>
+      </div>
+      <p>사용자 요청: <em>"orca를 써보니 하나의 repo 아래에 여러 개의 worktree들이 보이는 게 관리가 더 편해 보였다."</em> — 그 구조를 CodeSpark의 어느 계층에 넣을지 정합니다.</p>
+      <div class="info-box"><strong>근거:</strong> 사이드바는 프로젝트 평면 목록, 탭바는 전체 세션 평면 목록이고 워크스페이스는 렌더링되지 않습니다. 반면 모델에는 워크스페이스별 선택 기억·전환 시맨틱이 이미 있습니다. <span class="evidence">SidebarView.swift:72 / MainContentView.swift:16 / AppModel.swift:34-49</span></div>
+
+      <div class="ascii">A안 — 사이드바 트리              B안 — 워크트리 스트립
+▾ codespark                    ┌ codespark ───────────────┐
+    main             1         │ [main 1] [feat-auth 2] + │
+    feat-auth  a3f1  2         │ Terminal ×   Terminal    │
+  emac                         └──────────────────────────┘
+▸ goodgirl</div>
+
+      <div class="option-grid" data-question="Q-01">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-01" value="A — 사이드바 트리" data-summary-label="A — 사이드바 트리" data-recommended="true" checked>
+          <div class="opt-label">A (권장) — 사이드바 트리 <span class="badge badge-rec">권장</span></div>
+          <p>프로젝트 행 아래에 워크트리 자식 행. orca에서 좋다고 느낀 구조와 동일하고, 모델의 <code>workspaces</code>/<code>activeWorkspacePath</code>가 그대로 데이터 소스가 됩니다.</p>
+          <span class="impl">구현: SidebarView에 트리 렌더링 + <code>expandedProjectIDs</code> 활성화. 폭 문제(Q-03)와 숨김 대응(Q-04)이 따라옴.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-01" value="B — 탭바 위 워크트리 스트립" data-summary-label="B — 탭바 위 워크트리 스트립">
+          <div class="opt-label">B — 탭바 위 워크트리 스트립</div>
+          <p>사이드바는 프로젝트 전용으로 두고 콘텐츠 영역 상단에 워크트리 칩 줄을 추가. 사이드바 폭 압박이 없고 ISSUES.md의 "inactive는 축약 + 개수 표시"가 자연스럽게 들어맞습니다.</p>
+          <span class="impl">구현: MainContentView에 칩 스트립 추가. 사이드바 무변경. 가로 크롬이 2줄이 되어 세로 공간 손실.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-01" value="C — 탭바 한 줄 그룹 구분" data-summary-label="C — 탭바 한 줄 그룹 구분">
+          <div class="opt-label">C — 탭바 한 줄 그룹 구분</div>
+          <p>탭바를 유지하되 워크트리 경계에 라벨/구분선. 크롬 추가가 없지만 워크트리 3~4개를 넘으면 가로 스크롤로 무너집니다.</p>
+          <span class="impl">구현: SessionTabBarView만 수정. 식별은 되지만 "관리"(선택·정리)는 안 됨.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-01" value="D — 탭 제목만 브랜치로" data-summary-label="D — 탭 제목만 브랜치로">
+          <div class="opt-label">D — 탭 제목만 브랜치로</div>
+          <p>구조 변경 없이 식별만 해결. 비용이 가장 낮지만 요청의 "관리가 편하다"에는 못 미칩니다.</p>
+          <span class="impl">구현: <code>newSession</code> 제목 생성만 변경. Q-07과 사실상 동일한 작업.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-01">대안제시</label>
+        <textarea id="alt-Q-01" data-alt-for="Q-01" placeholder="예: A안 골격 + 워크트리가 1개일 때는 자식 행을 아예 숨겨 평면처럼 보이게"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-02 -->
+    <div class="dp-section" id="dp-q02">
+      <div class="dp-title">
+        <span class="dp-tag">Q-02</span>
+        탭바 스코프 — 활성 워크트리만 vs 전체
+        <span class="badge badge-open">상위 결정</span>
+      </div>
+      <p>"관리가 편하다"의 실체가 여기서 갈립니다. 워크트리를 고르면 탭바가 그 워크트리 것만 보여줄지, 아니면 전체를 계속 보여줄지.</p>
+      <div class="info-box"><strong>근거:</strong> 현재 탭바는 <code>model.liveSessions</code>(프로젝트 전체)를 받습니다. 반면 <code>workspaceSelectedSessions</code>는 워크스페이스별로 마지막 선택 탭을 기억하도록 설계돼 있어, 필터링을 전제한 구조입니다. <span class="evidence">MainContentView.swift:16 / AppModel.swift:49</span></div>
+      <div class="option-grid" data-question="Q-02">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-02" value="a — 활성 워크트리의 탭만 표시" data-summary-label="a — 활성 워크트리의 탭만 표시" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 활성 워크트리의 탭만 <span class="badge badge-rec">권장</span></div>
+          <p>워크트리 선택이 곧 문맥 전환이 됩니다. 탭 수가 워크트리 수만큼 나뉘어 탭바가 짧아지고, 모델의 기존 시맨틱과 정확히 일치합니다.</p>
+          <span class="impl">구현: 탭바 입력을 <code>workspaces.first(where: activeWorkspacePath)?.sessions</code>로 교체. baseline 테스트 추가 필요.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-02" value="b — 전체 표시 + 활성 워크트리 강조" data-summary-label="b — 전체 표시 + 활성 워크트리 강조">
+          <div class="opt-label">b — 전체 표시 + 활성 강조</div>
+          <p>탭이 사라지지 않아 이동 비용이 낮지만, 워크트리가 늘수록 탭바가 계속 길어져 원래 문제가 남습니다.</p>
+          <span class="impl">구현: 탭바 입력 유지 + 스타일 구분만. 변경 최소, 효과도 최소.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-02" value="c — 사용자 토글" data-summary-label="c — 사용자 토글">
+          <div class="opt-label">c — 사용자 토글</div>
+          <p>"이 워크트리만 / 전체" 토글 제공. 유연하지만 상태가 하나 늘고, 어느 쪽이 기본인지 다시 정해야 합니다.</p>
+          <span class="impl">구현: a + b 둘 다 만들고 토글 상태를 <code>@AppStorage</code>로 저장.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-02">대안제시</label>
+        <textarea id="alt-Q-02" data-alt-for="Q-02" placeholder="예: 기본은 활성 워크트리만, 워크트리가 1개인 프로젝트는 자동으로 전체와 동일"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-03 -->
+    <div class="dp-section" id="dp-q03">
+      <div class="dp-title">
+        <span class="dp-tag">Q-03</span>
+        사이드바 폭 처리 (Q-01 = A일 때)
+      </div>
+      <p>트리를 고르면 즉시 물리적 제약에 부딪힙니다. 들여쓰기 + 브랜치명 + 카운트가 현재 최대 폭에 들어가지 않습니다.</p>
+      <div class="warning-box"><strong>근거:</strong> <code>.navigationSplitViewColumnWidth(min: 100, ideal: 120, max: 180)</code> — 최대 180pt. 프로젝트 행은 이미 이름 + 정보줄 2줄 구조입니다. <span class="evidence">CodeSparkApp.swift:43 / SidebarView.swift:28-35</span></div>
+      <div class="option-grid" data-question="Q-03">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-03" value="c — 소폭 확대 + 접기 기본" data-summary-label="c — 소폭 확대 + 접기 기본" data-recommended="true" checked>
+          <div class="opt-label">c (권장) — 소폭 확대 + 접기 기본 <span class="badge badge-rec">권장</span></div>
+          <p>max를 180 → 220 정도로만 올리고, 기본은 활성 프로젝트만 펼침. 평소 시각적 밀도는 지금과 비슷하게 유지됩니다.</p>
+          <span class="impl">구현: 폭 상수 변경 + Q-05의 접기 정책과 함께.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-03" value="a — 폭만 확대 (180 → 260)" data-summary-label="a — 폭만 확대 (180 → 260)">
+          <div class="opt-label">a — 폭만 확대</div>
+          <p>단순하고 모든 워크트리를 항상 볼 수 있지만, 터미널 가로가 그만큼 줄어듭니다. 터미널 앱에서 가로는 비쌉니다.</p>
+          <span class="impl">구현: 상수 한 줄. 접기 로직 불필요.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-03" value="b — 현행 폭 유지 + 브랜치명 말줄임" data-summary-label="b — 현행 폭 유지 + 브랜치명 말줄임">
+          <div class="opt-label">b — 현행 폭 유지 + 말줄임</div>
+          <p>터미널 공간을 지키지만 <code>feature/long-branch-name</code> 같은 이름이 거의 안 보여 식별 가치가 떨어집니다.</p>
+          <span class="impl">구현: 트리 렌더링만. 툴팁으로 전체 이름 보완 필요.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-03">대안제시</label>
+        <textarea id="alt-Q-03" data-alt-for="Q-03" placeholder="예: 폭을 사용자가 드래그로 조절하고 값을 @AppStorage에 저장"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-04 -->
+    <div class="dp-section" id="dp-q04">
+      <div class="dp-title">
+        <span class="dp-tag">Q-04</span>
+        사이드바를 숨겼을 때의 워크트리 전환 수단
+      </div>
+      <p>사이드바는 <code>Cmd+Ctrl+S</code>로 토글되고 프로젝트가 없으면 자동으로 숨습니다. 트리에만 의존하면 숨긴 상태에서 워크트리를 바꿀 방법이 사라집니다.</p>
+      <div class="info-box"><strong>근거:</strong> 사이드바 가시성은 <code>@AppStorage(StorageKeys.isSidebarVisible)</code>로 영속화되며 토글 가능합니다. 한편 <code>.navigationSubtitle</code>은 이미 브랜치를 표시하고 있어 활성 워크트리 표시에 재사용할 수 있습니다. <span class="evidence">CodeSparkApp.swift:23, 49, 116-121</span></div>
+      <div class="option-grid" data-question="Q-04">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-04" value="a — navigationSubtitle을 활성 워크트리로 + 순환 단축키" data-summary-label="a — navigationSubtitle을 활성 워크트리로 + 순환 단축키" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 부제 표시 + 순환 단축키 <span class="badge badge-rec">권장</span></div>
+          <p>현재 위치는 타이틀 부제로 항상 보이고, 전환은 단축키로. 사이드바 상태와 무관하게 동작합니다.</p>
+          <span class="impl">구현: <code>navigationSubtitle</code>을 활성 워크스페이스 브랜치로 바꾸고 <code>CommandGroup</code>에 이전/다음 워크트리 추가.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-04" value="b — 툴바에 워크트리 팝업 메뉴" data-summary-label="b — 툴바에 워크트리 팝업 메뉴">
+          <div class="opt-label">b — 툴바 팝업 메뉴</div>
+          <p>발견성이 가장 높지만 통합 툴바에 항목이 하나 더 늘고, 트리와 기능이 중복됩니다.</p>
+          <span class="impl">구현: detail 컬럼 <code>.toolbar</code>에 Menu 추가.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-04" value="c — 대응 없음 (사이드바 필수)" data-summary-label="c — 대응 없음 (사이드바 필수)">
+          <div class="opt-label">c — 대응 없음</div>
+          <p>구현이 가장 적지만, 사이드바를 숨기고 쓰는 사용자는 워크트리 기능을 사실상 못 씁니다.</p>
+          <span class="impl">구현: 없음. Q-01이 B안이면 애초에 무관한 질문.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-04">대안제시</label>
+        <textarea id="alt-Q-04" data-alt-for="Q-04" placeholder="예: 워크트리 전환 시 잠깐 HUD로 브랜치명 표시"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-05 -->
+    <div class="dp-section" id="dp-q05">
+      <div class="dp-title">
+        <span class="dp-tag">Q-05</span>
+        접기 기본값과 inactive 축약 정책
+      </div>
+      <p>ISSUES.md에 이미 상충하는 두 요구가 적혀 있습니다: <em>"inactive ws들은 <code>...</code> 같은 걸로 줄여서 한 줄에 표시하고 몇 개인지 숫자를 표시"</em> 와 <em>"active는 항상 펼쳐주세요. 안 그러면 Cmd 키를 눌러도 안 보여요."</em></p>
+      <div class="warning-box"><strong>근거:</strong> <code>StorageKeys.expandedProjectIDs</code>가 선언만 되고 쓰이지 않습니다. 접기 상태를 영속화할 자리는 이미 있지만 정책이 없습니다. <span class="evidence">StorageKeys.swift:6 / ISSUES.md / ISSUE01.md</span></div>
+      <div class="option-grid" data-question="Q-05">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-05" value="a — 활성 프로젝트만 펼침, 나머지 접힘" data-summary-label="a — 활성 프로젝트만 펼침, 나머지 접힘" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 활성만 펼침 <span class="badge badge-rec">권장</span></div>
+          <p>두 요구를 동시에 만족합니다. 활성 프로젝트는 항상 펼쳐 Cmd 오버레이가 보이고, 나머지는 접혀 목록이 짧게 유지됩니다.</p>
+          <span class="impl">구현: 펼침 상태를 <code>selectedProjectID</code>에서 파생. <code>expandedProjectIDs</code>는 수동 오버라이드용으로만 사용하거나 삭제.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-05" value="b — 사용자 수동 접기 상태 영속화" data-summary-label="b — 사용자 수동 접기 상태 영속화">
+          <div class="opt-label">b — 수동 접기 영속화</div>
+          <p>사용자 통제권이 크지만, 활성 프로젝트를 접어둔 상태에서 Cmd 오버레이가 안 보이는 기존 불만이 재발합니다.</p>
+          <span class="impl">구현: <code>expandedProjectIDs</code> 활성화 + 토글 UI.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-05" value="c — 항상 전부 펼침" data-summary-label="c — 항상 전부 펼침">
+          <div class="opt-label">c — 항상 전부 펼침</div>
+          <p>상태가 없어 가장 단순하지만 프로젝트 8개 × 워크트리 2~3개면 사이드바가 20행을 넘습니다.</p>
+          <span class="impl">구현: 접기 로직 없음.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-05">대안제시</label>
+        <textarea id="alt-Q-05" data-alt-for="Q-05" placeholder="예: 워크트리 2개 이하 프로젝트는 접기 없이 항상 펼침"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-06 -->
+    <div class="dp-section" id="dp-q06">
+      <div class="dp-title">
+        <span class="dp-tag">Q-06</span>
+        탭이 0개인 워크트리를 표시할 것인가
+      </div>
+      <p>현재 <code>groupSessions</code>는 탭이 없는 워크트리도 빈 워크스페이스로 반환합니다. 이걸 UI에 그대로 노출할지 정해야 합니다.</p>
+      <div class="info-box"><strong>근거:</strong> <code>worktrees.map { ... sessions: buckets[wt.path] ?? [] }</code> — 워크트리 목록을 그대로 매핑하므로 빈 워크트리도 항상 포함됩니다. <span class="evidence">ProjectViewData.swift:199-207</span></div>
+      <div class="option-grid" data-question="Q-06">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-06" value="a — 항상 표시 (클릭 시 새 탭 생성)" data-summary-label="a — 항상 표시 (클릭 시 새 탭 생성)" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 항상 표시 <span class="badge badge-rec">권장</span></div>
+          <p>워크트리는 "자리"이므로 탭 유무와 무관하게 존재해야 합니다. 빈 워크트리를 클릭하면 거기서 새 탭을 여는 자연스러운 진입점이 됩니다.</p>
+          <span class="impl">구현: 모델 변경 없음. 빈 행 클릭 시 <code>newSession(inWorkspacePath:)</code> 호출.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-06" value="b — 탭이 있는 워크트리만 표시" data-summary-label="b — 탭이 있는 워크트리만 표시">
+          <div class="opt-label">b — 탭 있는 것만</div>
+          <p>목록이 짧아지지만 워크트리를 만들어놓고 탭을 닫으면 사이드바에서 사라져 "어디 갔지"가 됩니다.</p>
+          <span class="impl">구현: 렌더링 시 <code>sessions.isEmpty</code> 필터.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-06" value="c — 흐리게 표시" data-summary-label="c — 흐리게 표시">
+          <div class="opt-label">c — 흐리게 표시</div>
+          <p>존재는 알리되 시각적 무게를 줄입니다. 상태 표현이 하나 늘어납니다.</p>
+          <span class="impl">구현: 빈 워크트리에 <code>.opacity</code> 또는 별도 dot 상태.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-06">대안제시</label>
+        <textarea id="alt-Q-06" data-alt-for="Q-06" placeholder="예: 빈 워크트리는 흐리게 + 정리 버튼을 hover 시 노출"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-07 -->
+    <div class="dp-section" id="dp-q07">
+      <div class="dp-title">
+        <span class="dp-tag">Q-07</span>
+        탭 제목 기본값
+      </div>
+      <p>현재 워크트리로 연 탭도 제목이 <code>Terminal</code> 고정이라, 탭바만 봐서는 어느 워크트리인지 알 수 없습니다.</p>
+      <div class="warning-box"><strong>근거:</strong> <code>addWorktree</code>가 <code>newSession(inWorkspacePath:)</code>를 호출하고, 거기서 제목이 <code>"Terminal"</code>로 하드코딩됩니다. <span class="evidence">AppModel.swift:506, 636-648</span></div>
+      <div class="option-grid" data-question="Q-07">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-07" value="a — 브랜치명을 기본 제목으로" data-summary-label="a — 브랜치명을 기본 제목으로" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 브랜치명 <span class="badge badge-rec">권장</span></div>
+          <p>Q-01을 무엇으로 정하든 즉시 이득이고 되돌리기 쉽습니다. 이름 변경 기능(<code>renameSession</code>)이 이미 있어 사용자가 덮어쓸 수 있습니다.</p>
+          <span class="impl">구현: <code>newSession</code>에서 워크스페이스의 브랜치를 제목으로. 메인 워크트리는 <code>Terminal</code> 유지 가능.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-07" value="b — Terminal 유지, 그룹 라벨로만 구분" data-summary-label="b — Terminal 유지, 그룹 라벨로만 구분">
+          <div class="opt-label">b — Terminal 유지</div>
+          <p>Q-02를 "활성 워크트리만"으로 정하면 탭바에 한 워크트리 것만 남으므로 제목 중복이 덜 문제됩니다.</p>
+          <span class="impl">구현: 변경 없음. Q-02=a에 종속.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-07" value="c — 브랜치 + 순번" data-summary-label="c — 브랜치 + 순번">
+          <div class="opt-label">c — 브랜치 + 순번</div>
+          <p>같은 워크트리에 탭이 여러 개일 때 구분됩니다. 대신 제목이 길어져 탭 폭을 먹습니다.</p>
+          <span class="impl">구현: <code>feat-auth 2</code> 형태 생성 로직 + 탭 닫힘 시 번호 재계산 정책 필요.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-07">대안제시</label>
+        <textarea id="alt-Q-07" data-alt-for="Q-07" placeholder="예: 메인 워크트리는 Terminal, 나머지는 브랜치명"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-08 -->
+    <div class="dp-section" id="dp-q08">
+      <div class="dp-title">
+        <span class="dp-tag">Q-08</span>
+        사라진 워크트리에 속한 탭 처리
+      </div>
+      <p>워크트리를 지우거나 경로가 바뀌면 그 탭들의 <code>workspace_path</code>가 아무 워크트리와도 매칭되지 않습니다. 현재는 조용히 메인 워크트리로 흡수됩니다.</p>
+      <div class="warning-box"><strong>파생 상태 위험:</strong> 소속이 <strong>경로</strong>로 저장되고 매칭도 경로 동일성입니다. 같은 브랜치로 워크트리를 재생성하면 id 4자리가 달라져 매칭이 깨집니다. 현재 폴백 동작은 테스트로 고정돼 있습니다. <span class="evidence">ProjectViewData.swift:186-196 / WorkspaceSelectionTests.swift:367</span></div>
+      <div class="option-grid" data-question="Q-08">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-08" value="a — 메인으로 폴백 유지 (현행)" data-summary-label="a — 메인으로 폴백 유지 (현행)" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 현행 폴백 유지 <span class="badge badge-rec">권장</span></div>
+          <p>탭이 사라지지 않고 항상 어딘가에서 접근 가능합니다. 이미 구현·테스트되어 있어 추가 비용이 0입니다.</p>
+          <span class="impl">구현: 변경 없음. Q-11에서 삭제 UI를 만들 때 "탭도 함께 닫음"을 명시하면 혼란이 줄어듦.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-08" value="b — orphaned 그룹으로 분리 표시" data-summary-label="b — orphaned 그룹으로 분리 표시">
+          <div class="opt-label">b — orphaned 그룹 분리</div>
+          <p>무슨 일이 일어났는지 명확해지지만 UI 상태가 하나 늘고, 정리 동선까지 설계해야 합니다.</p>
+          <span class="impl">구현: <code>groupSessions</code>에 orphan 버킷 추가 + 사이드바 특수 행.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-08" value="c — 탭 자동 닫기" data-summary-label="c — 탭 자동 닫기">
+          <div class="opt-label">c — 탭 자동 닫기</div>
+          <p>정리는 되지만 살아있는 셸을 사용자 동의 없이 죽입니다. 워크트리 경로만 바뀐 경우에도 발동해 위험합니다.</p>
+          <span class="impl">구현: 매칭 실패 시 <code>closeSession</code>. <strong>비권장</strong> — 데이터 손실 가능.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-08">대안제시</label>
+        <textarea id="alt-Q-08" data-alt-for="Q-08" placeholder="예: 메인으로 폴백하되 탭에 '원래 워크트리 없음' 표식"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-09 -->
+    <div class="dp-section" id="dp-q09">
+      <div class="dp-title">
+        <span class="dp-tag">Q-09</span>
+        워크트리 캐시 미스 시 구조 깜빡임
+      </div>
+      <p>캐시가 비어 있으면 워크트리가 여러 개인 프로젝트도 합성 워크스페이스 1개로 접혔다가, 로드 후 여러 개로 갈라집니다. 트리 UI에서는 이 깜빡임이 눈에 띕니다.</p>
+      <div class="warning-box"><strong>근거:</strong> <code>worktrees(for:)</code>는 <code>cache[projectPath]?.worktrees</code>로 미스 시 nil. <code>selectProject</code>는 await 후 호출하지만 <code>newSession</code>·<code>addWorktree</code>·<code>sessionDidReportCwd</code>는 캐시를 그대로 씁니다. <span class="evidence">GitWorktreeService.swift:43-45 / AppModel.swift:163-169, 206</span></div>
+      <div class="option-grid" data-question="Q-09">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-09" value="a — 이전 구조 유지 (낙관적)" data-summary-label="a — 이전 구조 유지 (낙관적)" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 이전 구조 유지 <span class="badge badge-rec">권장</span></div>
+          <p>캐시 미스 시 워크스페이스를 재계산하지 않고 직전 구조를 유지합니다. 깜빡임이 사라지고 사용자 눈에는 안정적입니다.</p>
+          <span class="impl">구현: <code>recomputeWorkspaces()</code>에서 <code>worktrees == nil &amp;&amp; !workspaces.isEmpty</code>면 조기 반환.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-09" value="b — 로딩 상태 표시" data-summary-label="b — 로딩 상태 표시">
+          <div class="opt-label">b — 로딩 표시</div>
+          <p>정직하지만 사이드바에 스피너가 자주 깜빡여 산만합니다.</p>
+          <span class="impl">구현: 캐시 미스를 로딩으로 구분하는 상태 추가.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-09" value="c — 현행 유지 (접힘 허용)" data-summary-label="c — 현행 유지 (접힘 허용)">
+          <div class="opt-label">c — 현행 유지</div>
+          <p>변경이 없지만 트리에서는 행이 사라졌다 나타나는 것으로 보입니다.</p>
+          <span class="impl">구현: 없음.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-09">대안제시</label>
+        <textarea id="alt-Q-09" data-alt-for="Q-09" placeholder="예: 워크트리 목록을 store에 캐시해 앱 재시작 직후에도 즉시 그림"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-10 -->
+    <div class="dp-section" id="dp-q10">
+      <div class="dp-title">
+        <span class="dp-tag">Q-10</span>
+        앱 밖에서 만든 worktree 취급
+      </div>
+      <p>터미널에서 <code>git worktree add</code>로 만든 워크트리는 <code>&lt;repo&gt;-&lt;branch&gt;-&lt;id&gt;</code> 명명 규칙을 따르지 않습니다.</p>
+      <div class="info-box"><strong>근거:</strong> <code>worktreeID(from:)</code>는 경로 마지막 컴포넌트의 4자리 hex 접미사를 찾고, 없으면 <strong>경로 전체를 ID로</strong> 반환합니다. 목록에는 뜨지만 ID 체계가 다릅니다. 이 동작은 테스트로 고정돼 있습니다. <span class="evidence">GitWorktreeService.swift:178-188 / WorkspaceSelectionTests.swift:154</span></div>
+      <div class="option-grid" data-question="Q-10">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-10" value="a — 동등하게 표시 (현행)" data-summary-label="a — 동등하게 표시 (현행)" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 동등하게 표시 <span class="badge badge-rec">권장</span></div>
+          <p><code>git worktree list</code> 결과를 그대로 신뢰합니다. 앱이 만든 것과 밖에서 만든 것을 구분하지 않는 게 사용자 기대에 가깝습니다.</p>
+          <span class="impl">구현: 변경 없음. 표시 이름은 브랜치명을 쓰므로 명명 규칙과 무관.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-10" value="b — 앱 생성 워크트리만 표시" data-summary-label="b — 앱 생성 워크트리만 표시">
+          <div class="opt-label">b — 앱 생성분만</div>
+          <p>ID 체계가 일관되지만, 사용자가 밖에서 만든 워크트리가 안 보여 "왜 없지"가 됩니다.</p>
+          <span class="impl">구현: 명명 규칙 매칭 필터 추가.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-10" value="c — 별도 섹션 + 입양 액션" data-summary-label="c — 별도 섹션 + 입양 액션">
+          <div class="opt-label">c — 별도 섹션 + 입양</div>
+          <p>명시적이지만 "입양"이 실제로 무엇을 바꾸는지(경로 이동?) 정의해야 하고 파괴적 조작이 됩니다.</p>
+          <span class="impl">구현: 범위 확대. 이번 슬라이스에서는 <strong>NO-GO</strong>.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-10">대안제시</label>
+        <textarea id="alt-Q-10" data-alt-for="Q-10" placeholder="예: 동등 표시하되 앱 생성분만 삭제 액션 허용"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-11 -->
+    <div class="dp-section" id="dp-q11">
+      <div class="dp-title">
+        <span class="dp-tag">Q-11</span>
+        워크트리 삭제 진입점
+        <span class="badge badge-open">현재 도달 불가</span>
+      </div>
+      <p><code>removeWorktree(path:)</code>는 구현되어 있고 세션 정리 로직까지 있지만 <strong>UI에서 호출하는 곳이 없습니다.</strong> 앱으로 만든 워크트리를 앱으로 지울 수 없습니다.</p>
+      <div class="danger-box"><strong>파괴성 경고:</strong> <code>git worktree remove</code>는 디스크의 작업 트리를 삭제합니다. 커밋되지 않은 변경이 있으면 유실될 수 있습니다. 어떤 진입점을 고르든 <strong>확인 대화상자와 미커밋 변경 감지</strong>가 함께 가야 합니다. <span class="evidence">GitWorktreeService.swift:198-200 / AppModel.swift:651-</span></div>
+      <div class="option-grid" data-question="Q-11">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-11" value="a — 사이드바 워크트리 행 컨텍스트 메뉴 (별도 슬라이스)" data-summary-label="a — 사이드바 워크트리 행 컨텍스트 메뉴 (별도 슬라이스)" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 사이드바 컨텍스트 메뉴 <span class="badge badge-rec">권장</span></div>
+          <p>Q-01=A를 고르면 워크트리 행이 자연스러운 우클릭 대상이 됩니다. 단, 확인 대화상자와 함께 <strong>2차 슬라이스</strong>로 분리합니다.</p>
+          <span class="impl">구현: 트리 행에 <code>.contextMenu</code> + confirmation + 미커밋 변경 시 경고.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-11" value="b — 이번 범위에서 제외 (죽은 코드로 명시)" data-summary-label="b — 이번 범위에서 제외 (죽은 코드로 명시)">
+          <div class="opt-label">b — 이번 범위 제외</div>
+          <p>표시 구조에만 집중하고 파괴적 조작은 나중에. 대신 도달 불가 상태가 유지되므로 Known Issues에 명시해야 합니다.</p>
+          <span class="impl">구현: 없음 + 문서화.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-11" value="c — Settings에 워크트리 관리 화면" data-summary-label="c — Settings에 워크트리 관리 화면">
+          <div class="opt-label">c — Settings 관리 화면</div>
+          <p>파괴적 조작을 설정 안에 격리해 오조작 위험이 낮습니다. 대신 동선이 멀고 화면을 새로 만들어야 합니다.</p>
+          <span class="impl">구현: SettingsView에 워크트리 목록 + 삭제.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-11">대안제시</label>
+        <textarea id="alt-Q-11" data-alt-for="Q-11" placeholder="예: 삭제 대신 '목록에서 숨기기'만 제공하고 실제 삭제는 터미널로 유도"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-12 -->
+    <div class="dp-section" id="dp-q12">
+      <div class="dp-title">
+        <span class="dp-tag">Q-12</span>
+        SSH·비-git 프로젝트의 합성 워크스페이스 노출
+      </div>
+      <p>SSH 프로젝트는 경로가 <code>ssh://</code> URI라 워크트리 조회가 항상 nil이고, 비-git 폴더도 마찬가지입니다. 이때 <code>branch: "default"</code>인 합성 워크스페이스가 하나 생깁니다.</p>
+      <div class="info-box"><strong>근거:</strong> <code>groupSessions</code>의 guard 분기가 <code>path: projectPath, branch: "default"</code>로 워크스페이스를 합성합니다. 트리에 그대로 그리면 <code>default</code>라는 의미 없는 자식 행이 생깁니다. <span class="evidence">ProjectViewData.swift:167-176</span></div>
+      <div class="option-grid" data-question="Q-12">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-12" value="a — 워크트리가 2개 미만이면 자식 행 숨김" data-summary-label="a — 워크트리가 2개 미만이면 자식 행 숨김" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 2개 미만이면 자식 숨김 <span class="badge badge-rec">권장</span></div>
+          <p>SSH·비-git·단일 워크트리 프로젝트는 지금과 똑같이 평면으로 보입니다. 트리는 실제로 갈래가 있을 때만 나타납니다.</p>
+          <span class="impl">구현: 렌더링 조건 <code>workspaces.count > 1</code>. 모델 변경 없음.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-12" value="b — 항상 자식 행 표시" data-summary-label="b — 항상 자식 행 표시">
+          <div class="opt-label">b — 항상 표시</div>
+          <p>구조가 일관되지만 대부분의 프로젝트에서 의미 없는 <code>default</code> 행이 하나씩 늘어납니다.</p>
+          <span class="impl">구현: 조건 없음. 사이드바 행 수가 거의 2배.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-12">대안제시</label>
+        <textarea id="alt-Q-12" data-alt-for="Q-12" placeholder="예: 합성 워크스페이스는 브랜치명 대신 프로젝트명을 그대로 표시"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-13 -->
+    <div class="dp-section" id="dp-q13">
+      <div class="dp-title">
+        <span class="dp-tag">Q-13</span>
+        Cmd+1~9 매핑
+      </div>
+      <p>현재 <code>Cmd+1~9</code>는 프로젝트 전환이고, Cmd 홀드 시 사이드바에 번호 오버레이가 뜹니다. 계층이 하나 늘면 이 단축키가 무엇을 가리키는지 모호해집니다.</p>
+      <div class="info-box"><strong>근거:</strong> <code>ForEach(model.orderedProjects.prefix(9))</code>에 <code>.keyboardShortcut(Character("\(index+1)"), .command)</code>. 오버레이 인덱스도 <code>model.orderedProjects</code> 기준입니다. <span class="evidence">CodeSparkApp.swift:136-141 / SidebarView.swift:40</span></div>
+      <div class="option-grid" data-question="Q-13">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-13" value="a — 프로젝트 유지 (워크트리는 별도 단축키)" data-summary-label="a — 프로젝트 유지 (워크트리는 별도 단축키)" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 프로젝트 유지 <span class="badge badge-rec">권장</span></div>
+          <p>기존 근육 기억을 지킵니다. 워크트리 전환은 Q-04의 순환 단축키로 분리해 충돌이 없습니다.</p>
+          <span class="impl">구현: 변경 없음 + Q-04 단축키 추가.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-13" value="b — 보이는 행 순서대로 재매핑" data-summary-label="b — 보이는 행 순서대로 재매핑">
+          <div class="opt-label">b — 보이는 행 순서대로</div>
+          <p>오버레이 번호와 실제 행이 항상 일치합니다. 대신 워크트리를 펼치고 접을 때마다 번호가 바뀌어 기억이 안 됩니다.</p>
+          <span class="impl">구현: 인덱스 계산을 평탄화된 트리 행 기준으로 변경.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-13" value="c — Cmd+숫자=프로젝트, Cmd+Shift+숫자=워크트리" data-summary-label="c — Cmd+숫자=프로젝트, Cmd+Shift+숫자=워크트리">
+          <div class="opt-label">c — 계층별 수식어 분리</div>
+          <p>둘 다 직접 접근 가능하지만 <code>Cmd+Shift+숫자</code>가 다른 단축키와 충돌할 수 있어 확인이 필요합니다.</p>
+          <span class="impl">구현: 두 번째 <code>CommandGroup</code> 추가 + 충돌 검사.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-13">대안제시</label>
+        <textarea id="alt-Q-13" data-alt-for="Q-13" placeholder="예: Cmd 홀드 오버레이에 워크트리는 번호 대신 브랜치 첫 글자 표시"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-14 -->
+    <div class="dp-section" id="dp-q14">
+      <div class="dp-title">
+        <span class="dp-tag">Q-14</span>
+        죽은 코드 <code>SessionSidebarRow</code> 처리
+      </div>
+      <p>사이드바에 세션 행을 그리려던 컴포넌트가 남아 있지만 아무도 쓰지 않습니다. 이름 인라인 편집까지 구현돼 있습니다.</p>
+      <div class="info-box"><strong>근거:</strong> <code>grep -rn "SessionSidebarRow"</code> 결과가 정의 1곳뿐입니다. 프로젝트 파일에는 등록되어 있어 매 빌드마다 컴파일됩니다. <span class="evidence">Views/SessionSidebarRow.swift:3</span></div>
+      <div class="option-grid" data-question="Q-14">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-14" value="a — Q-01=A면 트리 행으로 재사용, 아니면 삭제" data-summary-label="a — Q-01=A면 트리 행으로 재사용, 아니면 삭제" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 조건부 재사용 <span class="badge badge-rec">권장</span></div>
+          <p>트리를 만들면 dot/이름/인라인 편집이 그대로 쓰입니다. 다른 안을 고르면 미련 없이 삭제합니다.</p>
+          <span class="impl">구현: Q-01 결과에 종속. 재사용 시 세션 행 → 워크트리 행으로 의미 조정.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-14" value="b — 지금 바로 삭제" data-summary-label="b — 지금 바로 삭제">
+          <div class="opt-label">b — 지금 삭제</div>
+          <p>죽은 코드를 즉시 제거해 혼란을 없앱니다. 나중에 필요하면 git 히스토리에서 되살릴 수 있습니다.</p>
+          <span class="impl">구현: 파일 삭제 + pbxproj 항목 제거.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-14" value="c — 그대로 둠" data-summary-label="c — 그대로 둠">
+          <div class="opt-label">c — 그대로 둠</div>
+          <p>아무 작업이 없지만 다음 사람이 또 "이건 어디서 쓰지?"를 반복합니다.</p>
+          <span class="impl">구현: 없음.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-14">대안제시</label>
+        <textarea id="alt-Q-14" data-alt-for="Q-14" placeholder="예: 삭제하되 커밋 메시지에 복원 지점 명시"></textarea>
+      </div>
+    </div>
+
+    <!-- Q-15 -->
+    <div class="dp-section" id="dp-q15">
+      <div class="dp-title">
+        <span class="dp-tag">Q-15</span>
+        1차 구현 범위 (슬라이스 경계)
+      </div>
+      <p>어디까지를 한 번에 낼지 정합니다. 표시 변경과 스코프 변경은 되돌리기 비용이 다릅니다.</p>
+      <div class="danger-box"><strong>NO-GO 재확인:</strong> 탭바 스코프 변경(Q-02=a)과 파괴적 git 조작(Q-11=a)을 1차에 함께 넣지 않습니다. 전자는 "탭이 사라졌다"는 인상을 주고 후자는 파일을 지웁니다. 둘이 같은 릴리스에 들어가면 문제 원인 분리가 어렵습니다.</div>
+      <div class="option-grid" data-question="Q-15">
+        <label class="option-card recommended selected">
+          <input type="radio" name="Q-15" value="a — 1차: 표시 계층 + 탭 제목만" data-summary-label="a — 1차: 표시 계층 + 탭 제목만" data-recommended="true" checked>
+          <div class="opt-label">a (권장) — 표시 + 제목만 <span class="badge badge-rec">권장</span></div>
+          <p>읽기 전용 변경이라 저장 스키마·git 조작을 건드리지 않습니다. 구조가 마음에 드는지 먼저 확인한 뒤 스코프를 바꿉니다.</p>
+          <span class="impl">범위: Q-01 + Q-07 + Q-12(숨김 조건). 탭바 스코프는 그대로 두고 2차에서.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-15" value="b — 1차에 탭바 스코프까지 포함" data-summary-label="b — 1차에 탭바 스코프까지 포함">
+          <div class="opt-label">b — 스코프까지 포함</div>
+          <p>"관리 편함"을 한 번에 체감할 수 있지만, 구조와 스코프 중 무엇이 어색한지 분리 판단이 어렵습니다.</p>
+          <span class="impl">범위: Q-01 + Q-02 + Q-04 + Q-07. baseline 테스트 선행 필수.</span>
+        </label>
+        <label class="option-card">
+          <input type="radio" name="Q-15" value="c — 전부 한 번에" data-summary-label="c — 전부 한 번에">
+          <div class="opt-label">c — 전부 한 번에</div>
+          <p>왕복이 없지만 삭제 UI까지 포함되어 되돌리기 비용이 가장 큽니다.</p>
+          <span class="impl">범위: 15개 카드 전부. <strong>비권장</strong>.</span>
+        </label>
+      </div>
+      <div class="alt-field">
+        <label for="alt-Q-15">대안제시</label>
+        <textarea id="alt-Q-15" data-alt-for="Q-15" placeholder="예: 1차를 로컬 dev 빌드로만 써보고 릴리스는 2차 이후"></textarea>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-risks">
+    <h2>Cross-Cutting Risks and Open Items</h2>
+
+    <h3>여러 카드에 걸친 위험</h3>
+    <ul>
+      <li><strong>소속 키가 경로라는 구조적 취약점 (Q-08, Q-10, Q-11):</strong> 워크트리를 지웠다 다시 만들면 탭들이 조용히 메인으로 흡수됩니다. 삭제 UI(Q-11)를 만들면 이 경로가 훨씬 자주 밟히므로, 삭제 시 소속 탭 처리를 명시적으로 정해야 합니다.</li>
+      <li><strong>캐시 미스로 인한 구조 흔들림 (Q-01, Q-09):</strong> 트리를 고르면 지금은 안 보이던 접힘/펼침 깜빡임이 사용자 눈에 들어옵니다. Q-09를 "현행 유지"로 두면 Q-01=A의 체감 품질이 떨어집니다.</li>
+      <li><strong>ISSUES.md 기존 요구와의 상호작용 (Q-05):</strong> "inactive 축약"과 "active는 항상 펼침"은 같은 화면을 두고 경쟁합니다. 워크트리 자식 행이 추가되면 압력이 더 커집니다.</li>
+      <li><strong>파괴적 조작 (Q-11):</strong> 이번 결정에는 보안/자격증명 수명주기 분기가 없지만, <code>git worktree remove</code>가 그 자리를 대신하는 되돌릴 수 없는 동작입니다. 확인 대화상자, 미커밋 변경 감지, 소속 탭 종료 고지가 롤아웃 전 필수입니다.</li>
+    </ul>
+
+    <h3>부족한 근거 / 확인이 필요한 것</h3>
+    <ul>
+      <li><strong>orca의 실제 동작:</strong> 워크트리를 선택하면 탭이 필터링되는지, 아니면 워크트리 자체가 탭 없이 터미널 하나였는지 확인되지 않았습니다. Q-02의 판단 근거가 여기에 걸려 있습니다.</li>
+      <li><strong>실사용 워크트리 개수 분포:</strong> 프로젝트당 워크트리가 보통 2~3개인지 10개 이상인지에 따라 Q-03(폭)과 Q-05(접기)의 답이 달라집니다.</li>
+      <li><strong>빈 워크트리 발생 빈도:</strong> Q-06의 무게가 여기에 달려 있습니다.</li>
+    </ul>
+
+    <h3>롤아웃 전 남는 의무</h3>
+    <ul>
+      <li>Q-02를 <code>a</code>로 정하면 <em>"탭바에 보이는 세션 집합이 <code>activeWorkspacePath</code>를 따른다"</em> baseline 테스트를 <strong>구현 전에</strong> 추가합니다. 현재 전환 시맨틱만 테스트되고 가시성은 테스트되지 않습니다.</li>
+      <li>Q-11을 진행하면 <code>removeWorktree</code> 경로에 미커밋 변경 감지 테스트를 추가합니다. 현재 이 함수는 UI 호출자가 없어 통합 검증이 전혀 없습니다.</li>
+      <li>Q-01=A + Q-12=a 조합은 "워크트리 1개 프로젝트의 사이드바가 지금과 동일하게 보인다"는 회귀 테스트가 필요합니다. 대부분의 프로젝트가 이 경로입니다.</li>
+    </ul>
+
+    <div class="warning-box"><strong>스펙 동결을 막는 요소:</strong> Q-01과 Q-02가 미결이면 나머지 13개 카드의 구현 방향이 확정되지 않습니다. 이 둘만 먼저 정해도 Q-15의 1차 슬라이스를 시작할 수 있습니다.</div>
+  </section>
+
+  <section id="sec-summary">
+    <h2>Decision Summary Generator</h2>
+    <p>선택한 옵션, authored recommendation, 대안제시를 모아 Claude Code CLI에 붙여넣을 결정사항 텍스트를 생성합니다.</p>
+    <div class="reply-template">
+      <div class="actions">
+        <button class="primary" id="generateReply">복붙 텍스트 생성</button>
+        <button id="copyReply">클립보드 복사</button>
+      </div>
+      <pre id="replyOutput">아직 생성되지 않음</pre>
+    </div>
+  </section>
+
+</div><!-- .page-wrap -->
+
+<script>
+  function refreshOptionGroup(name) {
+    document.querySelectorAll(`input[name="${name}"]`).forEach(input => {
+      const card = input.closest('.option-card');
+      if (!card) return;
+      card.classList.toggle('selected', input.checked);
+    });
+  }
+
+  document.querySelectorAll('.option-card input[type="radio"]').forEach(input => {
+    input.addEventListener('change', () => refreshOptionGroup(input.name));
+    refreshOptionGroup(input.name);
+  });
+
+  document.querySelectorAll('.option-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const input = card.querySelector('input[type="radio"]');
+      if (!input) return;
+      input.checked = true;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+
+  const labels = {
+    'Q-01': 'worktree 표시 계층',
+    'Q-02': '탭바 스코프 — 활성 워크트리만 vs 전체',
+    'Q-03': '사이드바 폭 처리',
+    'Q-04': '사이드바를 숨겼을 때의 워크트리 전환 수단',
+    'Q-05': '접기 기본값과 inactive 축약 정책',
+    'Q-06': '탭이 0개인 워크트리를 표시할 것인가',
+    'Q-07': '탭 제목 기본값',
+    'Q-08': '사라진 워크트리에 속한 탭 처리',
+    'Q-09': '워크트리 캐시 미스 시 구조 깜빡임',
+    'Q-10': '앱 밖에서 만든 worktree 취급',
+    'Q-11': '워크트리 삭제 진입점',
+    'Q-12': 'SSH·비-git 프로젝트의 합성 워크스페이스 노출',
+    'Q-13': 'Cmd+1~9 매핑',
+    'Q-14': '죽은 코드 SessionSidebarRow 처리',
+    'Q-15': '1차 구현 범위 (슬라이스 경계)'
+  };
+
+  function selected(name) {
+    const input = document.querySelector(`input[name="${name}"]:checked`);
+    return input ? (input.dataset.summaryLabel || input.value) : '미결정';
+  }
+
+  function recommended(name) {
+    const input = document.querySelector(`input[name="${name}"][data-recommended="true"]`);
+    return input ? (input.dataset.summaryLabel || input.value) : '없음';
+  }
+
+  function alt(name) {
+    const el = document.querySelector(`[data-alt-for="${name}"]`);
+    return el && el.value.trim() ? el.value.trim() : '없음';
+  }
+
+  function buildReply() {
+    const names = Object.keys(labels);
+    const answered = names.filter(name => document.querySelector(`input[name="${name}"]:checked`)).length;
+    const unanswered = names.length - answered;
+    const lines = [];
+    lines.push('Worksheet');
+    lines.push('- path: docs/pre-decisions/2026-08-06-worktree-sidebar-presentation-v1.html');
+    lines.push('- title: CodeSpark worktree 표시 구조 — 결정 워크시트');
+    lines.push('- date: 2026-08-06');
+    lines.push('- version: v1');
+    lines.push('');
+    lines.push('Status');
+    lines.push(`- answered cards: ${answered}, unanswered cards: ${unanswered}, deferred cards: 0`);
+    lines.push('');
+    lines.push('Recommended direction');
+    lines.push('- 사이드바를 프로젝트 > 워크트리 트리로 만들고, 워크트리가 2개 미만인 프로젝트는 지금과 동일한 평면으로 유지한다.');
+    lines.push('- 1차 슬라이스는 표시 계층과 탭 제목(브랜치명)까지만 낸다. 탭바 스코프 변경과 워크트리 삭제 UI는 2차로 분리한다.');
+    lines.push('- 사라진 워크트리의 탭은 현행대로 메인으로 폴백하고, 삭제 UI를 만들 때 소속 탭 처리를 명시한다.');
+    lines.push('');
+    lines.push('Decision log');
+    names.forEach(name => {
+      lines.push(`- ${name} — ${labels[name]}`);
+      lines.push(`  - 선택: ${selected(name)}`);
+      lines.push(`  - 권장: ${recommended(name)}`);
+      lines.push(`  - 대안제시: ${alt(name)}`);
+    });
+    lines.push('');
+    lines.push('Open follow-ups');
+    lines.push('- orca에서 워크트리 선택 시 탭이 필터링되는지 확인한다. Q-02의 판단 근거가 여기에 걸려 있다.');
+    lines.push('- 프로젝트당 실제 워크트리 개수 분포를 확인해 Q-03(폭)과 Q-05(접기) 답을 검증한다.');
+    lines.push('- Q-02를 a로 정하면 "탭바 가시성이 activeWorkspacePath를 따른다" baseline 테스트를 구현 전에 추가한다.');
+    lines.push('- Q-11 진행 시 removeWorktree에 미커밋 변경 감지와 확인 대화상자를 함께 넣고 통합 테스트를 추가한다.');
+    lines.push('- 워크트리 1개 프로젝트의 사이드바가 현행과 동일하게 보이는지 회귀 테스트로 고정한다.');
+    return lines.join('\n');
+  }
+
+  const output = document.getElementById('replyOutput');
+  document.getElementById('generateReply').addEventListener('click', () => {
+    output.textContent = buildReply();
+  });
+  document.getElementById('copyReply').addEventListener('click', async () => {
+    const text = output.textContent === '아직 생성되지 않음' ? buildReply() : output.textContent;
+    output.textContent = text;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (_) {
+      const range = document.createRange();
+      range.selectNodeContents(output);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.execCommand('copy');
+      sel.removeAllRanges();
+    }
+  });
+</script>
+</body>
+</html>
