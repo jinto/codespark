@@ -166,7 +166,10 @@ Process detection + screen parsing replaces the old hook system:
 - **워크스페이스 소속**: 세션 행의 `workspace_path`에 생성 시점 고정. `cd`로 탭이 사이드바에서 이동하면 안 된다. 빈 값(컬럼 이전 행)만 `last_cwd` 기반 매칭으로 폴백 — 이 판정이 `SessionViewData.belongs(to:)` 하나에 모여 있고, 그룹핑과 **워크트리 삭제가 같은 걸 써야 한다**. 삭제를 cwd로 판정하면 밖으로 `cd`한 탭이 살아남고 남의 워크트리 방문객이 대신 닫힌다. 복원이 `workspaceSelectedSessions`에 쓰는 키도 **`workspace_path`다** — `last_cwd`로 쓰면 워크트리 안쪽 디렉터리에서 끝난 탭이 어떤 워크스페이스도 답하지 않는 키에 기억된다.
 - **종료**: `saveAllSessionsForRestore()`는 최종 스냅샷만 저장하고 **세션을 닫지 않는다**. 행이 `live`로 남아야 다음 실행의 `reconcileInterruptedSessions()`가 `interrupted`로 전환하고, 복원은 그걸 읽는다. 여기서 닫으면 복원이 종료 타이밍에 좌우되는 복불복이 된다.
 - **시작**: `load()`가 자동 복원한다. 각 탭은 자기 `last_cwd`로, SSH는 `remotePath`를 통한 `cd` 주입으로 돌아간다.
-- **중복 방지 (중요)**: 복원한 `interrupted` 행은 `consumeInterruptedSession`으로 즉시 닫는다. 안 그러면 다음 실행에서 그 행이 자기 대체 세션과 **함께** 복원돼 탭이 매번 2배가 된다. 또 `reconcileInterruptedSessions`는 시작 시 남아 있던 `interrupted` 행을 먼저 폐기한다 — 그래야 복원 대상이 "직전 실행의 탭"으로 한정된다.
+- **폐기는 한 세대 뒤에**: `reconcileInterruptedSessions`가 시작 시 남아 있던 `interrupted` 행을 폐기하는데, **전부가 아니라 최신 세대를 뺀 나머지**다. 한 번의 reconcile이 `now()` 하나로 그 실행의 탭 전부를 찍으므로 `updated_at`이 곧 세대 번호다.
+  - **왜**: 복원은 탭마다 왕복 하나(원격이면 접속까지)라 느리고, 행은 하나씩 `interrupted`에서 빠진다. 중간에 죽으면 나머지가 남는데, 예전에는 다음 실행이 **읽기 전에 전부 닫았다** — 아직 안 돌아온 탭이 조용히 영구 삭제됐다. "복원 안 한 것"과 "복원 중에 죽은 것"은 데이터상 구분되지 않으므로, 추측으로 지우는 대신 한 세대 더 남긴다.
+  - **대가**: 다시 안 여는 프로젝트는 탭을 한 번 더 제안받는다. 누적은 여전히 **두 세대로 경계**가 있다.
+- **중복 방지 (중요)**: 복원한 `interrupted` 행은 `consumeInterruptedSession`으로 즉시 닫는다. 안 그러면 다음 실행에서 그 행이 자기 대체 세션과 **함께** 복원돼 탭이 매번 2배가 된다. 폐기 규칙은 위 "폐기는 한 세대 뒤에" 참고.
 - **복원은 진행을 말한다**: 탭마다 왕복이 한 번이고 ssh면 그 위에 원격 접속이 얹히므로, 복원은 눈에 보일 만큼 걸린다. `AppModel.restoreProgress`(nil = 복원 중 아님)가 `completed`/`total`을 들고, 아직 아무것도 못 돌려놨으면 화면 전체가, 첫 탭이 돌아온 뒤에는 터미널 위의 띠가 그걸 말한다(`restoreBannerProgress`). 로컬·원격 구분이 없다 — 루프가 구분하지 않으므로.
   - **돌아온 탭이 자리를 갖는다**: 진행 화면이 복원 끝까지 터미널을 덮으면 안 된다. 쓸 수 있게 된 탭은 즉시 화면을 갖고, 남은 것은 띠로 밀려난다.
   - **`ProgressView(value:)`를 쓰지 말 것**: 자기 값을 향해 애니메이션하는데 카운트마다 뷰가 다시 만들어져 **끝내 도달하지 못한다**. 화면에는 "5 of 6" 옆에 텅 빈 바가 떴다. 채워진 길이만큼 직접 그린다(`progressBar`). 숫자를 검사하는 테스트로는 안 보인다 — 숫자는 내내 옳았다.

@@ -1003,8 +1003,19 @@ test "reconcile retires interrupted rows the user never restored" {
     });
     defer std.testing.allocator.free(recent);
 
-    // Run 3 must offer only what run 2 had open — otherwise every abandoned tab
-    // in the store's history piles back onto the screen.
+    // Run 3 offers both. "Never restored" and "the app died before restore got
+    // there" look identical in the data, and the second is a tab the user still
+    // wants — so a generation is kept one launch longer rather than deleted on a
+    // guess. See `retireStaleInterruptedSessions`.
+    try store.reconcileInterruptedSessions();
+    {
+        var detail = try store.projectDetail(std.testing.allocator, project_id);
+        defer detail.deinit(std.testing.allocator);
+        try std.testing.expectEqual(@as(usize, 2), detail.interrupted_sessions.len);
+    }
+
+    // Run 4 drops it. That is the whole point of the retire: the pileup stays
+    // bounded at two generations instead of the store's entire history.
     try store.reconcileInterruptedSessions();
 
     var detail = try store.projectDetail(std.testing.allocator, project_id);
@@ -1325,4 +1336,42 @@ test "a store that fails to migrate closes its handle exactly once" {
     }
 
     try std.testing.expectError(error.InvalidData, core.Store.open(path));
+}
+
+// Restore is slow by design — one round trip per tab, plus an ssh connect for a
+// remote one — and rows leave `interrupted` one at a time as each tab comes
+// back. Kill the app halfway and the remainder is still `interrupted`; the next
+// launch used to retire every one of them before anything read them. Those tabs
+// were gone, silently, and no test saw it because every interrupted-session test
+// here runs a restore to completion.
+test "a crash mid-restore keeps the tabs that had not come back yet" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_id = try store.createProject(std.testing.allocator, "codespark", "/tmp/proj", .local);
+    defer std.testing.allocator.free(project_id);
+
+    var opened: [2][]u8 = undefined;
+    for (&opened, 0..) |*slot, index| {
+        slot.* = try store.startSession(std.testing.allocator, .{
+            .project_id = project_id,
+            .transport = .local,
+            .target_label = "local",
+            .title = if (index == 0) "First" else "Second",
+            .shell = "zsh",
+            .initial_cwd = "/tmp/proj",
+        });
+    }
+    defer for (opened) |id| std.testing.allocator.free(id);
+
+    // Launch 2 reconciles both tabs, restores the first, and dies.
+    try store.reconcileInterruptedSessions();
+    try store.consumeInterruptedSession(opened[0]);
+
+    // Launch 3 must still be able to bring the second one back.
+    try store.reconcileInterruptedSessions();
+
+    var detail = try store.projectDetail(std.testing.allocator, project_id);
+    defer detail.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), detail.interrupted_sessions.len);
+    try std.testing.expectEqualStrings("Second", detail.interrupted_sessions[0].title);
 }

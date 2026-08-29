@@ -1419,6 +1419,123 @@ final class WorkspaceSelectionTests: XCTestCase {
         return model
     }
 
+    // MARK: - A write mid-switch belongs to the project that asked for it
+    //
+    // `selectedProjectID` moves on the click; `selectedProject` arrives a git
+    // round trip later. Three writers read both in the same breath, so during
+    // that window they filed project B's work under project A's identity — and
+    // unlike the sidebar blink, these reach the store and survive a restart.
+    //
+    // The convention that would have caught it already exists and already
+    // failed: four other sites guard correctly and `workspaces(for:)` carries a
+    // paragraph explaining the hazard. A rule this well documented and still
+    // unapplied in three places is a broken mechanism, not carelessness.
+
+    @MainActor
+    private func slowLookupModel(
+        secondProjectPath: String = "/tmp/other",
+        secondTransport: String = "local"
+    ) async -> (AppModel, MockProjectCoreClient) {
+        func summary(id: String, path: String, transport: String) -> ProjectSummaryViewData {
+            ProjectSummaryViewData(id: id, name: id, path: path, transport: transport,
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: [])
+        }
+        let core = MockProjectCoreClient(
+            summaries: [summary(id: "p1", path: Self.mainWorktree, transport: "local"),
+                        summary(id: "p2", path: secondProjectPath, transport: secondTransport)],
+            details: [
+                ProjectDetailViewData(id: "p1", name: "p1", path: Self.mainWorktree,
+                                      transport: "local", liveSessions: []),
+                ProjectDetailViewData(id: "p2", name: "p2", path: secondProjectPath,
+                                      transport: secondTransport, liveSessions: [])
+            ],
+            detailLatencyByID: ["p1": 400_000_000, "p2": 400_000_000]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        return (model, core)
+    }
+
+    /// Cmd+T during the round trip wrote a row saying "project p2" with p1's
+    /// directory in it. Restore then opens that tab under p2, in p1's folder,
+    /// every launch — `groupSessions` has nowhere else to put it.
+    @MainActor
+    func test_a_tab_opened_mid_switch_belongs_to_the_project_that_asked() async {
+        let (model, core) = await slowLookupModel()
+        await model.selectProject(id: "p1")
+
+        let switching = Task { await model.selectProject(id: "p2") }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        await model.newSession()
+        await switching.value
+
+        XCTAssertEqual(core.startedSessions.last?.workspacePath, "/tmp/other",
+                       "the tab was filed under p2 but opened in p1's directory")
+    }
+
+    /// The worst of the three: the transport comes from the *old* project, so
+    /// leaving a local project for an ssh one and asking for an agent opened a
+    /// local shell and recorded it against the remote project.
+    @MainActor
+    func test_an_agent_session_mid_switch_reads_its_own_projects_transport() async {
+        let (model, core) = await slowLookupModel(secondProjectPath: "ssh://box/srv",
+                                                  secondTransport: "ssh")
+        await model.selectProject(id: "p1")
+
+        let switching = Task { await model.selectProject(id: "p2") }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        await model.newAgentSession(.claude)
+        await switching.value
+
+        XCTAssertTrue(core.startedSessions.isEmpty,
+                      "a local agent shell was opened for an ssh project")
+    }
+
+    /// `terminalHostDidClose` calls this, so *any* shell exiting during the
+    /// window stamped the old project's tab list onto the new project's row —
+    /// which is the same field the sidebar reads for every unselected project.
+    ///
+    /// Two tabs, closing one: close the only tab and the list empties, which is
+    /// the right answer for p2 by accident and proves nothing.
+    @MainActor
+    func test_a_tab_dying_mid_switch_does_not_stamp_another_projects_summary() async {
+        var hosts: [MockTerminalHost] = []
+        func summary(id: String, path: String) -> ProjectSummaryViewData {
+            ProjectSummaryViewData(id: id, name: id, path: path, transport: "local",
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: [])
+        }
+        let core = MockProjectCoreClient(
+            summaries: [summary(id: "p1", path: Self.mainWorktree),
+                        summary(id: "p2", path: Self.otherProject)],
+            details: [ProjectDetailViewData(id: "p1", name: "p1", path: Self.mainWorktree,
+                                            transport: "local", liveSessions: []),
+                      ProjectDetailViewData(id: "p2", name: "p2", path: Self.otherProject,
+                                            transport: "local", liveSessions: [])],
+            detailLatencyByID: ["p2": 400_000_000])
+        let model = AppModel(core: core, terminalFactory: { _ in
+            let host = MockTerminalHost(); hosts.append(host); return host
+        })
+        await model.load()
+        await model.selectProject(id: "p1")
+        await model.newSession()
+        await model.newSession()
+        let closing = model.liveSessions[1].id
+
+        let switching = Task { await model.selectProject(id: "p2") }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        hosts[1].finishClose(sessionID: closing, snapshot: .fixture(lines: []), closeReason: .userClosed)
+
+        // Inside the window, not after it: the round trip corrects p2's summary
+        // when it lands, so a test that waits sees only the repair.
+        let p2 = model.projects.first { $0.id == "p2" }!
+        XCTAssertEqual(p2.liveSessions, 0, "p1's tab count landed on p2's row")
+        XCTAssertTrue(p2.liveSessionDetails.isEmpty, "p1's tabs landed on p2's row")
+
+        await switching.value
+    }
+
     /// `selectedProjectID` moves the instant the key is pressed; the worktrees
     /// arrive a git round trip later. In between, `workspaces` still holds the
     /// project you came *from* — and reading it for the one you are going to

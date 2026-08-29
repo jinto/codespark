@@ -665,13 +665,24 @@ final class AppModel: ObservableObject {
     }
 
     func newSession(inWorkspacePath: String? = nil) async {
-        guard let projectID = selectedProjectID else { return }
-        guard let project = selectedProject else { return }
+        // The summary, not `selectedProject`. `selectedProjectID` moves on the
+        // click and the detail lands a git round trip later, so reading both in
+        // one breath filed this tab under the project you were going to with the
+        // path of the one you came from — and `core.startSession` below writes
+        // that row before any guard can catch it. `projects` is keyed by id, so
+        // it cannot disagree with itself.
+        guard let projectID = selectedProjectID,
+              let project = projects.first(where: { $0.id == projectID }) else { return }
 
         let workspacePath: String
         if let explicit = inWorkspacePath {
             workspacePath = explicit
         } else if let active = activeWorkspacePath,
+                  // `activeWorkspacePath` and `workspaces` still describe the
+                  // previous project until `apply(detail:)` runs, and the
+                  // membership check passes against *its* grouping. Only trust
+                  // them once they are this project's.
+                  selectedProject?.id == projectID,
                   workspaces.contains(where: { $0.path == active }) {
             // A new tab belongs to the worktree you are looking at. The
             // membership check keeps a removed worktree from taking the tab
@@ -858,11 +869,16 @@ final class AppModel: ObservableObject {
     }
 
     func newAgentSession(_ agent: AgentKind, resumeID: String? = nil) async {
+        // Same pairing as `newSession`, and the transport made it worse: read
+        // from the project you came from, leaving a local project for an ssh one
+        // opened a local agent shell and recorded it against the remote project.
         guard let projectID = selectedProjectID,
-              let project = selectedProject,
+              let project = projects.first(where: { $0.id == projectID }),
               project.transport == "local" else { return }
 
-        let workspacePath = activeWorkspacePath ?? project.path
+        let workspacePath = selectedProject?.id == projectID
+            ? (activeWorkspacePath ?? project.path)
+            : project.path
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let command: String = if let resumeID {
             agent.resumeCommand(id: resumeID)
@@ -1401,8 +1417,14 @@ final class AppModel: ObservableObject {
     }
 
     /// Keep projects[].liveSessionDetails in sync with current liveSessions.
+    ///
+    /// Keyed on the detail that has landed, because `liveSessions` belongs to
+    /// *that* project. `terminalHostDidClose` calls this, so during a switch any
+    /// shell exiting stamped the old project's tabs onto the new project's row —
+    /// the same field the sidebar reads for every unselected project, and the
+    /// one `workspaces(for:)` falls back to.
     func syncProjectSessionDetails() {
-        guard let projectID = selectedProjectID,
+        guard let projectID = selectedProject?.id,
               let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
         projects[index].liveSessionDetails = liveSessions.map { session in
             SessionSummary(id: session.id, title: session.title, targetLabel: session.targetLabel, lastCwd: session.lastCwd, workspacePath: session.workspacePath)

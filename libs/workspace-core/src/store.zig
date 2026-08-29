@@ -357,12 +357,28 @@ pub const Store = struct {
         try stmt.expectDone();
     }
 
+    /// Retires the generations *behind* the newest one, not everything.
+    ///
+    /// `reconcileInterruptedSessions` marks a whole run's tabs in one statement
+    /// with one `now()`, so an interrupted row's `updated_at` identifies the run
+    /// it belongs to exactly — nothing else writes to a row in that state.
+    ///
+    /// This used to close every interrupted row on the way in. Restore is slow
+    /// by design and takes rows out of that state one at a time, so a crash
+    /// halfway through left the remainder interrupted — and the next launch
+    /// deleted precisely the tabs that had not come back yet.
+    ///
+    /// The cost of keeping them is one extra launch: a project you abandon and
+    /// never reopen offers its tabs once more before being retired. The pileup
+    /// this guards against is still bounded — two generations, not the store's
+    /// whole history — and that is a far smaller price than losing a tab.
     fn retireStaleInterruptedSessions(self: *Store) StoreError!void {
         var stmt = try Statement.init(
             self.db,
             "update sessions\n" ++
                 " set state = ?1, close_reason = ?2, updated_at = ?3\n" ++
-                " where state = ?4",
+                " where state = ?4\n" ++
+                "   and updated_at < (select max(updated_at) from sessions where state = ?4)",
         );
         defer stmt.deinit();
         try stmt.bindText(1, models.SessionState.closed.asSql());
