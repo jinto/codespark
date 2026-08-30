@@ -108,10 +108,14 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
   - **숫자는 데려다 준다**: 선택 + 트리 **열기** + 워크트리 번호면 **그 워크트리에 서기**. 프로젝트 번호는 **떠났던 워크트리로 복귀**한다(`projectSelectedWorkspaces`를 `apply(detail:)`이 읽는다). 클릭은 겨냥한 행을 토글하지만 숫자는 "거기로 가 줘"라서, **접지는 않는다** — 두 번 누르면 트리가 펄럭이고, 숫자는 보지 않고 누르라고 있는 것이다.
   - 단축키 등록 규칙은 아래 "Keyboard Shortcuts" 참고.
 - **원격(ssh) 프로젝트도 워크트리를 갖는다**: 원격 워크트리의 주소는 `ssh://user@host/remote/path` URI다. `workspacePath`가 소속·선택·복원·삭제가 공유하는 단일 키이므로, 원격도 같은 문자열 공간에 넣어 그 로직을 그대로 쓴다.
-  - **두 네임스페이스를 섞지 말 것**: `workspacePath`는 URI, `last_cwd`와 git 인자는 원격 raw 경로다. 변환은 `SSHConnectionInfo.workspaceURI(forRemotePath:)` / `remotePath(fromWorkspaceURI:)` **두 함수 밖에서 하지 않는다**. `git -C 'ssh://…'`는 `cannot change to`로 죽는다.
-  - **로컬 워크트리 주소는 캐시에 들어갈 때 한 번 정규화한다**(`String.canonicalWorkspacePath`). git은 해소된 경로(`/private/tmp/proj`)를 찍고 프로젝트는 추가될 때의 철자(`/tmp/proj`)를 들고 있다. 철자가 둘이면 워크스페이스가 둘이고, **한쪽의 탭은 아무도 선택할 수 없는 행에 속한다** — `recomputeWorkspaces`는 `sameWorkspace(as:)`로 맞춰보고 선택을 옳게 놔두는데, `visibleSessions`는 `==`로 비교해 못 찾아서 **돌고 있는 탭 위에 "New Terminal"이 뜬다**.
-    - 앱 전체의 비교가 `String`의 `==`이고 `sameWorkspace(as:)`를 부르는 곳은 딱 하나였다. 나머지 일곱 곳을 가르치는 대신 **양쪽이 애초에 같은 철자로 적히게** 한다.
-    - **로컬에만 적용한다.** `parseWorktreeList`는 원격 스캔과 공유되고, 다른 기계의 경로를 이 기계의 파일시스템으로 해소하는 것이야말로 이 주소 체계가 피하려는 그 혼동이다.
+  - **두 네임스페이스는 `WorkspaceAddress`가 갈라놓는다.** 예전엔 문장이었다 — "`workspacePath`는 URI, `last_cwd`와 git 인자는 원격 raw 경로이고 변환은 두 함수 밖에서 하지 않는다". 같은 실수로 fix가 네 번 나온 뒤 타입이 됐다.
+    - `localPath`는 **`.local`일 때만** 값이 있다. `git -C`와 파일 API는 이걸 받으므로 URI를 줄 방법이 없다(`git -C 'ssh://…'`는 `cannot change to`로 죽는다). `displayName`은 자기가 무엇을 들고 있는지 알아서, 틸드 축약이 URI의 `//`를 먹어 `ssh:/box/srv/repo`로 만드는 일이 안 생긴다.
+    - `storageKey`가 스토어·UserDefaults·`workspace_path` 컬럼으로 나가는 **유일한 철자**이고, 그걸 다시 `init`에 넣으면 같은 주소가 돌아온다.
+    - **정규화는 `init`에서 한 번.** git은 해소된 경로(`/private/tmp/proj`)를 찍고 프로젝트는 추가될 때의 철자(`/tmp/proj`)를 들고 있다. 철자가 둘이면 워크스페이스가 둘이고, **한쪽의 탭은 아무도 선택할 수 없는 행에 속한다** — 예전엔 `recomputeWorkspaces`만 `sameWorkspace(as:)`로 맞춰보고 `visibleSessions`는 `==`로 비교해 못 찾아서, **돌고 있는 탭 위에 "New Terminal"이 떴다**.
+    - **로컬 팔에만 적용한다.** 다른 기계의 경로를 이 기계의 파일시스템으로 해소하는 것이야말로 이 주소 체계가 피하려는 그 혼동이다(`test_a_remote_address_is_left_as_the_host_spelled_it`).
+    - **`case local(String)`이지 `URL`이 아니다.** `URL`은 끝 슬래시·퍼센트 인코딩이라는 자기 철자 변주를 갖고 오는데, 그게 바로 이 타입이 고치는 병이다.
+    - **타입이 못 잡는 것 하나**: 원격 탭의 `last_cwd`는 **URI가 아니라 저쪽의 raw 경로**라 글자만 봐서는 로컬 경로와 구분되지 않는다. 그래서 `gitBranchQueryPaths`의 `transport != "ssh"` 필터는 여전히 필요하다 — 타입은 URI를 전부 막고, 나머지는 그 탭이 속한 프로젝트만 안다.
+    - **게이트 2겹**: `test_the_git_services_never_classify_a_raw_string`(Git* 서비스 안에서 `hasPrefix("ssh://")`/`SSHConnectionInfo(uri:` 금지 — 분류는 받는 것이지 하는 게 아니다)와 `test_only_the_address_type_abbreviates_a_path`.
   - **주소는 git이 부르는 대로 쓴다**: 워크트리를 만든 뒤 경로를 우리가 조립하면 안 된다. git은 심링크가 해소된 경로를 기록하므로(macOS의 `/var` → `/private/var`), 생성 스크립트가 `pwd -P`로 찍어준 걸 그대로 받는다. 철자가 둘이면 워크스페이스가 둘이고, 그중 하나는 아무 탭도 안 가리킨다 — 스텁 테스트로는 안 보이고 실제 ssh 왕복에서만 드러난다.
   - **`remotePath` 없는 `ssh://host`는 스캔하지 않는다** — 리포 위치를 모르므로.
   - **게이트가 두 겹**: `worktreeProjectPaths`의 필터와 `selectProject`의 호출 조건. 하나만 열면 원격 스캔은 아무 증상 없이 죽어 있는다. 그래서 호출부가 `worktreeProjectPaths.contains(...)`로 **같은 질문**을 한다.

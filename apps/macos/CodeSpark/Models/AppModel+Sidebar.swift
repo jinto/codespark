@@ -245,9 +245,8 @@ extension AppModel {
         // comparing — and through this project's own connection, so a path can
         // never match a worktree on some other host.
         let address: String
-        if selection.onScreen?.transport == "ssh" {
-            guard let info = SSHConnectionInfo(uri: selection.onScreen?.path ?? "") else { return nil }
-            address = info.workspaceURI(forRemotePath: cwd)
+        if let connection = WorkspaceAddress(selection.onScreen?.path ?? "").remote {
+            address = connection.address(forRemotePath: cwd).storageKey
         } else {
             address = cwd
         }

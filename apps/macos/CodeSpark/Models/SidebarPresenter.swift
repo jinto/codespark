@@ -307,17 +307,10 @@ enum SidebarPresenter {
         workspace.isMainWorktree ? workspace.path : nil
     }
 
-    /// How a workspace address reads on screen.
-    ///
-    /// A remote address is a URI, and a URI is not a filesystem path —
-    /// `abbreviatingWithTildeInPath` collapses its `//` into
-    /// `ssh:/localhost/srv/repo`. The host already sits on the project row, so
-    /// the remote directory is the part worth reading.
+    /// How a workspace address reads on screen — the address knows, because it
+    /// knows which machine it names.
     static func displayPath(for workspacePath: String) -> String {
-        if let remote = SSHConnectionInfo.remotePath(fromWorkspaceURI: workspacePath) {
-            return remote
-        }
-        return (workspacePath as NSString).abbreviatingWithTildeInPath
+        WorkspaceAddress(workspacePath).displayName
     }
 
     // MARK: - Where the digits go

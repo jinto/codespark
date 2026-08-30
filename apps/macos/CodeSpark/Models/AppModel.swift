@@ -350,9 +350,10 @@ final class AppModel: ObservableObject {
         // Only when git actually named the worktrees: an empty answer means the
         // lookup failed or has not landed yet, which is no reason to move
         // someone off the worktree they are working in.
-        if worktrees?.isEmpty == false, let active = activeWorkspacePath,
-           !workspaces.contains(where: { $0.path.sameWorkspace(as: active) }) {
-            activeWorkspacePath = workspaces.first { $0.path.sameWorkspace(as: project.path) }?.path
+        if worktrees?.isEmpty == false, let active = activeWorkspacePath.map(WorkspaceAddress.init),
+           !workspaces.contains(where: { WorkspaceAddress($0.path) == active }) {
+            let home = WorkspaceAddress(project.path)
+            activeWorkspacePath = workspaces.first { WorkspaceAddress($0.path) == home }?.path
                 ?? workspaces[0].path
         }
     }
@@ -673,7 +674,7 @@ final class AppModel: ObservableObject {
             // The tab belongs to the worktree the tab bar is showing. That
             // address is a URI on this same host, and its remote path is where
             // the shell has to land.
-            let remoteCwd = SSHConnectionInfo.remotePath(fromWorkspaceURI: workspacePath)
+            let remoteCwd = WorkspaceAddress(workspacePath).remote?.remotePath
             if let remoteCwd { info.remotePath = remoteCwd }
             do {
                 // `cwd` is a *remote* path on purpose — see the note in
@@ -887,7 +888,7 @@ final class AppModel: ObservableObject {
         guard let project = selection.detail, !project.path.isEmpty else { return }
         do {
             let creation = try await GitWorktreeService.addWorktree(
-                projectPath: project.path, branch: branch
+                at: WorkspaceAddress(project.path), branch: branch
             )
             gitWorktreeService.expireCache(for: project.path)
             await gitWorktreeService.refreshWorktrees(for: worktreeProjectPaths)
@@ -903,7 +904,8 @@ final class AppModel: ObservableObject {
         do {
             // Remove first, close after. A remove that fails must not cost the
             // user their terminals — over ssh that failure is routine.
-            try await GitWorktreeService.removeWorktree(projectPath: project.path, worktreePath: path)
+            try await GitWorktreeService.removeWorktree(
+                at: WorkspaceAddress(project.path), worktree: WorkspaceAddress(path))
             // By ownership, not by where the tab is standing: a tab belongs to
             // the worktree it was opened in and keeps belonging to it after a
             // `cd`. The old cwd test let a tab that had wandered out survive the

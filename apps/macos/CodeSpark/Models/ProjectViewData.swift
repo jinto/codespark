@@ -119,55 +119,17 @@ struct ProjectDetailViewData: Equatable {
 
 // MARK: - Workspace
 
-extension String {
-    /// Whether two workspace addresses name the same place. Local paths are
-    /// compared with symlinks resolved: git reports the resolved directory
-    /// (`/private/tmp`, not `/tmp`), while a project keeps whatever spelling it
-    /// was added with. Two spellings meant the selection matched no workspace,
-    /// and the correction in `recomputeWorkspaces` moved it every time it ran.
-    ///
-    /// Remote addresses are URIs, not filesystem paths — resolving one against
-    /// this machine's filesystem would be meaningless, so they compare as text.
-    /// The remote side already guards this by reporting `pwd -P`.
-    func sameWorkspace(as other: String) -> Bool {
-        if self == other { return true }
-        guard !hasPrefix("ssh://"), !other.hasPrefix("ssh://") else { return false }
-        return String.normalizedWorkspacePath(self) == String.normalizedWorkspacePath(other)
-    }
-
-    /// The one spelling of a local workspace address.
-    ///
-    /// Every comparison in the app is `==` on a `String`, and there is exactly
-    /// one place that was careful enough to call `sameWorkspace(as:)` instead —
-    /// so the fix is not to teach the other seven, it is to make sure both sides
-    /// were already written down the same way. Canonicalise git's answer as it
-    /// enters the cache and the plain `==` everywhere downstream is comparing
-    /// like with like.
-    ///
-    /// `resolvingSymlinksInPath` only follows links that exist, and a worktree
-    /// git has just reported may already be gone. `/private` is stripped
-    /// explicitly because that is the pair this actually turns on — `/tmp` and
-    /// `/var` are symlinks into it on every mac.
-    static func canonicalWorkspacePath(_ path: String) -> String {
-        guard !path.hasPrefix("ssh://") else { return path }
-        return normalizedWorkspacePath(path)
-    }
-
-    private static func normalizedWorkspacePath(_ path: String) -> String {
-        let resolved = (path as NSString).resolvingSymlinksInPath
-        guard resolved.hasPrefix("/private/") else { return resolved }
-        return String(resolved.dropFirst("/private".count))
-    }
-}
-
 extension SessionViewData {
     /// Whether this tab belongs to a workspace. Membership is fixed at creation
     /// in `workspacePath`; only rows written before that column existed fall
     /// back to their cwd, matching how `groupSessions` places them.
     func belongs(to workspacePath: String) -> Bool {
-        guard self.workspacePath.isEmpty else { return self.workspacePath == workspacePath }
-        let cwd = lastCwd ?? ""
-        return cwd == workspacePath || cwd.hasPrefix(workspacePath + "/")
+        let workspace = WorkspaceAddress(workspacePath)
+        guard self.workspacePath.isEmpty else {
+            return WorkspaceAddress(self.workspacePath) == workspace
+        }
+        guard let cwd = lastCwd else { return false }
+        return workspace.contains(WorkspaceAddress(cwd))
     }
 }
 

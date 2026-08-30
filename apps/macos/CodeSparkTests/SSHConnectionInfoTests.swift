@@ -241,34 +241,18 @@ final class SSHConnectionInfoTests: XCTestCase {
     // space as the project itself — `workspacePath` is one column, and it is
     // what grouping, selection, restore, and removal all compare.
 
-    func test_workspace_uri_carries_the_connection_authority() {
+    func test_workspace_address_carries_the_connection_authority() {
         let info = SSHConnectionInfo(host: "box", user: "jay", port: 2222, remotePath: "/srv/repo")
         XCTAssertEqual(
-            info.workspaceURI(forRemotePath: "/srv/worktrees/repo-feat-ab12"),
+            info.address(forRemotePath: "/srv/worktrees/repo-feat-ab12").storageKey,
             "ssh://jay@box:2222/srv/worktrees/repo-feat-ab12"
         )
     }
 
-    func test_workspace_uri_round_trips_to_the_remote_path() {
+    func test_a_workspace_address_round_trips_to_the_remote_path() {
         let info = SSHConnectionInfo(host: "box", remotePath: "/srv/repo")
-        let uri = info.workspaceURI(forRemotePath: "/srv/wt/a b")
-        XCTAssertEqual(SSHConnectionInfo.remotePath(fromWorkspaceURI: uri), "/srv/wt/a b")
-    }
-
-    // A local workspace path answers nil, which is how callers tell the two
-    // namespaces apart without a second flag.
-    func test_local_paths_have_no_remote_path() {
-        XCTAssertNil(SSHConnectionInfo.remotePath(fromWorkspaceURI: "/Users/jay/projects/codespark"))
-    }
-
-    // Two spellings of one directory would be two different workspaces, and a
-    // tab keyed to the wrong spelling answers to no row at all.
-    func test_trailing_slash_is_not_a_different_worktree() {
-        let info = SSHConnectionInfo(host: "box")
-        XCTAssertEqual(
-            info.workspaceURI(forRemotePath: "/srv/wt/repo/"),
-            info.workspaceURI(forRemotePath: "/srv/wt/repo")
-        )
+        let address = info.address(forRemotePath: "/srv/wt/a b")
+        XCTAssertEqual(address.remote?.remotePath, "/srv/wt/a b")
     }
 
     func test_root_survives_canonicalization() {

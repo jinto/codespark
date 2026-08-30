@@ -1,6 +1,6 @@
 import Foundation
 
-struct SSHConnectionInfo: Equatable {
+struct SSHConnectionInfo: Equatable, Hashable {
     let host: String
     var user: String?
     var port: Int?
@@ -160,28 +160,6 @@ struct SSHConnectionInfo: Equatable {
 
 
     // MARK: - Workspace addressing
-
-    /// This connection's spelling of a remote directory, for use as a
-    /// `workspacePath`.
-    ///
-    /// A tab's workspace is one string, and that one string is what grouping,
-    /// selection memory, restore, and worktree removal all compare. Remote
-    /// worktrees join the same string space as the project URI rather than
-    /// getting a namespace of their own, so none of that machinery has to learn
-    /// about hosts.
-    func workspaceURI(forRemotePath remotePath: String) -> String {
-        var addressed = self
-        addressed.remotePath = Self.canonicalRemotePath(remotePath)
-        return addressed.uri
-    }
-
-    /// The remote directory inside a workspace address, or nil when the address
-    /// is a local filesystem path. The nil is the caller's cue about which
-    /// namespace it is holding — remote paths must never reach local file APIs,
-    /// and URIs must never reach `git -C`.
-    static func remotePath(fromWorkspaceURI uri: String) -> String? {
-        SSHConnectionInfo(uri: uri)?.remotePath
-    }
 
     /// One directory, one spelling. A trailing slash would otherwise mint a
     /// second workspace that no tab is keyed to.

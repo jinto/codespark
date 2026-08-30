@@ -2634,11 +2634,13 @@ final class WorkspaceSelectionTests: XCTestCase {
     }
 
     func test_two_spellings_of_one_directory_compare_equal() {
-        XCTAssertTrue("/tmp/x".sameWorkspace(as: "/private/tmp/x"))
-        XCTAssertFalse("/tmp/x".sameWorkspace(as: "/tmp/y"))
+        XCTAssertEqual(WorkspaceAddress("/tmp/x"), WorkspaceAddress("/private/tmp/x"))
+        XCTAssertNotEqual(WorkspaceAddress("/tmp/x"), WorkspaceAddress("/tmp/y"))
         // Remote addresses are URIs; resolving them here would be meaningless.
-        XCTAssertTrue("ssh://box/srv/repo".sameWorkspace(as: "ssh://box/srv/repo"))
-        XCTAssertFalse("ssh://box/tmp/x".sameWorkspace(as: "ssh://box/private/tmp/x"))
+        XCTAssertEqual(WorkspaceAddress("ssh://box/srv/repo"),
+                       WorkspaceAddress("ssh://box/srv/repo"))
+        XCTAssertNotEqual(WorkspaceAddress("ssh://box/tmp/x"),
+                          WorkspaceAddress("ssh://box/private/tmp/x"))
     }
 
     // MARK: - Worktrees nobody is working in fold away
@@ -2842,7 +2844,7 @@ final class WorkspaceSelectionTests: XCTestCase {
             )
         ]
 
-        let asked = Set(model.gitBranchQueryPaths)
+        let asked = Set(model.gitBranchQueryPaths.map(\.storageKey))
         XCTAssertTrue(asked.contains("/tmp/local"), "\(asked)")
         XCTAssertTrue(asked.contains("/tmp/local/deep"),
                       "a local tab's directory is exactly what the branch label is for: \(asked)")

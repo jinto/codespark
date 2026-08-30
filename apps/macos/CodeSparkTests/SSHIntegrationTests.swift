@@ -60,7 +60,7 @@ final class SSHIntegrationTests: XCTestCase {
 
         // Create
         let creation = try await GitWorktreeService.addWorktree(
-            projectPath: projectURI, branch: "feat", worktreeRoot: worktreeRoot
+            at: WorkspaceAddress(projectURI), branch: "feat", worktreeRoot: worktreeRoot
         )
         // The address is spelled the way git spells it, which on macOS means
         // /var resolved to /private/var — so check the shape, and let the scan
@@ -77,7 +77,7 @@ final class SSHIntegrationTests: XCTestCase {
                       "worktrees were \(found.map { "\($0.branch)@\($0.path)" })")
 
         // Remove
-        try await GitWorktreeService.removeWorktree(projectPath: projectURI, worktreePath: creation.path)
+        try await GitWorktreeService.removeWorktree(at: WorkspaceAddress(projectURI), worktree: WorkspaceAddress(creation.path))
         service.invalidateCache(for: projectURI)
         await service.refreshWorktrees(for: [projectURI])
         XCTAssertEqual(service.worktrees(for: projectURI)?.count, 1)

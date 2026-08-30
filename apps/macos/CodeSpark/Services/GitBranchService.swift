@@ -13,25 +13,29 @@ final class GitBranchService: @unchecked Sendable {
         var isExpired: Bool { Date().timeIntervalSince(fetchedAt) > ttl }
     }
 
-    func branch(for path: String) -> String? {
-        cache[path]?.branch
+    func branch(for address: WorkspaceAddress) -> String? {
+        cache[address.storageKey]?.branch
     }
 
     /// Whether git has been asked about this folder and reported no branch.
     /// Distinct from "not asked yet", which also has no branch — only one of the
     /// two is something to say out loud.
-    func isKnownNonRepo(_ path: String) -> Bool {
-        guard let entry = cache[path] else { return false }
+    func isKnownNonRepo(_ address: WorkspaceAddress) -> Bool {
+        guard let entry = cache[address.storageKey] else { return false }
         return entry.branch == nil
     }
 
+    /// Local addresses only. `git -C` runs on this machine, so a directory on
+    /// another one would be answered for by whatever local folder happens to
+    /// share its name — the address is what makes that unwriteable now, rather
+    /// than a filter each caller has to remember.
     @MainActor
-    func refreshBranches(for paths: [String]) async {
+    func refreshBranches(for addresses: [WorkspaceAddress]) async {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
 
-        let uniquePaths = Set(paths)
+        let uniquePaths = Set(addresses.compactMap(\.localPath))
         let stale = uniquePaths.filter { path in
             guard let entry = cache[path] else { return true }
             return entry.isExpired

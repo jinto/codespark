@@ -122,10 +122,17 @@ extension AppModel {
     /// machine, and `git -C` runs here, so a remote `/srv/app` would be answered
     /// by whatever local directory happens to share the name. Now that a remote
     /// shell reports every `cd` it makes, that mistake would arrive constantly.
-    var gitBranchQueryPaths: [String] {
+    var gitBranchQueryPaths: [WorkspaceAddress] {
+        // The transport filter stays, and it is not redundant with the address:
+        // a remote tab reports its directory as a bare path, which no amount of
+        // reading the text distinguishes from one here. `WorkspaceAddress`
+        // catches every URI; only the project a tab belongs to knows about the
+        // rest. `refreshBranches` then drops anything that is not local anyway,
+        // so it takes both to be wrong.
         let cwds = projects
             .filter { $0.transport != "ssh" }
             .flatMap { $0.liveSessionDetails.compactMap(\.lastCwd) }
+            .map(WorkspaceAddress.init)
         return Array(Set(localProjectPaths + cwds))
     }
 
@@ -133,22 +140,29 @@ extension AppModel {
     /// because only a *project* can be labelled "non-git" — a tab that wandered
     /// into a directory outside any repo says nothing about the project it
     /// belongs to.
-    var localProjectPaths: [String] {
-        projects.filter { $0.transport != "ssh" && !$0.path.isEmpty }.map(\.path)
+    var localProjectPaths: [WorkspaceAddress] {
+        projects
+            .filter { $0.transport != "ssh" && !$0.path.isEmpty }
+            .map { WorkspaceAddress($0.path) }
+            .filter { $0.localPath != nil }
     }
 
     func refreshGitBranches() {
-        let paths = gitBranchQueryPaths
-        guard !paths.isEmpty else { return }
+        let addresses = gitBranchQueryPaths
+        guard !addresses.isEmpty else { return }
         Task {
-            await gitBranchService.refreshBranches(for: paths)
+            await gitBranchService.refreshBranches(for: addresses)
             let updated = Dictionary(
-                uniqueKeysWithValues: paths.compactMap { path in
-                    gitBranchService.branch(for: path).map { (path, $0) }
+                uniqueKeysWithValues: addresses.compactMap { address in
+                    gitBranchService.branch(for: address).map { (address.storageKey, $0) }
                 }
             )
             if updated != gitBranches { gitBranches = updated }
-            let disowned = Set(localProjectPaths.filter { gitBranchService.isKnownNonRepo($0) })
+            let disowned = Set(
+                localProjectPaths
+                    .filter { gitBranchService.isKnownNonRepo($0) }
+                    .map(\.storageKey)
+            )
             if disowned != nonGitProjectPaths { nonGitProjectPaths = disowned }
         }
     }

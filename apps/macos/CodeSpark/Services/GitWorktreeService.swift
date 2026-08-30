@@ -73,30 +73,35 @@ final class GitWorktreeService: @unchecked Sendable {
         var isExpired: Bool { Date().timeIntervalSince(fetchedAt) > ttl }
     }
 
+    /// Cache reads take the address as written down anywhere — the store, a
+    /// project row, a session's `workspacePath` — and settle its spelling on the
+    /// way in, so both sides of every lookup are the same string.
     @MainActor
     func worktrees(for projectPath: String) -> [GitWorktree]? {
-        cache[projectPath]?.worktrees
+        cache[WorkspaceAddress(projectPath).storageKey]?.worktrees
     }
 
     @MainActor
     func refreshWorktrees(for projectPaths: [String]) async {
+        let addresses = projectPaths.map(WorkspaceAddress.init)
         let previous = inFlight
         let task = Task { @MainActor [weak self] in
             await previous?.value
-            await self?.performRefresh(for: projectPaths)
+            await self?.performRefresh(for: addresses)
         }
         inFlight = task
         await task.value
     }
 
     @MainActor
-    private func performRefresh(for projectPaths: [String]) async {
-        let uniquePaths = Set(projectPaths)
-        let stale = uniquePaths.filter { path in
-            guard let entry = cache[path] else { return true }
+    private func performRefresh(for addresses: [WorkspaceAddress]) async {
+        let unique = Set(addresses)
+        let keys = Set(unique.map(\.storageKey))
+        let stale = unique.filter { address in
+            guard let entry = cache[address.storageKey] else { return true }
             return entry.isExpired
         }
-        cache = cache.filter { uniquePaths.contains($0.key) }
+        cache = cache.filter { keys.contains($0.key) }
 
         guard !stale.isEmpty else { return }
 
@@ -104,8 +109,8 @@ final class GitWorktreeService: @unchecked Sendable {
             let pending = Array(stale)
             var next = 0
             while next < pending.count && next < Self.maxConcurrentLookups {
-                let path = pending[next]
-                group.addTask { await Self.fetchWorktrees(at: path) }
+                let address = pending[next]
+                group.addTask { await Self.fetchWorktrees(at: address) }
                 next += 1
             }
             for await (path, result) in group {
@@ -132,8 +137,8 @@ final class GitWorktreeService: @unchecked Sendable {
     /// production path.
     @MainActor
     func primeCache(_ worktrees: [GitWorktree], for projectPath: String) {
-        cache[projectPath] = CacheEntry(
-            worktrees: worktrees.map { projectPath.hasPrefix("ssh://") ? $0 : Self.canonicalised($0) },
+        cache[WorkspaceAddress(projectPath).storageKey] = CacheEntry(
+            worktrees: worktrees.map(Self.canonicalised),
             fetchedAt: Date(),
             ttl: normalTTL)
     }
@@ -246,7 +251,7 @@ final class GitWorktreeService: @unchecked Sendable {
                 return GitWorktreeCreation(
                     id: attemptID,
                     name: name,
-                    path: info.workspaceURI(forRemotePath: created),
+                    path: info.address(forRemotePath: created).storageKey,
                     branch: branch
                 )
             } catch let error as NSError where error.code == remoteNameTakenExitCode
@@ -271,12 +276,13 @@ final class GitWorktreeService: @unchecked Sendable {
     /// then `visibleSessions` compares with `==`, finds nothing, and the main
     /// area offers "New Terminal" over a running tab.
     ///
-    /// Local only. `parseWorktreeList` is shared with the remote scan, and
-    /// resolving a path from another machine against this one's filesystem is
-    /// the namespace confusion this is meant to end.
+    /// Local only — and the address decides which it is, so this no longer has
+    /// to ask. `parseWorktreeList` is shared with the remote scan, and resolving
+    /// a path from another machine against this one's filesystem is the
+    /// namespace confusion this is meant to end.
     private static func canonicalised(_ worktree: GitWorktree) -> GitWorktree {
         GitWorktree(
-            path: String.canonicalWorkspacePath(worktree.path),
+            path: WorkspaceAddress(worktree.path).storageKey,
             branch: worktree.branch,
             isMainWorktree: worktree.isMainWorktree,
             worktreeID: worktree.worktreeID
@@ -341,20 +347,26 @@ final class GitWorktreeService: @unchecked Sendable {
     /// the entry outright means a lookup that then fails leaves nothing, and
     /// over ssh that failure is routine.
     func expireCache(for projectPath: String) {
-        guard let entry = cache[projectPath] else { return }
-        cache[projectPath] = CacheEntry(worktrees: entry.worktrees, fetchedAt: .distantPast, ttl: 0)
+        let key = WorkspaceAddress(projectPath).storageKey
+        guard let entry = cache[key] else { return }
+        cache[key] = CacheEntry(worktrees: entry.worktrees, fetchedAt: .distantPast, ttl: 0)
     }
 
     /// Creates a new worktree at `~/worktrees/<repo>-<branch>-<id>` on a new branch.
     /// The generated ID is part of the directory name, so it remains available
     /// without a second metadata store when the app is relaunched.
     static func addWorktree(
-        projectPath: String,
+        at project: WorkspaceAddress,
         branch: String,
         worktreeRoot: String? = nil,
         id: String? = nil
     ) async throws -> GitWorktreeCreation {
-        if let info = SSHConnectionInfo(uri: projectPath), let repoPath = info.remotePath {
+        if let info = project.remote {
+            guard let repoPath = info.remotePath else {
+                throw NSError(domain: "GitWorktree", code: 4, userInfo: [
+                    NSLocalizedDescriptionKey: "This remote project does not say where its repository is."
+                ])
+            }
             return try await addRemoteWorktree(
                 info: info,
                 repoPath: repoPath,
@@ -363,6 +375,9 @@ final class GitWorktreeService: @unchecked Sendable {
                 id: id
             )
         }
+        // Local from here down, and the type is what says so — `git -C` below
+        // takes `localPath`, which the remote arm does not have.
+        let projectPath = project.localPath ?? ""
         let rootPath = expandedWorktreeRoot(worktreeRoot ?? configuredWorktreeRoot)
         try FileManager.default.createDirectory(
             atPath: rootPath,
@@ -398,9 +413,10 @@ final class GitWorktreeService: @unchecked Sendable {
 
     /// The repository's own name, whichever namespace the project lives in. A
     /// remote project is addressed by URI, but it is the remote path that names
-    /// the repository.
+    /// the repository — and the address is what knows the difference.
     static func repoName(forProjectPath projectPath: String) -> String {
-        let path = SSHConnectionInfo.remotePath(fromWorkspaceURI: projectPath) ?? projectPath
+        let address = WorkspaceAddress(projectPath)
+        let path = address.localPath ?? address.remote?.remotePath ?? projectPath
         return URL(fileURLWithPath: path).lastPathComponent
     }
 
@@ -448,14 +464,19 @@ final class GitWorktreeService: @unchecked Sendable {
         return sanitized.isEmpty ? "worktree" : sanitized
     }
 
-    static func removeWorktree(projectPath: String, worktreePath: String) async throws {
-        if let info = SSHConnectionInfo(uri: projectPath),
+    static func removeWorktree(at project: WorkspaceAddress, worktree: WorkspaceAddress) async throws {
+        if let info = project.remote,
            let repoPath = info.remotePath,
-           let target = SSHConnectionInfo.remotePath(fromWorkspaceURI: worktreePath) {
+           let target = worktree.remote?.remotePath {
             _ = try await runRemote(info, command: """
             git -C \(RemoteShell.quoted(repoPath)) worktree remove \(RemoteShell.quoted(target))
             """)
             return
+        }
+        guard let projectPath = project.localPath, let worktreePath = worktree.localPath else {
+            throw NSError(domain: "GitWorktree", code: 5, userInfo: [
+                NSLocalizedDescriptionKey: "A remote worktree cannot be removed through a local repository."
+            ])
         }
         try await runGit(["-C", projectPath, "worktree", "remove", worktreePath])
     }
@@ -497,10 +518,12 @@ final class GitWorktreeService: @unchecked Sendable {
         NSLog("[CodeSpark] git worktree list failed (%d) for %@: %@", status, path, stderr)
     }
 
-    private static func fetchWorktrees(at path: String) async -> (String, [GitWorktree]?) {
-        // The one place local and remote part ways. Everything downstream —
-        // cache, parser, grouping — sees the same shapes either way.
-        if let info = SSHConnectionInfo(uri: path) {
+    private static func fetchWorktrees(at address: WorkspaceAddress) async -> (String, [GitWorktree]?) {
+        // The one place local and remote part ways, and the address has already
+        // said which. Everything downstream — cache, parser, grouping — sees the
+        // same shapes either way.
+        let path = address.storageKey
+        if let info = address.remote {
             guard let repoPath = info.remotePath else { return (path, nil) }
             return (path, await fetchRemoteWorktrees(info: info, repoPath: repoPath))
         }
@@ -545,7 +568,7 @@ final class GitWorktreeService: @unchecked Sendable {
             // workspace addresses.
             let worktrees = parseWorktreeList(result.out).map { worktree in
                 GitWorktree(
-                    path: info.workspaceURI(forRemotePath: worktree.path),
+                    path: info.address(forRemotePath: worktree.path).storageKey,
                     branch: worktree.branch,
                     isMainWorktree: worktree.isMainWorktree
                 )

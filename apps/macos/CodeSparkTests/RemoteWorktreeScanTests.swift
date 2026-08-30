@@ -191,7 +191,7 @@ final class RemoteWorktreeScanTests: XCTestCase {
         try installStubSSH(stdout: "/home/jay/worktrees/repo-feat-ab12")
 
         let creation = try await GitWorktreeService.addWorktree(
-            projectPath: "ssh://jay@box/srv/repo", branch: "feat", worktreeRoot: "~/worktrees", id: "ab12"
+            at: WorkspaceAddress("ssh://jay@box/srv/repo"), branch: "feat", worktreeRoot: "~/worktrees", id: "ab12"
         )
 
         XCTAssertEqual(creation.path, "ssh://jay@box/home/jay/worktrees/repo-feat-ab12")
@@ -211,8 +211,8 @@ final class RemoteWorktreeScanTests: XCTestCase {
         let argvFile = try installStubSSH(stdout: "")
 
         try await GitWorktreeService.removeWorktree(
-            projectPath: "ssh://jay@box/srv/repo",
-            worktreePath: "ssh://jay@box/srv/wt/repo-feat-ab12"
+            at: WorkspaceAddress("ssh://jay@box/srv/repo"),
+            worktree: WorkspaceAddress("ssh://jay@box/srv/wt/repo-feat-ab12")
         )
 
         let argv = try recordedArgv(argvFile)
@@ -273,7 +273,7 @@ final class RemoteWorktreeScanTests: XCTestCase {
         let started = Date()
         do {
             _ = try await GitWorktreeService.addWorktree(
-                projectPath: "ssh://box/srv/repo",
+                at: WorkspaceAddress("ssh://box/srv/repo"),
                 branch: "feature"
             )
             XCTFail("a stub that never answers reported success")
