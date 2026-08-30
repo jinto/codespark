@@ -158,10 +158,24 @@ extension String {
         return String.normalizedWorkspacePath(self) == String.normalizedWorkspacePath(other)
     }
 
+    /// The one spelling of a local workspace address.
+    ///
+    /// Every comparison in the app is `==` on a `String`, and there is exactly
+    /// one place that was careful enough to call `sameWorkspace(as:)` instead —
+    /// so the fix is not to teach the other seven, it is to make sure both sides
+    /// were already written down the same way. Canonicalise git's answer as it
+    /// enters the cache and the plain `==` everywhere downstream is comparing
+    /// like with like.
+    ///
     /// `resolvingSymlinksInPath` only follows links that exist, and a worktree
     /// git has just reported may already be gone. `/private` is stripped
     /// explicitly because that is the pair this actually turns on — `/tmp` and
     /// `/var` are symlinks into it on every mac.
+    static func canonicalWorkspacePath(_ path: String) -> String {
+        guard !path.hasPrefix("ssh://") else { return path }
+        return normalizedWorkspacePath(path)
+    }
+
     private static func normalizedWorkspacePath(_ path: String) -> String {
         let resolved = (path as NSString).resolvingSymlinksInPath
         guard resolved.hasPrefix("/private/") else { return resolved }

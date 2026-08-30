@@ -1419,6 +1419,62 @@ final class WorkspaceSelectionTests: XCTestCase {
         return model
     }
 
+    // MARK: - One directory, one spelling
+
+    /// git reports the resolved directory — `/private/tmp/proj`, never
+    /// `/tmp/proj` — while a project keeps whatever spelling it was added with.
+    /// `sameWorkspace(as:)` exists to absorb that, and it is used in exactly one
+    /// place; everywhere else compares with `==`.
+    ///
+    /// So `recomputeWorkspaces` finds a match and correctly declines to move the
+    /// selection, and then `visibleSessions` finds none and returns nothing:
+    /// the main area offers "New Terminal" while the tabs of that very worktree
+    /// are running.
+    @MainActor
+    func test_a_worktree_git_spells_differently_still_shows_its_tabs() async {
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "Proj", path: "/tmp/proj", transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "Proj", path: "/tmp/proj",
+                                            transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        // What `git worktree list --porcelain` actually prints on a mac.
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: "/private/tmp/proj", branch: "main", isMainWorktree: true),
+            GitWorktree(path: "/private/tmp/proj-feature", branch: "feature", isMainWorktree: false)
+        ], for: "/tmp/proj")
+        model.recomputeWorkspaces()
+
+        await model.newSession()
+
+        XCTAssertFalse(model.visibleSessions.isEmpty,
+                       "the tab bar is empty while its own tab is running")
+        XCTAssertEqual(model.mainAreaContent, .terminals,
+                       "the main area offered New Terminal with a live tab behind it")
+    }
+
+    /// The remote half of the same rule, and the reason the canonicalisation is
+    /// applied to local lookups only: a path from another machine resolved
+    /// against *this* filesystem is the namespace confusion the whole worktree
+    /// addressing scheme exists to avoid.
+    @MainActor
+    func test_a_remote_worktree_address_is_left_exactly_as_the_host_spelled_it() async {
+        let uri = "ssh://box/private/var/folders/xyz/repo"
+        let service = GitWorktreeService()
+        service.primeCache(
+            [GitWorktree(path: uri, branch: "main", isMainWorktree: true)],
+            for: "ssh://box/private/var/folders/xyz/repo")
+
+        XCTAssertEqual(service.worktrees(for: "ssh://box/private/var/folders/xyz/repo")?.first?.path,
+                       uri,
+                       "a remote address was rewritten against the local filesystem")
+    }
+
     // MARK: - A write mid-switch belongs to the project that asked for it
     //
     // `selectedProjectID` moves on the click; `selectedProject` arrives a git

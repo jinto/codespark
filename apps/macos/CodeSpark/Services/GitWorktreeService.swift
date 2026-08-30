@@ -132,7 +132,10 @@ final class GitWorktreeService: @unchecked Sendable {
     /// production path.
     @MainActor
     func primeCache(_ worktrees: [GitWorktree], for projectPath: String) {
-        cache[projectPath] = CacheEntry(worktrees: worktrees, fetchedAt: Date(), ttl: normalTTL)
+        cache[projectPath] = CacheEntry(
+            worktrees: worktrees.map { projectPath.hasPrefix("ssh://") ? $0 : Self.canonicalised($0) },
+            fetchedAt: Date(),
+            ttl: normalTTL)
     }
 
     /// Ages every entry past its TTL so the next refresh re-runs the lookup.
@@ -259,6 +262,26 @@ final class GitWorktreeService: @unchecked Sendable {
     }
 
     // MARK: - Parsing
+
+    /// git prints the resolved directory — `/private/tmp/proj`, never
+    /// `/tmp/proj` — while a project keeps whatever spelling it was added with.
+    /// Two spellings are two workspaces, and the tabs of one of them end up
+    /// belonging to a row nothing can select: `recomputeWorkspaces` matches
+    /// through `sameWorkspace(as:)` and correctly leaves the selection alone,
+    /// then `visibleSessions` compares with `==`, finds nothing, and the main
+    /// area offers "New Terminal" over a running tab.
+    ///
+    /// Local only. `parseWorktreeList` is shared with the remote scan, and
+    /// resolving a path from another machine against this one's filesystem is
+    /// the namespace confusion this is meant to end.
+    private static func canonicalised(_ worktree: GitWorktree) -> GitWorktree {
+        GitWorktree(
+            path: String.canonicalWorkspacePath(worktree.path),
+            branch: worktree.branch,
+            isMainWorktree: worktree.isMainWorktree,
+            worktreeID: worktree.worktreeID
+        )
+    }
 
     static func parseWorktreeList(_ output: String) -> [GitWorktree] {
         let stanzas = output.components(separatedBy: "\n\n").filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -498,7 +521,7 @@ final class GitWorktreeService: @unchecked Sendable {
                 return (path, nil)
             }
             failureLog.clear(path)
-            let worktrees = parseWorktreeList(result.out)
+            let worktrees = parseWorktreeList(result.out).map(canonicalised)
             return (path, worktrees.isEmpty ? nil : worktrees)
         } catch {
             noteFailure(at: path, status: -1, stderr: error.localizedDescription)
