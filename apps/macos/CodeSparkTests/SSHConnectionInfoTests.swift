@@ -276,7 +276,7 @@ final class SSHConnectionInfoTests: XCTestCase {
     }
 
     func test_shell_quoting_survives_an_apostrophe() {
-        XCTAssertEqual(SSHConnectionInfo.shellQuoted("/srv/it's here"), "'/srv/it'\\''s here'")
+        XCTAssertEqual(RemoteShell.quoted("/srv/it's here"), "'/srv/it'\\''s here'")
     }
 
     // MARK: - A real shell on the other side

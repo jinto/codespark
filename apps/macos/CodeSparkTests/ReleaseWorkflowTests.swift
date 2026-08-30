@@ -131,6 +131,42 @@ final class ReleaseWorkflowTests: XCTestCase {
             "릴리즈가 workspace-core 테스트를 돌리지 않는다")
     }
 
+    /// Quoting for a remote shell lived in three files, byte for byte the same,
+    /// and the tilde expression in three more. That is the duplication that
+    /// matters most: it is where a directory name becomes shell syntax, so a
+    /// correction landing in one copy and not the others is a hole that looks
+    /// closed. The same family had already drifted — the two ssh option blocks
+    /// still disagree about `ConnectTimeout`, with nothing saying which is meant.
+    func test_only_one_file_knows_how_to_quote_for_a_remote_shell() throws {
+        let services = repoRoot.appendingPathComponent("apps/macos/CodeSpark")
+        let files = FileManager.default.enumerator(at: services, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" && $0.lastPathComponent != "RemoteShell.swift" } ?? []
+        XCTAssertFalse(files.isEmpty, "found no sources to scan — this gate would guard nothing")
+
+        var offenders: [String] = []
+        for file in files {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            // Two tells, both free of backslashes so the pattern cannot drift
+            // from what it is looking for: the single-quote escape dance, and
+            // the leading-tilde expansion.
+            // The opening quote of the dance, not just any single-quote
+            // replacement: `RestoredScreenReplay` legitimately rewrites `'` as
+            // `\047` for `printf`, which is a different job.
+            if source.contains(##""'" + "##)
+                || source.contains(##"hasPrefix("~/")"##) {
+                offenders.append(file.lastPathComponent)
+            }
+        }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            """
+            \(offenders.joined(separator: ", "))가 자기만의 원격 셸 따옴표/틸드 전개를 갖고 있다.
+            `RemoteShell.quoted` / `RemoteShell.pathExpression`을 쓸 것 — 사본이 갈라지면
+            한쪽만 고쳐놓고 고쳤다고 믿게 된다.
+            """)
+    }
+
     /// 두 겹이 함께여야 한다. `create-dmg … || true`가 실패를 삼키고,
     /// 업로드 액션의 `fail_on_unmatched_files` 기본값이 false라
     /// **DMG 없는 초록 릴리즈**가 나올 수 있었다.

@@ -28,6 +28,8 @@
 		3F0129AAAF55357541A4D8B6 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68D431120939D317364A97A9 /* CoreGraphics.framework */; };
 		47E722B3A80D8F6EA4095FAA /* SessionTabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */; };
 		A1B2C3D40004E5F600001004 /* RestoredScreenReplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40003E5F600001003 /* RestoredScreenReplay.swift */; };
+		D7E1A2B3C4D50023E5F600001023 /* RemoteShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50022E5F600001022 /* RemoteShell.swift */; };
+		D7E1A2B3C4D50021E5F600001021 /* AgentSessionDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50020E5F600001020 /* AgentSessionDiscovery.swift */; };
 		4A72F1CFFEF80585ED500C3F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E88E37B7F37CF55D219D6B /* SettingsView.swift */; };
 		4E5838C30942E3A4EAC8B3B2 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 17158E6BF62F75313B1E9B2F /* Metal.framework */; };
 		4F7109283E67CEE1A8CA7425 /* GhosttyTerminalSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF23B602753F8B2AC6D2D29 /* GhosttyTerminalSurfaceView.swift */; };
@@ -114,6 +116,8 @@
 		6465D8D71A356DB935A2D94C /* GhosttyTerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyTerminalHost.swift; sourceTree = "<group>"; };
 		6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTabBarView.swift; sourceTree = "<group>"; };
 		A1B2C3D40003E5F600001003 /* RestoredScreenReplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoredScreenReplay.swift; sourceTree = "<group>"; };
+		D7E1A2B3C4D50022E5F600001022 /* RemoteShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteShell.swift; sourceTree = "<group>"; };
+		D7E1A2B3C4D50020E5F600001020 /* AgentSessionDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSessionDiscovery.swift; sourceTree = "<group>"; };
 		66BAAF4E673EE8BBBAA95CF7 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
 		68D431120939D317364A97A9 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
 		6D4B27F8AE7CBF0B33461523 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
@@ -249,6 +253,8 @@
 						B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */,
 				D1E2F3A4B5C6D7E8F9A0B1C2 /* TerminalStateDetector.swift */,
 				A1B2C3D40003E5F600001003 /* RestoredScreenReplay.swift */,
+				D7E1A2B3C4D50022E5F600001022 /* RemoteShell.swift */,
+				D7E1A2B3C4D50020E5F600001020 /* AgentSessionDiscovery.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -566,6 +572,8 @@
 				E8CF80B13D9BFCC8278965D6 /* SessionSidebarRow.swift in Sources */,
 				47E722B3A80D8F6EA4095FAA /* SessionTabBarView.swift in Sources */,
 				A1B2C3D40004E5F600001004 /* RestoredScreenReplay.swift in Sources */,
+				D7E1A2B3C4D50023E5F600001023 /* RemoteShell.swift in Sources */,
+				D7E1A2B3C4D50021E5F600001021 /* AgentSessionDiscovery.swift in Sources */,
 				4A72F1CFFEF80585ED500C3F /* SettingsView.swift in Sources */,
 				366A365CFA1EFA718DEF53C6 /* SidebarView.swift in Sources */,
 				0EEC708F84CF823A8E360EC4 /* NewSSHProjectSheet.swift in Sources */,

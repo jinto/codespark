@@ -16,7 +16,7 @@ enum RestoredScreenReplay {
     /// Written to the pty once the shell starts. `cat` emits the payload — whose
     /// first bytes clear the echoed command line — then the file removes itself.
     static func command(forPayloadAt path: String) -> String {
-        "cat \(shellQuoted(path)) && rm -f \(shellQuoted(path))\n"
+        "cat \(RemoteShell.quoted(path)) && rm -f \(RemoteShell.quoted(path))\n"
     }
 
     /// Terminal bytes for the replay: clear the screen (hiding the echoed
@@ -41,7 +41,7 @@ enum RestoredScreenReplay {
     static func inlineCommand(for snapshot: TerminalSnapshotViewData) -> String? {
         let text = payload(for: snapshot)
         guard !text.isEmpty else { return nil }
-        return "printf '%b' \(shellQuoted(printfEscaped(text)))"
+        return "printf '%b' \(RemoteShell.quoted(printfEscaped(text)))"
     }
 
     /// Screen text is an argument, never a format string, so `%` needs no care —
@@ -85,7 +85,4 @@ enum RestoredScreenReplay {
         return result
     }
 
-    private static func shellQuoted(_ path: String) -> String {
-        "'" + path.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
 }

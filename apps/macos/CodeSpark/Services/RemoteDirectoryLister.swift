@@ -73,7 +73,7 @@ final class RemoteDirectoryLister: @unchecked Sendable {
         let target = path.map(remoteExpression(for:)) ?? "\"$HOME\""
         return """
         cd -- \(target) 2>/dev/null || exit 3
-        printf "%s\\n" \(shellQuoted(marker))
+        printf "%s\\n" \(RemoteShell.quoted(marker))
         pwd
         for e in * .*; do
         [ -d "$e" ] || continue
@@ -84,11 +84,11 @@ final class RemoteDirectoryLister: @unchecked Sendable {
     }
 
     static func createScript(in parent: String, named name: String) -> String {
-        let quotedName = shellQuoted(name)
+        let quotedName = RemoteShell.quoted(name)
         return """
         cd -- \(remoteExpression(for: parent)) 2>/dev/null || exit 3
         mkdir -- \(quotedName) || exit 4
-        printf "%s\\n" \(shellQuoted(marker))
+        printf "%s\\n" \(RemoteShell.quoted(marker))
         cd -- \(quotedName) && pwd
         """
     }
@@ -96,11 +96,7 @@ final class RemoteDirectoryLister: @unchecked Sendable {
     /// A path as the remote shell should read it. Only a leading `~` is left to
     /// that shell to expand — everything else is quoted so it stays a path.
     static func remoteExpression(for path: String) -> String {
-        if path == "~" { return "\"$HOME\"" }
-        if path.hasPrefix("~/") {
-            return "\"$HOME\"/" + shellQuoted(String(path.dropFirst(2)))
-        }
-        return shellQuoted(path)
+        RemoteShell.pathExpression(path)
     }
 
     static func arguments(for info: SSHConnectionInfo, script: String) -> [String] {
@@ -113,7 +109,7 @@ final class RemoteDirectoryLister: @unchecked Sendable {
         if let port = info.port { args.append(contentsOf: ["-p", "\(port)"]) }
         args.append("--")
         args.append(info.user.map { "\($0)@\(info.host)" } ?? info.host)
-        args.append(contentsOf: ["/bin/sh", "-c", shellQuoted(script)])
+        args.append(contentsOf: ["/bin/sh", "-c", RemoteShell.quoted(script)])
         return args
     }
 
@@ -265,7 +261,4 @@ final class RemoteDirectoryLister: @unchecked Sendable {
         }
     }
 
-    private static func shellQuoted(_ value: String) -> String {
-        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
 }

@@ -84,7 +84,7 @@ struct SSHConnectionInfo: Equatable {
         // whole string to `/bin/sh -c`, and the host is free text from the New
         // SSH Project sheet. Unquoted, everything a `;` introduces runs here.
         parts.append("--")
-        parts.append(Self.shellQuoted(user.map { "\($0)@\(host)" } ?? host))
+        parts.append(RemoteShell.quoted(user.map { "\($0)@\(host)" } ?? host))
         if let remote = remoteCommand(replaying: replay) {
             // Ghostty runs this whole string through `/bin/sh -c`, so the remote
             // command has to survive as one word. Unquoted, the local shell eats
@@ -96,7 +96,7 @@ struct SSHConnectionInfo: Equatable {
             // shell*, which may be fish or csh. Neither parses the `case` the
             // reporter is built from, and today's `cd … && exec` only survived
             // there by being simple enough.
-            parts.append(contentsOf: ["-t", Self.shellQuoted("/bin/sh -c " + Self.shellQuoted(remote))])
+            parts.append(contentsOf: ["-t", RemoteShell.quoted("/bin/sh -c " + RemoteShell.quoted(remote))])
         }
         return parts.joined(separator: " ")
     }
@@ -111,9 +111,9 @@ struct SSHConnectionInfo: Equatable {
         var parts = ["ssh"]
         if let port { parts.append(contentsOf: ["-p", "\(port)"]) }
         parts.append("--")
-        parts.append(Self.shellQuoted(user.map { "\($0)@\(host)" } ?? host))
+        parts.append(RemoteShell.quoted(user.map { "\($0)@\(host)" } ?? host))
         if let remotePath {
-            parts.append(contentsOf: ["-t", Self.shellQuoted("cd \(Self.remotePathExpression(remotePath))")])
+            parts.append(contentsOf: ["-t", RemoteShell.quoted("cd \(Self.remotePathExpression(remotePath))")])
         }
         return parts.joined(separator: " ")
     }
@@ -123,11 +123,7 @@ struct SSHConnectionInfo: Equatable {
     /// shell expanding a leading `~` — so the tilde is left outside the quotes
     /// and everything after it stays inside.
     static func remotePathExpression(_ path: String) -> String {
-        if path == "~" { return "\"$HOME\"" }
-        if path.hasPrefix("~/") {
-            return "\"$HOME\"/" + shellQuoted(String(path.dropFirst(2)))
-        }
-        return shellQuoted(path)
+        RemoteShell.pathExpression(path)
     }
 
     /// What the remote `sh` runs. Internal so a test can drive it through a
@@ -162,9 +158,6 @@ struct SSHConnectionInfo: Equatable {
         !component.isEmpty && !component.hasPrefix("-")
     }
 
-    static func shellQuoted(_ value: String) -> String {
-        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
-    }
 
     // MARK: - Workspace addressing
 

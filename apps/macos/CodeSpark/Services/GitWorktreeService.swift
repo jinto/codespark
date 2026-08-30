@@ -158,18 +158,14 @@ final class GitWorktreeService: @unchecked Sendable {
     /// The remote side hands this to a shell, so the repository path has to
     /// survive as a single word.
     static func remoteWorktreeListCommand(repoPath: String) -> String {
-        "git -C \(SSHConnectionInfo.shellQuoted(repoPath)) worktree list --porcelain"
+        "git -C \(RemoteShell.quoted(repoPath)) worktree list --porcelain"
     }
 
     /// Tilde expansion is the one thing quoting must not swallow — `'~/wt'` is
     /// a literal directory named `~`. Everything after the tilde is still
     /// quoted.
     static func remoteRootExpression(_ root: String) -> String {
-        if root == "~" { return "\"$HOME\"" }
-        if root.hasPrefix("~/") {
-            return "\"$HOME\"/" + SSHConnectionInfo.shellQuoted(String(root.dropFirst(2)))
-        }
-        return SSHConnectionInfo.shellQuoted(root)
+        RemoteShell.pathExpression(root)
     }
 
     /// Exit code the create script uses for "that name is already taken".
@@ -193,12 +189,12 @@ final class GitWorktreeService: @unchecked Sendable {
         name: String
     ) -> String {
         let rootExpr = remoteRootExpression(root)
-        let quotedName = SSHConnectionInfo.shellQuoted(name)
+        let quotedName = RemoteShell.quoted(name)
         return """
         root=\(rootExpr); p="$root"/\(quotedName); \
         if [ -e "$p" ]; then exit \(remoteNameTakenExitCode); fi; \
         mkdir -p "$root" || exit 1; \
-        git -C \(SSHConnectionInfo.shellQuoted(repoPath)) worktree add -b \(SSHConnectionInfo.shellQuoted(branch)) "$p" 1>&2 || exit 1; \
+        git -C \(RemoteShell.quoted(repoPath)) worktree add -b \(RemoteShell.quoted(branch)) "$p" 1>&2 || exit 1; \
         cd "$p" && pwd -P
         """
     }
@@ -451,7 +447,7 @@ final class GitWorktreeService: @unchecked Sendable {
            let repoPath = info.remotePath,
            let target = SSHConnectionInfo.remotePath(fromWorkspaceURI: worktreePath) {
             _ = try await runRemote(info, command: """
-            git -C \(SSHConnectionInfo.shellQuoted(repoPath)) worktree remove \(SSHConnectionInfo.shellQuoted(target))
+            git -C \(RemoteShell.quoted(repoPath)) worktree remove \(RemoteShell.quoted(target))
             """)
             return
         }
