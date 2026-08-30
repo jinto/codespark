@@ -1218,10 +1218,10 @@ final class WorkspaceSelectionTests: XCTestCase {
         let p1 = model.projects.first { $0.id == "p1" }!
         model.toggleWorktrees(projectID: "p1")
 
-        XCTAssertNil(model.numberedIndex(forProject: p1),
+        XCTAssertNil(model.numberedBadges.index(forProject: p1),
                      "an open project row is a heading; the digit belongs to the row it names")
         let feature = model.sidebarWorktrees(for: p1).first { $0.path == Self.featureWorktree }!
-        XCTAssertEqual(model.numberedIndex(forWorktree: feature, in: p1), 1)
+        XCTAssertEqual(model.numberedBadges.index(forWorktree: feature, in: p1), 1)
     }
 
     @MainActor
@@ -1232,7 +1232,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         await model.newSession(inWorkspacePath: Self.featureWorktree)
         let p1 = model.projects.first { $0.id == "p1" }!
 
-        XCTAssertEqual(model.numberedIndex(forProject: p1), 1,
+        XCTAssertEqual(model.numberedBadges.index(forProject: p1), 1,
                        "folded, the project row is the only thing on screen that digit can point at")
     }
 
@@ -1244,7 +1244,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         let p1 = model.projects.first { $0.id == "p1" }!
         model.toggleWorktrees(projectID: "p1")
 
-        XCTAssertEqual(model.numberedIndex(forProject: p1), 1,
+        XCTAssertEqual(model.numberedBadges.index(forProject: p1), 1,
                        "no worktree row took the digit, so nothing may take it away")
     }
 
@@ -2305,6 +2305,38 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(worktrees.map(\.isMainWorktree), [true, false])
     }
 
+    /// A prunable stanza is skipped, and skipping it used to clear the "this is
+    /// the first one" flag — so if the *first* stanza was prunable, nothing came
+    /// back marked as the main worktree at all.
+    ///
+    /// Silent both ways: `projectIdentityLine` reads
+    /// `.first(where: \.isMainWorktree)?.branch`, so a remote row quietly falls
+    /// back to naming only its host, and `groupSessions` falls back to
+    /// `worktrees[0]`.
+    func test_a_prunable_first_stanza_still_leaves_a_main_worktree() {
+        let output = """
+        worktree /repo/gone
+        HEAD 397b0c351c60dd65374311b12771aec66cf9cf3c
+        branch refs/heads/gone
+        prunable gitdir file points to non-existent location
+
+        worktree /repo
+        HEAD e88b2979aa74007dcd276c3b7bfcd2ce75516903
+        branch refs/heads/main
+
+        worktree /repo-feature
+        HEAD 1111111111111111111111111111111111111111
+        branch refs/heads/feature
+        """
+
+        let worktrees = GitWorktreeService.parseWorktreeList(output)
+
+        XCTAssertEqual(worktrees.map(\.branch), ["main", "feature"])
+        XCTAssertEqual(worktrees.filter(\.isMainWorktree).count, 1,
+                       "a list of worktrees with no main one has nothing to name the project")
+        XCTAssertTrue(worktrees[0].isMainWorktree)
+    }
+
     private func makeRepoWithWorktree() throws -> URL {
         let root = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("codespark-worktree-\(UUID().uuidString)")
@@ -2584,7 +2616,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         await model.newSession(inWorkspacePath: Self.mainWorktree)
         let p2 = model.projects.first { $0.id == "p2" }!
 
-        XCTAssertNotNil(model.numberedIndex(forProject: p2),
+        XCTAssertNotNil(model.numberedBadges.index(forProject: p2),
                         "a project you have not opened a tab in yet is unreachable by keyboard")
     }
 
@@ -2599,8 +2631,8 @@ final class WorkspaceSelectionTests: XCTestCase {
         let p1 = model.projects.first { $0.id == "p1" }!
         let p2 = model.projects.first { $0.id == "p2" }!
 
-        XCTAssertEqual(model.numberedIndex(forProject: p1), 1)
-        XCTAssertEqual(model.numberedIndex(forProject: p2), 2)
+        XCTAssertEqual(model.numberedBadges.index(forProject: p1), 1)
+        XCTAssertEqual(model.numberedBadges.index(forProject: p2), 2)
     }
 
     /// Pressing the digit has to land where clicking the row lands — including

@@ -1231,30 +1231,47 @@ final class AppModel: ObservableObject {
         return worked.map { .worktree(projectID: project.id, path: $0.path) }
     }
 
-    /// The digit the project row wears, for the Cmd-held overlay.
+    /// Every badge on the sidebar, worked out once.
     ///
-    /// A project addressed as itself always wears its own. One whose digits live
-    /// on its worktree rows lets go of the badge when the tree opens — the row
-    /// it names is on screen now, and a heading wearing its child's number says
-    /// the digit leads somewhere it does not. Folded, it stands in for the first
-    /// digit inside: that row is not on screen, and the project row is the only
-    /// thing that digit can point at.
-    func numberedIndex(forProject project: ProjectSummaryViewData) -> Int? {
-        let places = numberedPlaces
-        if let own = places.firstIndex(of: .project(project.id)) { return own + 1 }
-        guard !showsWorktreeRows(for: project) else { return nil }
-        return places.firstIndex { $0.projectID == project.id }.map { $0 + 1 }
+    /// There used to be two per-row lookups here, and each one rebuilt the whole
+    /// numbering: drawing N projects grouped every project's sessions N times
+    /// over, on every `@Published` change — including the OSC 7 report a shell
+    /// sends at every prompt. Typing `ls` re-grouped the sidebar.
+    ///
+    /// The per-row functions are gone rather than kept alongside this one. A
+    /// view that can only ask once cannot reintroduce the square.
+    struct NumberedBadges: Equatable {
+        fileprivate var byProject: [String: Int] = [:]
+        fileprivate var byWorktree: [NumberedPlace: Int] = [:]
+
+        func index(forProject project: ProjectSummaryViewData) -> Int? {
+            byProject[project.id]
+        }
+
+        func index(forWorktree workspace: WorkspaceViewData,
+                   in project: ProjectSummaryViewData) -> Int? {
+            byWorktree[.worktree(projectID: project.id, path: workspace.path)]
+        }
     }
 
-    /// The digit a worktree row wears. Only rows with tabs have one, and a row
-    /// with tabs never folds, so the badge is never drawn out of reach.
-    func numberedIndex(
-        forWorktree workspace: WorkspaceViewData,
-        in project: ProjectSummaryViewData
-    ) -> Int? {
-        numberedPlaces
-            .firstIndex(of: .worktree(projectID: project.id, path: workspace.path))
-            .map { $0 + 1 }
+    var numberedBadges: NumberedBadges {
+        let places = numberedPlaces
+        var badges = NumberedBadges()
+        for (offset, place) in places.enumerated() {
+            if case .worktree = place { badges.byWorktree[place] = offset + 1 }
+        }
+        for project in orderedProjects {
+            if let own = places.firstIndex(of: .project(project.id)) {
+                badges.byProject[project.id] = own + 1
+            } else if !showsWorktreeRows(for: project),
+                      let first = places.firstIndex(where: { $0.projectID == project.id }) {
+                // Folded, the project row stands in for the first digit inside
+                // it — that row is not on screen, and this is the only thing
+                // that digit can point at.
+                badges.byProject[project.id] = first + 1
+            }
+        }
+        return badges
     }
 
     /// Menu wording: the project, and the branch the digit will land in when

@@ -287,11 +287,22 @@ final class SSHConnectionInfoTests: XCTestCase {
     // actually be handed and run it through a real shell here.
 
     /// The directories a run reported, read out of the OSC 7 sequences the way
-    /// Ghostty reads them.
+    /// Ghostty reads them — including the percent-decode, which is the whole
+    /// point: Ghostty runs the payload through `std.Uri` and
+    /// `toRawMaybeAlloc` (`termio/stream_handler.zig`), so what it concludes is
+    /// the *decoded* path, not the bytes we printed.
     private func reportedDirectories(in output: String) -> [String] {
         output.components(separatedBy: "\u{1B}]7;file://localhost")
             .dropFirst()
             .compactMap { $0.components(separatedBy: "\u{07}").first }
+            .map { decodedAsGhosttyWould($0) }
+    }
+
+    /// `#` opens a fragment and `?` a query, so both truncate the path; `%NN`
+    /// decodes. Mirrors what `std.Uri` does to the payload.
+    private func decodedAsGhosttyWould(_ payload: String) -> String {
+        let path = payload.prefix { $0 != "#" && $0 != "?" }
+        return String(path).removingPercentEncoding ?? String(path)
     }
 
     private func runRemoteScript(
@@ -359,6 +370,39 @@ final class SSHConnectionInfoTests: XCTestCase {
         let output = try runRemoteScript(shell: shell, typing: "cd /tmp\nexit\n")
         XCTAssertTrue(reportedDirectories(in: output).contains("/tmp"),
                       "fish never reported a directory: \(output.debugDescription)")
+    }
+
+    /// The payload is a URI, and `$PWD` was printed into it raw. A directory
+    /// named `a%20b` was therefore reported as `a b`, and one containing `#` or
+    /// `?` was reported truncated at that character — the tab's cwd silently
+    /// became some other directory, and the next restore opened that one.
+    ///
+    /// Ghostty's own shell integration encodes; this reimplementation of it
+    /// did not.
+    func test_a_directory_whose_name_is_a_uri_delimiter_survives_the_round_trip() throws {
+        for shell in ["/bin/zsh", "/bin/bash"] + (Self.installedFish.map { [$0] } ?? []) {
+            let awkward = try makeDirectory(named: "a%20b #1?x")
+            defer { try? FileManager.default.removeItem(atPath: awkward) }
+
+            let output = try runRemoteScript(
+                shell: shell,
+                typing: "cd '\(awkward)'\nexit\n"
+            )
+
+            XCTAssertTrue(
+                reportedDirectories(in: output).contains(awkward),
+                "\(shell) reported \(reportedDirectories(in: output)) for \(awkward)")
+        }
+    }
+
+    private func makeDirectory(named name: String) throws -> String {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("cs-odd-\(UUID().uuidString)")
+            .appendingPathComponent(name)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        // The shell reports `$PWD`, which is the path after symlink resolution —
+        // /var vs /private/var on this machine.
+        return (url.path as NSString).resolvingSymlinksInPath
     }
 
     /// Ghostty throws away OSC 7 whose host it cannot recognise as local, and a

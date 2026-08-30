@@ -300,13 +300,22 @@ final class GitWorktreeService: @unchecked Sendable {
                     branch = String(line.dropFirst("branch refs/heads/".count))
                 } else if line.hasPrefix("HEAD ") {
                     headSHA = String(line.dropFirst("HEAD ".count))
-                } else if line == "prunable" {
+                } else if line.hasPrefix("prunable") {
+                    // git writes `prunable <reason>`, never a bare `prunable`,
+                    // so the exact match this replaces never fired once: a
+                    // worktree whose directory is gone kept its sidebar row, and
+                    // selecting it landed on a path that no longer exists.
                     isPrunable = true
                 }
             }
 
             guard let worktreePath = path, !isPrunable else {
-                if path != nil { isFirst = false }
+                // Deliberately *not* clearing `isFirst`: the flag means "the
+                // first worktree we are keeping", and clearing it here left a
+                // list with no main worktree at all whenever the first stanza
+                // was skipped. `projectIdentityLine` reads
+                // `.first(where: \.isMainWorktree)?.branch`, so a remote row
+                // silently fell back to naming only its host.
                 continue
             }
 

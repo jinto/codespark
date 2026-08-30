@@ -34,17 +34,12 @@ struct SidebarView: View {
         (path as NSString).abbreviatingWithTildeInPath
     }
 
-    private func hotkeyIndex(for project: ProjectSummaryViewData) -> Int? {
-        guard showHotkeys else { return nil }
-        return model.numberedIndex(forProject: project)
-    }
-
-    private func hotkeyIndex(
-        for workspace: WorkspaceViewData,
-        in project: ProjectSummaryViewData
-    ) -> Int? {
-        guard showHotkeys else { return nil }
-        return model.numberedIndex(forWorktree: workspace, in: project)
+    /// One lookup for the whole list. Asking per row rebuilt the entire
+    /// numbering each time, so the sidebar re-grouped every project's sessions
+    /// once per row — on every `@Published` change, including the cwd report a
+    /// shell sends at each prompt.
+    private var badges: AppModel.NumberedBadges {
+        showHotkeys ? model.numberedBadges : AppModel.NumberedBadges()
     }
 
 
@@ -75,6 +70,10 @@ struct SidebarView: View {
                     .frame(maxWidth: .infinity)
                 }
                 LazyVStack(alignment: .leading, spacing: 3) {
+                    // Bound once per body pass, not per access: a computed
+                    // property read twice per row is the same square it
+                    // replaces.
+                    let badges = self.badges
                     ForEach(model.orderedProjects) { project in
                         VStack(alignment: .leading, spacing: 3) {
                             ProjectSidebarRow(
@@ -82,7 +81,7 @@ struct SidebarView: View {
                                 isSelected: model.selectedProjectID == project.id,
                                 status: model.projectStatus(for: project),
                                 infoLine: model.projectInfoLine(for: project),
-                                hotkeyIndex: hotkeyIndex(for: project)
+                                hotkeyIndex: badges.index(forProject: project)
                             )
                             .contentShape(Rectangle())
                             .overlay(alignment: .top) {
@@ -147,7 +146,7 @@ struct SidebarView: View {
                                         isSelected: model.selectedProjectID == project.id
                                             && model.activeWorkspacePath == workspace.path,
                                         status: model.workspaceStatus(for: workspace),
-                                        hotkeyIndex: hotkeyIndex(for: workspace, in: project),
+                                        hotkeyIndex: badges.index(forWorktree: workspace, in: project),
                                         pathLine: model.worktreePathLine(for: workspace).map(model.displayPath)
                                     )
                                     .contentShape(Rectangle())

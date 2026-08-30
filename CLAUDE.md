@@ -78,6 +78,8 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
   - `expandedProjectIDs`(UserDefaults 저장)가 기준이고 **다른 프로젝트의 선택과는 무관하다** — Cmd+1로 옮겨가도 열어둔 트리는 그대로다. detail이 도착한 프로젝트는 `workspaces`(라이브)를, 나머지는 `liveSessionDetails`를 그룹핑해 행을 만든다(아래 `selectedProject` 항목).
   - **UI 테스트 주의**: 삼각형이 사라지면서 "워크트리 여러 개인 프로젝트"를 공짜로 걸러주던 수단도 사라졌다. 이제 모든 행이 클릭을 받으므로 `projectRowWithATree()`가 눌러보고 `worktreeBranch` 개수가 변하는 행을 찾는다. `worktreeDisclosure`를 찾던 옛 방식대로 두면 테스트가 **조용히 skip되며 통과**한다.
   - **탭 없는 워크트리는 접힌다**(`sidebarWorktreeRows(for:)`, `·· N more`). 접히지 않는 것 셋: 탭이 있는 것(= `Cmd` 숫자가 가리키는 곳), **`projectSelectedWorkspaces`에 기록된 마지막으로 서 있던 워크트리**, 그리고 **`main`은 언제나**. 앞의 둘을 "지금 선택된 워크트리"로 판정하면 선택이 행 개수를 바꾼다 — 클릭 한 번에 `2 more`가 `1 more`가 되고 화면엔 다른 변화가 없다. main이 예외인 이유는 위와 같다: 펼친 트리는 최소 한 줄의 실체를 보여야 한다.
+  - **`prunable`은 이유를 달고 온다**: git은 `prunable <reason>`을 찍지 `prunable` 한 단어를 찍지 않는다. 완전 일치로 비교하던 동안 **prunable 워크트리가 한 번도 걸러지지 않았고**, 디렉터리가 사라진 워크트리가 사이드바에 남아 클릭하면 없는 경로에 서게 됐다.
+    - 걸러낼 때 **"첫 번째" 표시를 지우면 안 된다**: 그 플래그는 "우리가 남기는 것 중 첫 번째"라는 뜻이다. 지우면 첫 stanza가 prunable일 때 **main 워크트리가 하나도 없는 목록**이 나오고, `projectIdentityLine`의 `.first(where: \.isMainWorktree)?.branch`가 nil이 되어 원격 행이 조용히 브랜치를 잃는다.
   - **밖에서 만든 워크트리는 폴링으로만 발견된다**: 앱이 만든 것(`addWorktree`)은 즉시 반영되지만, 에이전트가 탭 안에서 만든 것이나 다른 체크아웃의 것은 10초 타이머가 찾는다. 타이머는 `NSApp.isActive`일 때만 돌고 TTL은 30초(실패 60초)라 최대 ~40초. **앱이 배경에 있으면 아예 돌지 않으므로** 활성화되는 순간(`didBecomeActiveNotification`) 한 번 더 묻는다 — 안 그러면 몇 시간 자리를 비운 뒤 돌아와도 다음 tick까지 낡은 목록을 본다.
   - **조회 실패는 로그로 남긴다**: 실패하면 그 프로젝트의 워크트리 행이 조용히 하나로 접힌다. stderr를 버리던 동안에는 왜 그런지 알아낼 방법이 아무 데도 없었다.
   - **캐시 주의**: `GitWorktreeService.refreshWorktrees(for:)`는 **넘기지 않은 경로의 캐시를 지운다**. 선택된 프로젝트 하나만 넘기면 나머지 프로젝트의 워크트리 행이 통째로 사라진다 — 항상 `worktreeProjectPaths`(워크트리를 가질 수 있는 프로젝트 전부, 원격 포함)를 넘길 것.
@@ -101,7 +103,8 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
     - 워크트리가 여럿인 리포에서는 **탭이 있는 워크트리들이** 각각 번호를 받는다. 일이 벌어지는 곳이 그 워크트리이므로. 빈 워크트리는 받지 않는다 — 뛰어들 데가 아니다.
     - 워크트리가 전부 비었으면 **프로젝트가 자기 이름으로** 번호를 받는다. 탭이 하나도 없는 프로젝트도 마찬가지다 — 탭이 없는 프로젝트야말로 탭을 열러 가는 곳이다.
   - **접힘은 번호를 바꾸지 않는다.** `numberedPlaces`는 `expandedProjectIDs`를 보지 않는다. 워크트리 사이를 걸어다녀도 마찬가지 — 배지가 두 행 사이를 왔다갔다하면 안 되므로 `projectSelectedWorkspaces`도 보지 않는다. 대신 **탭을 열고 닫으면 아래 번호들이 밀린다**; 손가락 기억보다 "일하는 자리로 한 번에"를 택한 거래다.
-  - **배지만 화면을 따라간다**(`numberedIndex(forProject:)`): 자기 이름으로 번호를 받은 프로젝트 행은 언제나 자기 배지를 단다. 번호가 워크트리 행에 있는 프로젝트는 **펼치면 배지를 놓고**(그 행이 화면에 있으므로), **접히면 자기 안의 첫 번호를 대신 단다** — 접힌 상태에서 그 숫자가 가리킬 수 있는 유일한 행이 그것이다.
+  - **배지는 한 번에 계산한다**(`numberedBadges`). 행마다 묻는 함수는 **지웠다** — 있으면 매 행이 전체 번호매김을 다시 만들어 사이드바가 프로젝트 수의 제곱만큼 그룹핑을 돌았고, `@Published`가 바뀔 때마다(= 셸이 프롬프트마다 보내는 cwd 보고마다) 그랬다. 뷰는 바디당 한 번 `let`으로 잡는다 — 컴퓨티드 프로퍼티를 행마다 읽으면 같은 제곱이다.
+  - **배지만 화면을 따라간다**: 자기 이름으로 번호를 받은 프로젝트 행은 언제나 자기 배지를 단다. 번호가 워크트리 행에 있는 프로젝트는 **펼치면 배지를 놓고**(그 행이 화면에 있으므로), **접히면 자기 안의 첫 번호를 대신 단다** — 접힌 상태에서 그 숫자가 가리킬 수 있는 유일한 행이 그것이다.
   - **숫자는 데려다 준다**: 선택 + 트리 **열기** + 워크트리 번호면 **그 워크트리에 서기**. 프로젝트 번호는 **떠났던 워크트리로 복귀**한다(`projectSelectedWorkspaces`를 `apply(detail:)`이 읽는다). 클릭은 겨냥한 행을 토글하지만 숫자는 "거기로 가 줘"라서, **접지는 않는다** — 두 번 누르면 트리가 펄럭이고, 숫자는 보지 않고 누르라고 있는 것이다.
   - 단축키 등록 규칙은 아래 "Keyboard Shortcuts" 참고.
 - **원격(ssh) 프로젝트도 워크트리를 갖는다**: 원격 워크트리의 주소는 `ssh://user@host/remote/path` URI다. `workspacePath`가 소속·선택·복원·삭제가 공유하는 단일 키이므로, 원격도 같은 문자열 공간에 넣어 그 로직을 그대로 쓴다.
@@ -149,6 +152,8 @@ Process detection + screen parsing replaces the old hook system:
   - `sessionDidReportCwd`는 `liveSessions`가 아니라 **`allSessions`**를 본다. 선택되지 않은 프로젝트의 탭도 셸이 살아 있어 `cd`할 수 있고(그 탭에서 도는 에이전트), 좁은 목록을 읽으면 그 보고가 버려져 스토어에 낡은 경로가 남는다.
   - SSH 탭의 `cwd`는 **원격 경로 그대로** 넘긴다. 그 인자가 Ghostty의 working directory이면서 동시에 스토어에 기록되는 탭 위치다. nil로 바꾸면 다음 복원부터 자리를 잃는다. Ghostty는 열 수 없는 working directory를 경고 로그만 남기고 무시한다(`embedded.zig`).
   - **원격도 OSC 7을 보낸다 — 우리가 심어서**(`RemoteCwdReporter`). 예전엔 원격에 shell integration이 없어 `last_cwd`가 탭을 연 순간에 얼어붙었고, 원격에서 `cd`한 자리는 복원 때마다 사라졌다. 이제 접속 스크립트가 원격 셸의 시작 파일을 하나 놔두고 프롬프트마다 OSC 7을 찍게 한다.
+    - **payload는 URI다 — `$PWD`를 percent-encoding 해야 한다.** Ghostty는 OSC 7을 `std.Uri`로 파싱하고 경로를 **percent-decode** 한다(`termio/stream_handler.zig`). 날것으로 찍으면 `a%20b`라는 디렉터리가 `a b`로 돌아오고, 이름에 `#`나 `?`가 있으면 **거기서 잘린다**(각각 fragment·query 구분자라서). 탭의 cwd가 조용히 다른 디렉터리가 되고 다음 복원이 그리로 간다. Ghostty 자신의 통합은 인코딩한다 — 우리 재구현만 안 했다.
+      - 패턴은 대괄호로 쓴다(`${p//[#]/%23}`): `\#`는 Swift raw string(`#"…"#`)에서 이스케이프로 읽히고, `?`는 셸 글로브 와일드카드라 어차피 감싸야 한다.
     - **hostname은 반드시 `localhost`다.** Ghostty는 local이 아닌 host의 OSC 7을 **버린다**(`termio/stream_handler.zig`의 `hostname.isLocal`). 원격 셸이 자기 `$HOST`를 찍으면 로그 한 줄 남기고 사라진다 — Ghostty 자신의 zsh 통합을 그대로 원격에 갖다 놔도 안 되는 이유이고, 이 한 글자가 기능 전체를 좌우한다.
     - **셸마다 주입 지점이 다르다**: zsh는 `ZDOTDIR`, bash는 `PROMPT_COMMAND`(환경변수), fish는 `-C`. 함수는 `exec`을 건너지 못하므로 zsh·fish는 시작 파일/초기 명령이라야 하지만, bash의 `PROMPT_COMMAND`는 문자열이라 환경변수로 건너간다 — 그게 bash를 로그인 셸로 만들 수 있는 유일한 이유다(아래). 모르는 셸은 그냥 셸을 연다 — 최악이 예전 동작이어야 한다.
     - **fish는 `fish_prompt`가 아니라 `--on-variable PWD`**다. `fish_prompt` 이벤트는 tty가 없으면 아예 안 뜨고, 어차피 우리가 알고 싶은 건 디렉터리가 바뀌는 순간이다.

@@ -219,6 +219,13 @@ struct SSHConnectionInfo: Equatable {
 /// Two details decide whether this works at all, and neither is guessable from
 /// the outside:
 ///
+/// - **The payload is a URI, so `$PWD` has to be encoded.** Ghostty parses OSC 7
+///   with `std.Uri` and percent-decodes the path
+///   (`termio/stream_handler.zig`), so a directory named `a%20b` came back as
+///   `a b`, and one containing `#` or `?` came back truncated at that character
+///   — the tab's cwd silently became a different directory and the next restore
+///   opened that one. Ghostty's own integration encodes; this reimplementation
+///   of it did not.
 /// - **The hostname has to be `localhost`.** Ghostty drops any OSC 7 whose host
 ///   is not local (`termio/stream_handler.zig`, `os/hostname.zig`) — which is
 ///   exactly what a remote shell reporting its own `$HOST` would be, and why
@@ -295,7 +302,10 @@ enum RemoteCwdReporter {
     ZDOTDIR=$CS_RC_HOME
     [[ $HISTFILE == $CS_RC_DIR/* ]] && HISTFILE=$CS_RC_HOME/${HISTFILE##*/}
     [ -r "$CS_RC_HOME/.zshrc" ] && . "$CS_RC_HOME/.zshrc"
-    __cs_report_pwd() { printf '\033]7;file://localhost%s\007' "$PWD"; }
+    __cs_report_pwd() {
+      local p=${PWD//[%]/%25}; p=${p//[#]/%23}; p=${p//[?]/%3F}
+      printf '\033]7;file://localhost%s\007' "$p"
+    }
     precmd_functions+=(__cs_report_pwd)
     CS_EOF
         [ -r "$CS_RC_DIR/.zshrc" ] && [ -r "$CS_RC_DIR/.zprofile" ] && { ZDOTDIR=$CS_RC_DIR; export ZDOTDIR; }
@@ -303,12 +313,12 @@ enum RemoteCwdReporter {
       exec "$__cs_s" -l -i
       ;;
     bash)
-      PROMPT_COMMAND='printf "\033]7;file://localhost%s\007" "$PWD"'${PROMPT_COMMAND:+;$PROMPT_COMMAND}
+      PROMPT_COMMAND='__cs_p=${PWD//[%]/%25}; __cs_p=${__cs_p//[#]/%23}; __cs_p=${__cs_p//[?]/%3F}; printf "\033]7;file://localhost%s\007" "$__cs_p"'${PROMPT_COMMAND:+;$PROMPT_COMMAND}
       export PROMPT_COMMAND
       exec "$__cs_s" -l -i
       ;;
     fish)
-      exec "$__cs_s" -l -i -C 'function __cs_report_pwd --on-variable PWD; printf "\033]7;file://localhost%s\007" $PWD; end; __cs_report_pwd'
+      exec "$__cs_s" -l -i -C 'function __cs_report_pwd --on-variable PWD; set -l p (string replace -a "%" "%25" -- $PWD); set p (string replace -a "#" "%23" -- $p); set p (string replace -a "?" "%3F" -- $p); printf "\033]7;file://localhost%s\007" $p; end; __cs_report_pwd'
       ;;
     esac
     exec "$__cs_s" -i
