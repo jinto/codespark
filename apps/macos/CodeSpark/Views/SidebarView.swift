@@ -30,13 +30,6 @@ struct SidebarView: View {
         var id: String { path }
     }
 
-    /// One lookup for the whole list. Asking per row rebuilt the entire
-    /// numbering each time, so the sidebar re-grouped every project's sessions
-    /// once per row — on every `@Published` change, including the cwd report a
-    /// shell sends at each prompt.
-    private var badges: AppModel.NumberedBadges {
-        showHotkeys ? model.numberedBadges : AppModel.NumberedBadges()
-    }
 
 
     var body: some View {
@@ -66,18 +59,20 @@ struct SidebarView: View {
                     .frame(maxWidth: .infinity)
                 }
                 LazyVStack(alignment: .leading, spacing: 3) {
-                    // Bound once per body pass, not per access: a computed
-                    // property read twice per row is the same square it
-                    // replaces.
-                    let badges = self.badges
-                    ForEach(model.orderedProjects) { project in
+                    // One pass for the whole list, bound once per body — not a
+                    // computed property read again per row per field, which is
+                    // what made drawing N projects regroup every project's
+                    // sessions N times over, on every `@Published` change.
+                    let groups = model.sidebarGroups
+                    ForEach(groups) { group in
+                        let project = group.project
                         VStack(alignment: .leading, spacing: 3) {
                             ProjectSidebarRow(
                                 project: project,
-                                isSelected: model.selection.id == project.id,
-                                status: model.projectStatus(for: project),
-                                infoLine: model.projectInfoLine(for: project),
-                                hotkeyIndex: badges.index(forProject: project)
+                                isSelected: group.isSelected,
+                                status: group.status,
+                                infoLine: group.infoLine,
+                                hotkeyIndex: showHotkeys ? group.hotkeyIndex : nil
                             )
                             .contentShape(Rectangle())
                             .overlay(alignment: .top) {
@@ -132,59 +127,57 @@ struct SidebarView: View {
                                 }
                             }
 
-                            // Shown while the project is expanded, selected or not:
-                            // switching projects must not fold someone's tree.
-                            if model.showsWorktreeRows(for: project) {
-                                let worktreeRows = model.sidebarWorktreeRows(for: project)
-                                ForEach(worktreeRows.shown) { workspace in
-                                    WorktreeSidebarRow(
-                                        workspace: workspace,
-                                        isSelected: model.selection.id == project.id
-                                            && model.activeWorkspacePath == workspace.path,
-                                        status: model.workspaceStatus(for: workspace),
-                                        hotkeyIndex: badges.index(forWorktree: workspace, in: project),
-                                        pathLine: model.worktreePathLine(for: workspace).map(model.displayPath)
-                                    )
+                            // Drawn while the project is expanded, selected or
+                            // not: switching projects must not fold someone's
+                            // tree. Empty unless it is.
+                            ForEach(group.worktrees) { row in
+                                let workspace = row.workspace
+                                WorktreeSidebarRow(
+                                    workspace: workspace,
+                                    isSelected: row.isSelected,
+                                    status: row.status,
+                                    hotkeyIndex: showHotkeys ? row.hotkeyIndex : nil,
+                                    pathLine: row.pathLine
+                                )
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    Task {
+                                        await model.selectWorktree(
+                                            projectID: project.id,
+                                            path: workspace.path
+                                        )
+                                    }
+                                }
+                                .onTapGesture(count: 2) {
+                                    Task {
+                                        await model.selectWorktree(
+                                            projectID: project.id,
+                                            path: workspace.path
+                                        )
+                                        model.presentSessionChooser()
+                                    }
+                                }
+                                .contextMenu {
+                                    // Main is the repository itself — removing
+                                    // it is not a worktree operation.
+                                    if !workspace.isMainWorktree {
+                                        Button("Remove Worktree...", role: .destructive) {
+                                            pendingRemoveWorktree = WorktreeRemoval(
+                                                projectID: project.id,
+                                                path: workspace.path,
+                                                branch: workspace.branch
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if group.foldedCount > 0 {
+                                FoldedWorktreesRow(count: group.foldedCount)
                                     .contentShape(Rectangle())
                                     .onTapGesture {
-                                        Task {
-                                            await model.selectWorktree(
-                                                projectID: project.id,
-                                                path: workspace.path
-                                            )
-                                        }
+                                        model.revealFoldedWorktrees(projectID: project.id)
                                     }
-                                    .onTapGesture(count: 2) {
-                                        Task {
-                                            await model.selectWorktree(
-                                                projectID: project.id,
-                                                path: workspace.path
-                                            )
-                                            model.presentSessionChooser()
-                                        }
-                                    }
-                                    .contextMenu {
-                                        // Main is the repository itself — removing
-                                        // it is not a worktree operation.
-                                        if !workspace.isMainWorktree {
-                                            Button("Remove Worktree...", role: .destructive) {
-                                                pendingRemoveWorktree = WorktreeRemoval(
-                                                    projectID: project.id,
-                                                    path: workspace.path,
-                                                    branch: workspace.branch
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if worktreeRows.foldedCount > 0 {
-                                    FoldedWorktreesRow(count: worktreeRows.foldedCount)
-                                        .contentShape(Rectangle())
-                                        .onTapGesture {
-                                            model.revealFoldedWorktrees(projectID: project.id)
-                                        }
-                                }
                             }
                         }
                     }
@@ -421,7 +414,7 @@ struct ProjectSidebarRow: View {
             if let info = infoLine {
                 // Never faded out: what this line says changes with the tree
                 // (branch when shut, "3 worktrees" when open — see
-                // `AppModel.projectInfoLine(for:)`), so there is nothing left to
+                // `SidebarPresenter.infoLine`), so there is nothing left to
                 // hide, and a line hidden while its children were all folded
                 // away was just an unexplained gap under the name.
                 Text(info)
@@ -511,7 +504,7 @@ struct WorktreeSidebarRow: View {
     let isSelected: Bool
     let status: ProjectStatus
     var hotkeyIndex: Int? = nil
-    /// Only the main worktree gets one — see `AppModel.worktreePathLine(for:)`.
+    /// Only the main worktree gets one — see `SidebarPresenter.pathLine`.
     var pathLine: String? = nil
 
     var body: some View {

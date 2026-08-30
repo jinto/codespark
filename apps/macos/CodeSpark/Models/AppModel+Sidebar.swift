@@ -1,32 +1,60 @@
 import Foundation
 
-/// The sidebar's whole vocabulary: what each row says, which worktrees it draws,
-/// which of them fold, and where the `Cmd` digits go.
+/// The model's side of the sidebar: it hands `SidebarPresenter` a snapshot and
+/// gets rows back, and it owns the actions a row can start.
 ///
-/// Split out of `AppModel` unchanged. Nineteen of the roughly sixty `fix:`
-/// commits in this repository's history landed in `AppModel.swift` and fifteen
-/// more in `SidebarView.swift` — 57% of them in two files, almost all answering
-/// one question: *which row does this tab, or this string, belong to?* Giving
-/// that question its own file is the first step toward giving it its own type.
-///
-/// Still an extension rather than a type of its own, so nothing about ownership
-/// has changed yet: these functions read `AppModel`'s state directly. Making
-/// them pure functions over a snapshot is the next move, and it is what would
-/// let the sidebar be tested without a model at all.
+/// Nothing here decides what a row says any more. That moved to
+/// `SidebarPresenter`, where it is a function of a value and can be tested
+/// without a model, a main actor, or git — and where it is worked out in one
+/// pass instead of once per row per field.
 
 extension AppModel {
 
+    /// Everything the sidebar reads, copied out once.
+    var sidebarSnapshot: SidebarSnapshot {
+        var worktreesByPath: [String: [GitWorktree]] = [:]
+        for project in orderedProjects {
+            worktreesByPath[project.path] = gitWorktreeService.worktrees(for: project.path)
+        }
+        return SidebarSnapshot(
+            projects: orderedProjects,
+            onScreenProjectID: selection.onScreen?.id,
+            selectedProjectID: selection.id,
+            activeWorkspacePath: activeWorkspacePath,
+            liveWorkspaces: workspaces,
+            worktreesByPath: worktreesByPath,
+            sessionStates: sessionStates,
+            gitBranches: gitBranches,
+            nonGitProjectPaths: nonGitProjectPaths,
+            expandedProjectIDs: expandedProjectIDs,
+            projectsShowingEveryWorktree: projectsShowingEveryWorktree,
+            projectSelectedWorkspaces: projectSelectedWorkspaces
+        )
+    }
+
+    /// Every row the sidebar draws. The view binds this once per body pass —
+    /// asking per row is the shape that made drawing N projects cost N groupings
+    /// of every project's sessions, on every `@Published` change.
+    var sidebarGroups: [SidebarProjectGroup] {
+        SidebarPresenter.groups(sidebarSnapshot)
+    }
+
+    typealias NumberedPlace = SidebarPresenter.NumberedPlace
+    typealias NumberedBadges = SidebarPresenter.NumberedBadges
+    typealias SidebarWorktreeRows = SidebarPresenter.FoldedWorktrees
+
+    // MARK: - One question at a time
+    //
+    // The presenter answers these for the whole sidebar at once; these are for
+    // callers that hold a single project — the menu, and the tests that read one
+    // row's worth of the answer.
+
     func projectStatus(for project: ProjectSummaryViewData) -> ProjectStatus {
-        let sessionIDs = Set(project.liveSessionDetails.map(\.id))
-        if project.hasInterruptedSessions && project.liveSessions == 0 { return .interrupted }
-        guard !sessionIDs.isEmpty, project.liveSessions > 0 else { return .idle }
+        SidebarPresenter.status(of: project, in: sidebarSnapshot)
+    }
 
-        if project.hasInterruptedSessions { return .needsInput }
-
-        let states = sessionIDs.compactMap { sessionStates[$0] }
-        if states.contains(.needsInput) { return .needsInput }
-        if !states.isEmpty && states.allSatisfy({ $0 == .idle }) { return .idle }
-        return .running
+    func workspaceStatus(for workspace: WorkspaceViewData) -> ProjectStatus {
+        SidebarPresenter.status(of: workspace, in: sidebarSnapshot)
     }
 
     /// Worktrees to draw as child rows under the selected project. A repo with a
@@ -36,98 +64,60 @@ extension AppModel {
         workspaces.count > 1 ? workspaces : []
     }
 
-    /// Every workspace of a project, whether it is the selected one or not. The
-    /// selected project reads the live grouping; the rest are grouped from their
-    /// summaries, so their tabs stay accounted for while focus is elsewhere.
-    ///
-    /// Keyed on the detail the live grouping belongs to, and not on the id,
-    /// which moves the instant a row is clicked or a digit
-    /// pressed. `workspaces` belongs to the project it was computed for, so
-    /// through the round trip in between it still describes the project you came
-    /// from, and handing it to the one you are going to made both rows lie: the
-    /// tree you had open blinked shut, and a flat project briefly wore four
-    /// worktrees that were not its own. Until the detail arrives, a project is
-    /// its summary — the same thing every unselected row already reads.
     func workspaces(for project: ProjectSummaryViewData) -> [WorkspaceViewData] {
-        guard project.id != selection.onScreen?.id else { return workspaces }
-        return WorkspaceViewData.groupSessions(
-            project.liveSessionDetails,
-            into: gitWorktreeService.worktrees(for: project.path),
-            projectPath: project.path
+        SidebarPresenter.workspaces(of: project, in: sidebarSnapshot)
+    }
+
+    func sidebarWorktrees(for project: ProjectSummaryViewData) -> [WorkspaceViewData] {
+        SidebarPresenter.worktreeRows(of: project, in: sidebarSnapshot)
+    }
+
+    func sidebarWorktreeRows(for project: ProjectSummaryViewData) -> SidebarWorktreeRows {
+        let snapshot = sidebarSnapshot
+        return SidebarPresenter.fold(
+            SidebarPresenter.worktreeRows(of: project, in: snapshot),
+            of: project,
+            in: snapshot
         )
     }
 
-    /// The same, filtered down to what the sidebar draws as child rows: a repo
-    /// with one worktree stays flat, because the project row already is it.
-    func sidebarWorktrees(for project: ProjectSummaryViewData) -> [WorkspaceViewData] {
-        let grouped = workspaces(for: project)
-        return grouped.count > 1 ? grouped : []
-    }
-
-    /// The worktree rows of one project, with the idle ones folded away.
-    struct SidebarWorktreeRows: Equatable {
-        var shown: [WorkspaceViewData]
-        var foldedCount: Int
-    }
-
-    /// A repo collects worktrees, and the ones with no tabs are the ones nobody
-    /// is working in. They fold behind a count rather than pushing everything
-    /// else off the screen.
-    ///
-    /// Three never fold. A worktree with tabs, because it carries a `Cmd` digit
-    /// and folding it would leave a number pointing at nothing on screen — the
-    /// same reason a folded project row wears the digit that leads inside it.
-    /// The worktree the project was last left standing in, because coming back
-    /// to a tree whose selection is hidden reads as no selection at all. And
-    /// `main`, always: an open tree with every row folded away shows one grey
-    /// "2 more" under a blank line, which reads as a rendering fault rather than
-    /// as a fold — and since the expansion is remembered across launches while
-    /// the "show me the rest" flag is not, that was the state the sidebar came
-    /// back in every morning.
-    ///
-    /// The remembered worktree is read from `projectSelectedWorkspaces`, not
-    /// from the live selection: the old test only held for the selected project,
-    /// so a click that changed nothing else grew the list by a row and turned
-    /// "2 more" into "1 more".
-    func sidebarWorktreeRows(for project: ProjectSummaryViewData) -> SidebarWorktreeRows {
-        let all = sidebarWorktrees(for: project)
-        guard !projectsShowingEveryWorktree.contains(project.id) else {
-            return SidebarWorktreeRows(shown: all, foldedCount: 0)
-        }
-        let remembered = projectSelectedWorkspaces[project.id]
-        let shown = all.filter { workspace in
-            !workspace.sessions.isEmpty
-                || workspace.isMainWorktree
-                || workspace.path == remembered
-        }
-        return SidebarWorktreeRows(shown: shown, foldedCount: all.count - shown.count)
-    }
-
-    /// Two halves of one rule: a path belongs to the row that *is* that worktree.
-    /// While a tree is open the project row is only a heading, so it lets go of
-    /// its path and the main worktree row picks it up — otherwise the same
-    /// directory is spelled out twice, one line apart.
     func showsWorktreeRows(for project: ProjectSummaryViewData) -> Bool {
-        expandedProjectIDs.contains(project.id) && !sidebarWorktrees(for: project).isEmpty
+        let snapshot = sidebarSnapshot
+        return snapshot.expandedProjectIDs.contains(project.id)
+            && !SidebarPresenter.worktreeRows(of: project, in: snapshot).isEmpty
     }
 
-    /// A linked worktree's directory is named after its branch, which the row
-    /// already says. Only the main one carries a path worth reading.
     func worktreePathLine(for workspace: WorkspaceViewData) -> String? {
-        workspace.isMainWorktree ? workspace.path : nil
+        SidebarPresenter.pathLine(for: workspace)
     }
 
-    /// How a workspace address reads on screen.
-    ///
-    /// A remote address is a URI, and a URI is not a filesystem path —
-    /// `abbreviatingWithTildeInPath` collapses its `//` into
-    /// `ssh:/localhost/srv/repo`. The host already sits on the project row, so
-    /// the remote directory is the part worth reading.
     func displayPath(for workspacePath: String) -> String {
-        if let remote = SSHConnectionInfo.remotePath(fromWorkspaceURI: workspacePath) {
-            return remote
+        SidebarPresenter.displayPath(for: workspacePath)
+    }
+
+    func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
+        let snapshot = sidebarSnapshot
+        let shown = snapshot.expandedProjectIDs.contains(project.id)
+            && !SidebarPresenter.worktreeRows(of: project, in: snapshot).isEmpty
+        return SidebarPresenter.infoLine(for: project, worktreeRowsShown: shown, in: snapshot)
+    }
+
+    func worktreeCount(for project: ProjectSummaryViewData) -> Int? {
+        SidebarPresenter.worktreeCount(for: project, in: sidebarSnapshot)
+    }
+
+    var numberedPlaces: [NumberedPlace] {
+        SidebarPresenter.numberedPlaces(sidebarSnapshot)
+    }
+
+    var numberedBadges: NumberedBadges {
+        let snapshot = sidebarSnapshot
+        let grouped = snapshot.projects.map { project in
+            (project: project, workspaces: SidebarPresenter.worktreeRows(of: project, in: snapshot))
         }
-        return (workspacePath as NSString).abbreviatingWithTildeInPath
+        return SidebarPresenter.badges(
+            SidebarPresenter.numberedPlaces(snapshot), grouped: grouped, in: snapshot
+        )
     }
 
     /// What the two destructive confirmations say. Here rather than in the view
@@ -144,84 +134,6 @@ extension AppModel {
 
     func removeWorktreeMessage(path: String) -> String {
         "Its tabs will close and the folder \(displayPath(for: path)) will be deleted from disk. The branch itself stays."
-    }
-
-    /// One place a `Cmd` digit can take you.
-    ///
-    /// A digit is for where work is happening, and inside a repo with several
-    /// worktrees that is the worktree, not the project heading. A repo whose
-    /// worktrees are all empty has nothing to single out and is addressed as
-    /// itself — so is a project with no tabs at all, which is precisely where
-    /// you go to open one.
-    enum NumberedPlace: Hashable {
-        case project(String)
-        case worktree(projectID: String, path: String)
-
-        var projectID: String {
-            switch self {
-            case .project(let id): id
-            case .worktree(let id, _): id
-            }
-        }
-    }
-
-    /// Where `Cmd+1…9` go, in sidebar order.
-    ///
-    /// Blind to whether a tree is expanded: folding must not shuffle the digits
-    /// out from under the user's fingers, and neither may walking between
-    /// worktrees. Only the badge follows what is on screen — see
-    /// `numberedIndex(forProject:)`.
-    var numberedPlaces: [NumberedPlace] {
-        Array(orderedProjects.flatMap(numberedPlaces(in:)).prefix(9))
-    }
-
-    private func numberedPlaces(in project: ProjectSummaryViewData) -> [NumberedPlace] {
-        let worked = sidebarWorktrees(for: project).filter { !$0.sessions.isEmpty }
-        guard !worked.isEmpty else { return [.project(project.id)] }
-        return worked.map { .worktree(projectID: project.id, path: $0.path) }
-    }
-
-    /// Every badge on the sidebar, worked out once.
-    ///
-    /// There used to be two per-row lookups here, and each one rebuilt the whole
-    /// numbering: drawing N projects grouped every project's sessions N times
-    /// over, on every `@Published` change — including the OSC 7 report a shell
-    /// sends at every prompt. Typing `ls` re-grouped the sidebar.
-    ///
-    /// The per-row functions are gone rather than kept alongside this one. A
-    /// view that can only ask once cannot reintroduce the square.
-    struct NumberedBadges: Equatable {
-        fileprivate var byProject: [String: Int] = [:]
-        fileprivate var byWorktree: [NumberedPlace: Int] = [:]
-
-        func index(forProject project: ProjectSummaryViewData) -> Int? {
-            byProject[project.id]
-        }
-
-        func index(forWorktree workspace: WorkspaceViewData,
-                   in project: ProjectSummaryViewData) -> Int? {
-            byWorktree[.worktree(projectID: project.id, path: workspace.path)]
-        }
-    }
-
-    var numberedBadges: NumberedBadges {
-        let places = numberedPlaces
-        var badges = NumberedBadges()
-        for (offset, place) in places.enumerated() {
-            if case .worktree = place { badges.byWorktree[place] = offset + 1 }
-        }
-        for project in orderedProjects {
-            if let own = places.firstIndex(of: .project(project.id)) {
-                badges.byProject[project.id] = own + 1
-            } else if !showsWorktreeRows(for: project),
-                      let first = places.firstIndex(where: { $0.projectID == project.id }) {
-                // Folded, the project row stands in for the first digit inside
-                // it — that row is not on screen, and this is the only thing
-                // that digit can point at.
-                badges.byProject[project.id] = first + 1
-            }
-        }
-        return badges
     }
 
     /// Menu wording: the project, and the branch the digit will land in when
@@ -355,14 +267,5 @@ extension AppModel {
             return workspace.branch
         }
         return gitBranches[selection.onScreen?.path ?? ""] ?? ""
-    }
-
-    /// Status of one worktree, from the tabs that belong to it. Mirrors
-    /// `projectStatus(for:)` but never reads a sibling worktree's tabs.
-    func workspaceStatus(for workspace: WorkspaceViewData) -> ProjectStatus {
-        let states = workspace.sessions.compactMap { sessionStates[$0.id] }
-        if states.contains(.needsInput) { return .needsInput }
-        if states.isEmpty || states.allSatisfy({ $0 == .idle }) { return .idle }
-        return .running
     }
 }

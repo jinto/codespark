@@ -140,66 +140,6 @@ final class AppModel: ObservableObject {
         return .empty
     }
 
-    /// The line under a project's name — and it says something in every state.
-    ///
-    /// Closed, the row *is* its main worktree, so the line names it: the branch,
-    /// or for a folder that is no repository, that fact. A repo with more than
-    /// one worktree adds how many, which is the only warning that clicking will
-    /// unfold a tree.
-    ///
-    /// Open, the branch is spelled by the `main` row one line below, so this
-    /// line drops it and keeps the count — the one thing no child row can say,
-    /// and the only mark left that the tree is open now that the disclosure
-    /// triangle is gone. It used to be faded out instead, and with every
-    /// worktree folded away that left a blank line under the name with nothing
-    /// on screen to explain it.
-    ///
-    /// Never the path. The row's title is the folder's name, and spelling the
-    /// same folder out again underneath tells nobody anything.
-    func projectInfoLine(for project: ProjectSummaryViewData) -> String? {
-        let scale = worktreeCount(for: project).flatMap { $0 > 1 ? "\($0) worktrees" : nil }
-        if showsWorktreeRows(for: project), let scale { return scale }
-        guard let identity = projectIdentityLine(for: project) else { return scale }
-        guard let scale else { return identity }
-        return "\(identity) · \(scale)"
-    }
-
-    /// A remote row leads with the branch and trails the host, the same way a
-    /// local row leads with the branch and has no host to trail. Several
-    /// projects on one box otherwise repeated that one word down the sidebar
-    /// while saying nothing about any of them.
-    ///
-    /// The branch is the main worktree's, from the scan — the remote answer to
-    /// what `gitBranches` is locally, since `git -C` here cannot be asked about
-    /// a directory over there. Until the scan lands, or on a `ssh://host` with
-    /// no path that is never scanned, the host stands alone: naming a branch
-    /// nobody has told us is the guess that "non-git" waits to avoid.
-    private func projectIdentityLine(for project: ProjectSummaryViewData) -> String? {
-        if project.transport == "ssh" {
-            let host = SSHConnectionInfo(uri: project.path)?.displayLabel ?? project.path
-            guard let branch = gitWorktreeService.worktrees(for: project.path)?
-                .first(where: \.isMainWorktree)?.branch
-            else { return host }
-            return "\(branch) on \(host)"
-        }
-        guard !project.path.isEmpty else { return nil }
-        if let branch = gitBranches[project.path] { return branch }
-        // Blank until the lookup lands: "non-git" before asking would be a guess.
-        return nonGitProjectPaths.contains(project.path) ? "non-git" : nil
-    }
-
-    /// How many worktrees a project has, or nil while nobody has answered yet.
-    ///
-    /// Straight from the cache rather than through `sidebarWorktrees(for:)`,
-    /// which reads the live grouping for the selected project and the cache for
-    /// every other one — a number that changed on selection would say the repo
-    /// grew when all that happened was a click. And nil is not zero: a count we
-    /// do not have yet is left off the row, the same way "non-git" waits for its
-    /// lookup instead of guessing.
-    func worktreeCount(for project: ProjectSummaryViewData) -> Int? {
-        gitWorktreeService.worktrees(for: project.path)?.count
-    }
-
     /// The strip above a terminal, for the tabs still on their way back.
     var restoreBannerProgress: RestoreProgress? {
         mainAreaContent == .terminals ? progressForSelectedProject : nil
