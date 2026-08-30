@@ -278,9 +278,14 @@ enum SidebarPresenter {
             return "\(branch) on \(host)"
         }
         guard !project.path.isEmpty else { return nil }
-        if let branch = snapshot.gitBranches[project.path] { return branch }
+        // Under the address's one spelling, which is what git was asked under.
+        // A project added as `/private/tmp/repo` reads the same row as one
+        // added as `/tmp/repo`; spelling the key by hand loses both the branch
+        // and the "non-git" that stands in for it.
+        let key = WorkspaceAddress(project.path).storageKey
+        if let branch = snapshot.gitBranches[key] { return branch }
         // Blank until the lookup lands: "non-git" before asking would be a guess.
-        return snapshot.nonGitProjectPaths.contains(project.path) ? "non-git" : nil
+        return snapshot.nonGitProjectPaths.contains(key) ? "non-git" : nil
     }
 
     /// How many worktrees a project has, or nil while nobody has answered yet.

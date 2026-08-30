@@ -91,6 +91,21 @@ final class SidebarPresenterTests: XCTestCase {
         XCTAssertEqual(group.infoLine, "main · 3 worktrees")
     }
 
+    /// git is asked under the one spelling of an address, so the answer comes
+    /// back filed under that spelling. A project added as `/private/tmp/repo`
+    /// reads its own row under the same key or its subtitle goes blank — the
+    /// branch, and "non-git" with it.
+    func test_a_branch_is_found_however_the_project_spelled_its_path() {
+        let p = project("p", path: "/private/tmp/repo")
+        var snapshot = SidebarSnapshot(projects: [p], gitBranches: ["/tmp/repo": "main"])
+
+        XCTAssertEqual(SidebarPresenter.groups(snapshot)[0].infoLine, "main")
+
+        snapshot.gitBranches = [:]
+        snapshot.nonGitProjectPaths = ["/tmp/repo"]
+        XCTAssertEqual(SidebarPresenter.groups(snapshot)[0].infoLine, "non-git")
+    }
+
     func test_a_folder_that_is_no_repository_says_so_only_once_asked() {
         let p = project("p", path: "/tmp/plain")
         var snapshot = SidebarSnapshot(projects: [p])

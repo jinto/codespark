@@ -265,6 +265,7 @@ extension AppModel {
            let workspace = workspaces.first(where: { $0.path == path }) {
             return workspace.branch
         }
-        return gitBranches[selection.onScreen?.path ?? ""] ?? ""
+        // Same key `refreshGitBranches` files the answer under.
+        return gitBranches[WorkspaceAddress(selection.onScreen?.path ?? "").storageKey] ?? ""
     }
 }
