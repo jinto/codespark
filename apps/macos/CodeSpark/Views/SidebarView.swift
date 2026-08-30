@@ -30,10 +30,6 @@ struct SidebarView: View {
         var id: String { path }
     }
 
-    private func abbreviatePath(_ path: String) -> String {
-        (path as NSString).abbreviatingWithTildeInPath
-    }
-
     /// One lookup for the whole list. Asking per row rebuilt the entire
     /// numbering each time, so the sidebar re-grouped every project's sessions
     /// once per row — on every `@Published` change, including the cwd report a

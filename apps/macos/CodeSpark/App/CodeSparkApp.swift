@@ -8,13 +8,15 @@ struct CodeSparkApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var model = AppModel(
         core: ProjectCoreClient.live,
+        // Through `TerminalHostFactory` rather than repeating its body: the
+        // factory had tests and no production caller, and this had the same
+        // decision written out a second time.
         terminalFactory: { session in
             #if GHOSTTY_FIRST
-            if let app = GhosttyRuntime.shared.app {
-                return GhosttyTerminalHost(app: app, session: session)
-            }
+            TerminalHostFactory(loadGhosttyApp: { GhosttyRuntime.shared.app }).makeHost(for: session)
+            #else
+            TerminalHostFactory(loadGhosttyApp: { nil }).makeHost(for: session)
             #endif
-            return NoOpTerminalHost()
         }
     )
     @AppStorage(StorageKeys.selectedProjectID) private var savedProjectID: String = ""

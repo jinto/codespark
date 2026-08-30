@@ -7,24 +7,6 @@ enum ProjectStatus: Equatable {
     case needsInput
     case interrupted
 
-    var label: String {
-        switch self {
-        case .running: "Running"
-        case .idle: "Idle"
-        case .needsInput: "Needs input"
-        case .interrupted: "Interrupted"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .running: "bolt.fill"
-        case .idle: "circle.fill"
-        case .needsInput: "exclamationmark.triangle.fill"
-        case .interrupted: "arrow.clockwise"
-        }
-    }
-
     var color: Color {
         switch self {
         case .running: AppTheme.statusRunning
@@ -46,11 +28,6 @@ struct SessionSummary: Identifiable, Equatable {
 
 /// A workspace reachable by Cmd+1…9. Identified by its project as well as its
 /// path, since the digit has to bring the right project along.
-struct NumberedWorkspace: Equatable {
-    let projectID: String
-    let path: String
-}
-
 /// Where a dragged project row will land. `end` is its own case because there is
 /// no row to sit in front of past the last one.
 enum ProjectDropTarget: Equatable {

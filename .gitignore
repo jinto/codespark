@@ -1,6 +1,5 @@
 /.worktrees/
 /.superpowers/
-/target
 /.build
 /DerivedData
 /.swiftpm

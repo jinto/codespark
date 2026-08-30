@@ -5,7 +5,6 @@ import GhosttyKit
 
 final class GhosttyTerminalHost: TerminalHostProtocol {
     weak var delegate: (any TerminalHostDelegate)?
-    var lastOutputTime: Date? = nil
     private(set) var _shellPID: pid_t?
     /// Returns shellPID only if the shell process is still alive.
     /// Guards against PID recycling — if the surface reports process exited, skip Level 1.
@@ -28,7 +27,6 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
     }
 
     func attach(sessionID: String, command: String? = nil, initialInput: String? = nil) {
-        lastOutputTime = Date()
         let beforePIDs = Set(Self.childPIDs(of: getpid()))
         let sv = GhosttyTerminalSurfaceView(
             app: app,
@@ -85,10 +83,6 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
         let actualSize = proc_listchildpids(parent, &pids, estSize)
         guard actualSize > 0 else { return [] }
         return Array(pids.prefix(Int(actualSize) / MemoryLayout<pid_t>.size))
-    }
-
-    func markOutput() {
-        lastOutputTime = Date()
     }
 
     func extractSnapshot() -> TerminalSnapshotViewData? {

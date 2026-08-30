@@ -527,46 +527,6 @@ pub const Store = struct {
         };
     }
 
-    pub fn findProjectByCwd(self: *Store, allocator: std.mem.Allocator, cwd: []const u8) StoreError!?[]u8 {
-        // 1. Exact match: find a live session whose last_cwd equals the given cwd
-        {
-            var stmt = try Statement.init(
-                self.db,
-                "select s.project_id\n" ++
-                    " from sessions s\n" ++
-                    " where s.last_cwd = ?1 and s.state = 'live'\n" ++
-                    " order by s.updated_at desc\n" ++
-                    " limit 1",
-            );
-            defer stmt.deinit();
-            try stmt.bindText(1, cwd);
-            if (try stmt.step()) {
-                return try stmt.columnOwnedText(allocator, 0);
-            }
-        }
-
-        // 2. Prefix match: find a project whose path is a prefix of cwd (or vice versa)
-        //    We fetch all projects and test in Zig to avoid SQLite LIKE/GLOB edge cases.
-        {
-            var stmt = try Statement.init(
-                self.db,
-                "select id, path from projects\n" ++
-                    " where path != ''\n" ++
-                    " order by updated_at desc",
-            );
-            defer stmt.deinit();
-            while (try stmt.step()) {
-                const path = try stmt.columnTextSlice(1);
-                if (path.len == 0) continue;
-                if (std.mem.startsWith(u8, cwd, path) or std.mem.startsWith(u8, path, cwd)) {
-                    return try stmt.columnOwnedText(allocator, 0);
-                }
-            }
-        }
-
-        return null;
-    }
-
     fn migrate(self: *Store) StoreError!void {
         // Bootstrap the version table (always safe to run)
         try self.execScript(
@@ -873,14 +833,6 @@ const Statement = struct {
         try checkSqlite(sqlite.sqlite3_bind_int64(self.stmt, index, value), self.db);
     }
 
-    fn bindOptionalInt64(self: *Statement, index: c_int, value: ?i64) StoreError!void {
-        if (value) |number| {
-            try self.bindInt64(index, number);
-        } else {
-            try checkSqlite(sqlite.sqlite3_bind_null(self.stmt, index), self.db);
-        }
-    }
-
     fn bindBlob(self: *Statement, index: c_int, value: []const u8) StoreError!void {
         try checkSqlite(
             sqlite.sqlite3_bind_blob(
@@ -959,23 +911,6 @@ fn encodeTerminalGridLines(grid: models.TerminalGridInput) StoreError![]u8 {
     }
 
     return buffer.toOwnedSlice(std.heap.c_allocator);
-}
-
-fn decodeTerminalGridLines(allocator: std.mem.Allocator, line_count: i64, payload: []u8) StoreError![][]u8 {
-    defer allocator.free(payload);
-
-    if (line_count == 0) return allocator.alloc([]u8, 0);
-    if (!std.unicode.utf8ValidateSlice(payload)) return error.InvalidData;
-
-    var items: std.ArrayList([]u8) = .empty;
-    defer items.deinit(allocator);
-
-    var iter = std.mem.splitScalar(u8, payload, '\n');
-    while (iter.next()) |line| {
-        try items.append(allocator, try allocator.dupe(u8, line));
-    }
-
-    return items.toOwnedSlice(allocator);
 }
 
 fn checkSqlite(code: c_int, db: ?*sqlite.sqlite3) StoreError!void {

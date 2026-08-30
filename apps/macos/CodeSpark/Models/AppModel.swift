@@ -42,7 +42,6 @@ final class AppModel: ObservableObject {
     @Published var nonGitProjectPaths: Set<String> = []
     @Published var workspaces: [WorkspaceViewData] = []
     @Published private(set) var expandedProjectIDs: Set<String> = AppModel.savedExpandedProjectIDs()
-    @Published var selectedWorkspacePath: String?
     @Published private(set) var resumableAgentSessions: [ResumableAgentSession] = []
     @Published var activeWorkspacePath: String? {
         didSet {
@@ -350,7 +349,6 @@ final class AppModel: ObservableObject {
     private func apply(detail: ProjectDetailViewData) {
         selectedProject = detail
         liveSessions = detail.liveSessions
-        selectedWorkspacePath = nil
         // The selection still names the *previous* project's worktree. Let it go
         // before recomputing, or the missing-worktree guard below reads it as a
         // worktree that vanished and overwrites what this project remembers.
@@ -1033,8 +1031,9 @@ final class AppModel: ObservableObject {
     private(set) var closingSessionIDs: Set<String> = []
 
     func markActiveSessionOutput() {
-        guard let id = activeSessionID, let host = hosts[id] else { return }
-        host.markOutput()
+        // `markOutput()` used to be called here; all it did was stamp a
+        // `lastOutputTime` that nothing ever read.
+        guard let id = activeSessionID else { return }
         resetDebounce(sessionID: id)
     }
 
@@ -1080,12 +1079,6 @@ final class AppModel: ObservableObject {
             expandedProjectIDs.sorted().joined(separator: ","),
             forKey: StorageKeys.expandedProjectIDs
         )
-    }
-
-
-    /// Backward-compatible computed property for views that check idle by session ID.
-    var idleSessionIDs: Set<String> {
-        Set(sessionStates.filter { $0.value == .idle }.map(\.key))
     }
 
     /// Keep projects[].liveSessionDetails in sync with current liveSessions.

@@ -3,11 +3,14 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GHOSTTY_DIR="$ROOT_DIR/vendor/ghostty"
-XCFRAMEWORK_OUT="$GHOSTTY_DIR/zig-out/macos/GhosttyKit.xcframework"
+# Where the Xcode phase and release.yml both look for it.
+XCFRAMEWORK_OUT="$GHOSTTY_DIR/macos/GhosttyKit.xcframework"
 
 if [ ! -d "$GHOSTTY_DIR" ]; then
     echo "error: Ghostty source not found at $GHOSTTY_DIR" >&2
-    echo "Run: git clone --depth 1 https://github.com/ghostty-org/ghostty.git $GHOSTTY_DIR" >&2
+    echo "Fetch the pinned commit:" >&2
+    echo "  git init $GHOSTTY_DIR && git -C $GHOSTTY_DIR remote add origin https://github.com/ghostty-org/ghostty.git" >&2
+    echo "  git -C $GHOSTTY_DIR fetch --depth 1 origin \"\$(cat $ROOT_DIR/.ghostty-version)\" && git -C $GHOSTTY_DIR checkout FETCH_HEAD" >&2
     exit 1
 fi
 
@@ -18,7 +21,9 @@ fi
 
 echo "Building Ghostty xcframework..."
 cd "$GHOSTTY_DIR"
-zig build -Demit-xcframework
+# ReleaseFast is not optional: a debug GhosttyKit ships a ~100x slower
+# allocator, which reads as the app being broken rather than slow.
+zig build -Doptimize=ReleaseFast -Demit-xcframework=true
 
 if [ -d "$XCFRAMEWORK_OUT" ]; then
     echo "Build succeeded: $XCFRAMEWORK_OUT"

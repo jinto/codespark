@@ -100,14 +100,6 @@ pub const TerminalGrid = struct {
     rows: u16,
     lines: [][]u8,
 
-    pub fn empty(allocator: std.mem.Allocator) !TerminalGrid {
-        return .{
-            .cols = 0,
-            .rows = 0,
-            .lines = try allocator.alloc([]u8, 0),
-        };
-    }
-
     pub fn deinit(self: *TerminalGrid, allocator: std.mem.Allocator) void {
         for (self.lines) |line| allocator.free(line);
         allocator.free(self.lines);

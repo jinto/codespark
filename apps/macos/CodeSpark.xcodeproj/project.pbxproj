@@ -34,7 +34,6 @@
 		4A72F1CFFEF80585ED500C3F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E88E37B7F37CF55D219D6B /* SettingsView.swift */; };
 		4E5838C30942E3A4EAC8B3B2 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 17158E6BF62F75313B1E9B2F /* Metal.framework */; };
 		4F7109283E67CEE1A8CA7425 /* GhosttyTerminalSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDF23B602753F8B2AC6D2D29 /* GhosttyTerminalSurfaceView.swift */; };
-		5066F54CBC80078498D6B71E /* CodeSparkWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E0D94021E6A37AA34942EED /* CodeSparkWindow.swift */; };
 		55DF7F1F76B8385AE01FBEB5 /* CodeSparkUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D1E03959DA8A839A6A0BDA5 /* CodeSparkUITests.swift */; };
 		566296EC328127177468735C /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D4B27F8AE7CBF0B33461523 /* AppModel.swift */; };
 		5A9644496F341ACE93AF9035 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7DA64F8FB306B85441226CB5 /* AppKit.framework */; };
@@ -59,7 +58,6 @@
 		E1275E7403FDD3DEE3FB06A2 /* CodeSparkApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CCE58232FA2D383F208923 /* CodeSparkApp.swift */; };
 		A1B2C3D40009E5F600001009 /* AppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40008E5F600001008 /* AppShortcuts.swift */; };
 		E898DEED2F56E2BA70A0166F /* StorageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32DD666C1E320049CFEF78CE /* StorageKeys.swift */; };
-		E8CF80B13D9BFCC8278965D6 /* SessionSidebarRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */; };
 		EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */; };
 		EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1188AFD5C69D085D60330D02 /* AppTheme.swift */; };
 		552061F050EC181BD64E2449 /* SSHConnectionInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CFD8F59943F2EE644486015 /* SSHConnectionInfo.swift */; };
@@ -105,7 +103,6 @@
 		18CA500C962BD0EB2F45C89C /* CoreText.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreText.framework; path = System/Library/Frameworks/CoreText.framework; sourceTree = SDKROOT; };
 		1E714CC26161A08016B366A0 /* TerminalHostFactoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostFactoryTests.swift; sourceTree = "<group>"; };
 		23C1F099F0619FDF11DD53CF /* MockProjectCoreClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockProjectCoreClient.swift; sourceTree = "<group>"; };
-		2E0D94021E6A37AA34942EED /* CodeSparkWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeSparkWindow.swift; sourceTree = "<group>"; };
 		32DD666C1E320049CFEF78CE /* StorageKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageKeys.swift; sourceTree = "<group>"; };
 		34B3EF915455EE5A5AEFAE01 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
 		372FF5235CD476B7A3D7D120 /* ProjectViewData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectViewData.swift; sourceTree = "<group>"; };
@@ -140,7 +137,6 @@
 		D7E1A2B3C4D50012E5F600001012 /* ReleaseWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReleaseWorkflowTests.swift; sourceTree = "<group>"; };
 		982886C18B94884FEA504409 /* GitWorktreeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitWorktreeService.swift; sourceTree = "<group>"; };
 		9FDED25D7FAF92C05A934D97 /* TerminalHostProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostProtocol.swift; sourceTree = "<group>"; };
-		A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSidebarRow.swift; sourceTree = "<group>"; };
 		B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalFontSettings.swift; sourceTree = "<group>"; };
 		BAEC4795D26203BF922A48FF /* CodeSparkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = CodeSparkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BDF23B602753F8B2AC6D2D29 /* GhosttyTerminalSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyTerminalSurfaceView.swift; sourceTree = "<group>"; };
@@ -275,7 +271,6 @@
 				A1B2C3D40010E5F600002002 /* RemoteFolderPickerSheet.swift */,
 				BE51452DABDDDB623C9F8A37 /* MainContentView.swift */,
 				F3450FDDB010612C39DC6A6B /* OnboardingView.swift */,
-				A20B2C7AB001F04E0BFF45B4 /* SessionSidebarRow.swift */,
 				6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */,
 				E2E88E37B7F37CF55D219D6B /* SettingsView.swift */,
 				13C9EBA2F1A781BC47810CD2 /* SidebarView.swift */,
@@ -331,7 +326,6 @@
 			children = (
 				11CCE58232FA2D383F208923 /* CodeSparkApp.swift */,
 				A1B2C3D40008E5F600001008 /* AppShortcuts.swift */,
-				2E0D94021E6A37AA34942EED /* CodeSparkWindow.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -568,7 +562,6 @@
 				EB8240D962C8CC6F19F2E8E2 /* AppTheme.swift in Sources */,
 					E1275E7403FDD3DEE3FB06A2 /* CodeSparkApp.swift in Sources */,
 					A1B2C3D40009E5F600001009 /* AppShortcuts.swift in Sources */,
-				5066F54CBC80078498D6B71E /* CodeSparkWindow.swift in Sources */,
 				A014AF3F565FAEE68A6AF58D /* GhosttyRuntime.swift in Sources */,
 				ADC7C90A0E6B40786204C136 /* GhosttyTerminalHost.swift in Sources */,
 				4F7109283E67CEE1A8CA7425 /* GhosttyTerminalSurfaceView.swift in Sources */,
@@ -580,7 +573,6 @@
 				63F552917CA547901266483B /* OnboardingView.swift in Sources */,
 				99172E1EB5C2AE4793F3C31E /* ProjectCoreClient.swift in Sources */,
 				E0A153DE5FCE17D9559AC0C3 /* ProjectViewData.swift in Sources */,
-				E8CF80B13D9BFCC8278965D6 /* SessionSidebarRow.swift in Sources */,
 				47E722B3A80D8F6EA4095FAA /* SessionTabBarView.swift in Sources */,
 				A1B2C3D40004E5F600001004 /* RestoredScreenReplay.swift in Sources */,
 				D7E1A2B3C4D50025E5F600001025 /* Subprocess.swift in Sources */,
