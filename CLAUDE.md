@@ -77,6 +77,14 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
   - **트리 유무를 먼저 묻지 않고 토글한다.** 선택이 git으로 워크트리 목록을 새로 읽으므로 캐시가 비어 있는 첫 클릭에는 "없음"으로 보인다 — 가드를 두면 이번 세션에 처음 여는 프로젝트마다 첫 클릭을 삼킨다. 워크트리가 1개면 아무것도 안 그리는 플래그만 저장될 뿐이다.
   - `expandedProjectIDs`(UserDefaults 저장)가 기준이고 **다른 프로젝트의 선택과는 무관하다** — Cmd+1로 옮겨가도 열어둔 트리는 그대로다. detail이 도착한 프로젝트는 `workspaces`(라이브)를, 나머지는 `liveSessionDetails`를 그룹핑해 행을 만든다(아래 `selectedProject` 항목).
   - **UI 테스트 주의**: 삼각형이 사라지면서 "워크트리 여러 개인 프로젝트"를 공짜로 걸러주던 수단도 사라졌다. 이제 모든 행이 클릭을 받으므로 `projectRowWithATree()`가 눌러보고 `worktreeBranch` 개수가 변하는 행을 찾는다. `worktreeDisclosure`를 찾던 옛 방식대로 두면 테스트가 **조용히 skip되며 통과**한다.
+    - **그리고 헬퍼가 옳아도 재료가 없으면 같은 일이 벌어진다.** XCUITest는 개발자의 **진짜 스토어**(`~/Library/Application Support/com.jinto.codespark.dev/store.sqlite3`)를 열기 때문에, 그 스토어의 프로젝트가 전부 워크트리 1개면 `projectRowWithATree()`가 `XCTSkip("no multi-worktree project in this store")`를 던진다. 트리 관련 테스트 5개가 통째로 건너뛰고 **`** TEST SUCCEEDED **`가 뜬다** — 사이드바 트리의 pre-push 게이트가 이 기계에서만 눈을 감고 있는 상태다(2026-08-31 실제로 그랬다).
+    - **판별**: 초록불이 아니라 skip 수를 읽을 것. `Executed 13 tests, with 5 tests skipped`가 그 신호다.
+    - **해결**: 돌리기 전에 워크트리를 하나 만들어 재료를 주고, 끝나면 지운다. 이걸 하고 나서야 5개가 실제로 돌았다.
+      ```bash
+      git worktree add -b tmp/ui-verify /tmp/codespark-uiverify
+      # …XCUITest 실행…
+      git worktree remove /tmp/codespark-uiverify && git branch -D tmp/ui-verify
+      ```
   - **탭 없는 워크트리는 접힌다**(`sidebarWorktreeRows(for:)`, `·· N more`). 접히지 않는 것 셋: 탭이 있는 것(= `Cmd` 숫자가 가리키는 곳), **`projectSelectedWorkspaces`에 기록된 마지막으로 서 있던 워크트리**, 그리고 **`main`은 언제나**. 앞의 둘을 "지금 선택된 워크트리"로 판정하면 선택이 행 개수를 바꾼다 — 클릭 한 번에 `2 more`가 `1 more`가 되고 화면엔 다른 변화가 없다. main이 예외인 이유는 위와 같다: 펼친 트리는 최소 한 줄의 실체를 보여야 한다.
   - **`prunable`은 이유를 달고 온다**: git은 `prunable <reason>`을 찍지 `prunable` 한 단어를 찍지 않는다. 완전 일치로 비교하던 동안 **prunable 워크트리가 한 번도 걸러지지 않았고**, 디렉터리가 사라진 워크트리가 사이드바에 남아 클릭하면 없는 경로에 서게 됐다.
     - 걸러낼 때 **"첫 번째" 표시를 지우면 안 된다**: 그 플래그는 "우리가 남기는 것 중 첫 번째"라는 뜻이다. 지우면 첫 stanza가 prunable일 때 **main 워크트리가 하나도 없는 목록**이 나오고, `projectIdentityLine`의 `.first(where: \.isMainWorktree)?.branch`가 nil이 되어 원격 행이 조용히 브랜치를 잃는다.
@@ -142,7 +150,9 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - **3겹째 (pre-push, XCUITest)**: `test_cmd_ctrl_s_toggles_the_sidebar_with_a_terminal_open`이 실제 앱에서 조합을 눌러 동작까지 확인하고, `test_declared_commands_are_wired_to_menu_items`가 선언만 하고 Button에 안 붙인 경우를 잡는다.
   - **터미널이 열려 있어야 재현된다.** `performKeyEquivalent`는 윈도우 뷰 트리를 훑으므로 세션이 없으면 가로챌 Ghostty surface가 없어 버그가 숨는다. 이 조건을 빼먹으면 테스트가 통과하면서 아무것도 못 잡는다.
   - UI 테스트는 앱을 띄우고 포커스를 뺏어서 pre-commit이 아니라 **pre-push**에 있다.
-  - `testmanagerd`가 오래 떠 있으면 "Timed out while enabling automation mode"로 러너가 안 뜬다. `kill $(pgrep -x testmanagerd)`로 내리면 launchd가 다시 만든다(SIP 때문에 `launchctl kickstart`는 막힌다).
+  - `testmanagerd`가 오래 떠 있으면 "Timed out while enabling automation mode"로 러너가 안 뜬다. 내리면 launchd가 다시 만든다(SIP 때문에 `launchctl kickstart`는 막힌다). **`kill -9`여야 한다** — 그냥 `kill`은 아무 말 없이 실패하고 PID가 그대로 남아, 고친 줄 알고 다시 돌렸다가 같은 오류를 두 번 본다.
+  - 화면이 **잠겨 있으면** 러너가 아예 초기화되지 않는다(`LocalAuthentication Code=-4 "System authentication is running."`). 잠금 화면의 인증 세션이 자동화를 막는 것이라 우회할 방법이 없다 — 풀고 돌려야 한다.
+  - `osascript` 기반 `UIVerificationTests`(`TEST_RUNNER_UI_VERIFICATION=1`)는 이 macOS에서 `entire contents of window 1`이 **0을 돌려주어** 사실상 죽어 있다. `static texts of window 1`처럼 직접 지정하면 읽힌다. 눈으로 확인할 일이 있으면 `screencapture`(화면 기록 권한 필요) 쪽이 낫고, 진짜 게이트는 XCUITest다.
 
 ## Terminal State Detection
 
