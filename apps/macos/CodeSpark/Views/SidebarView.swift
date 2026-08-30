@@ -74,7 +74,7 @@ struct SidebarView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             ProjectSidebarRow(
                                 project: project,
-                                isSelected: model.selectedProjectID == project.id,
+                                isSelected: model.selection.id == project.id,
                                 status: model.projectStatus(for: project),
                                 infoLine: model.projectInfoLine(for: project),
                                 hotkeyIndex: badges.index(forProject: project)
@@ -139,7 +139,7 @@ struct SidebarView: View {
                                 ForEach(worktreeRows.shown) { workspace in
                                     WorktreeSidebarRow(
                                         workspace: workspace,
-                                        isSelected: model.selectedProjectID == project.id
+                                        isSelected: model.selection.id == project.id
                                             && model.activeWorkspacePath == workspace.path,
                                         status: model.workspaceStatus(for: workspace),
                                         hotkeyIndex: badges.index(forWorktree: workspace, in: project),
@@ -234,7 +234,7 @@ struct SidebarView: View {
                         hasActiveSession: model.activeSessionID != nil,
                         hasSheet: NSApp.keyWindow?.attachedSheet != nil
                             || model.pendingWorkspaceRecoveryProjectID != nil,
-                        hasSelectedProject: model.selectedProjectID != nil
+                        hasSelectedProject: model.selection.id != nil
                     ) else { return event }
                     model.presentSessionChooser()
                     return nil

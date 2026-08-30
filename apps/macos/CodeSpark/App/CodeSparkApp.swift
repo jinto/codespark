@@ -47,7 +47,7 @@ struct CodeSparkApp: App {
                         MainContentView(model: model, onToggleSidebar: {
                             withAnimation { isSidebarVisible.toggle() }
                         })
-                        .navigationTitle("\u{1F4C2} " + (model.selectedProject?.name ?? ""))
+                        .navigationTitle("\u{1F4C2} " + (model.selection.onScreen?.name ?? ""))
                         .navigationSubtitle(model.activeBranchLabel)
                     }
                     .task {
@@ -61,7 +61,7 @@ struct CodeSparkApp: App {
             }
             .preferredColorScheme(.dark)
             .frame(minWidth: 600, minHeight: 400)
-            .onChange(of: model.selectedProjectID) { _, newValue in
+            .onChange(of: model.selection.id) { _, newValue in
                 savedProjectID = newValue ?? ""
             }
             .onChange(of: model.projects.count) { _, newCount in
@@ -85,7 +85,7 @@ struct CodeSparkApp: App {
                 Button("New Session…") {
                     model.presentSessionChooser()
                 }
-                .disabled(model.selectedProjectID == nil)
+                .disabled(model.selection.id == nil)
                 .keyboardShortcut(.newSession)
 
                 if !model.hiddenProjectIDs.isEmpty {
@@ -103,12 +103,12 @@ struct CodeSparkApp: App {
                 Button(model.activeSessionID != nil ? "Close Session" : "Close Project") {
                     if model.activeSessionID != nil {
                         model.pendingCloseSessionID = model.activeSessionID
-                    } else if let projID = model.selectedProjectID {
+                    } else if let projID = model.selection.id {
                         model.pendingCloseProjectID = projID
                     }
                 }
                 .keyboardShortcut(.closeSessionOrProject)
-                .disabled(model.selectedProjectID == nil)
+                .disabled(model.selection.id == nil)
             }
             CommandGroup(replacing: .sidebar) {
                 Button("Toggle Sidebar") {
@@ -223,7 +223,10 @@ struct CodeSparkApp: App {
             model.hiddenProjectIDs = Set(savedHiddenIDs.split(separator: ",").map(String.init))
         }
         if !savedProjectID.isEmpty {
-            model.selectedProjectID = savedProjectID
+            // Named before anything is loaded — `load()` reads it to decide
+            // which project to open. No detail exists yet, which is exactly
+            // what a pending selection is.
+            model.selection = .pending(id: savedProjectID, onScreen: nil)
         }
         await model.load()
         model.refreshAgentSessions()
@@ -269,7 +272,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let model else { return }
         if model.activeSessionID != nil {
             model.pendingCloseSessionID = model.activeSessionID
-        } else if let projID = model.selectedProjectID {
+        } else if let projID = model.selection.id {
             model.pendingCloseProjectID = projID
         }
     }

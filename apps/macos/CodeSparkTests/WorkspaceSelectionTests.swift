@@ -125,7 +125,7 @@ final class WorkspaceSelectionTests: XCTestCase {
     @MainActor
     func test_cmd_project_order_matches_sidebar_order() {
         let model = AppModel(core: MockProjectCoreClient(summaries: [], details: []))
-        model.selectedProjectID = "p1"
+        model.selection = .pending(id: "p1", onScreen: nil)
         model.projects = [
             ProjectSummaryViewData(
                 id: "p1", name: "First", path: "/tmp/first", transport: "local",
@@ -950,7 +950,9 @@ final class WorkspaceSelectionTests: XCTestCase {
         var areasAfterLeaving: [String] = []
         core.onStartSession = { [weak model] in
             started += 1
-            if started == 1 { model?.selectedProjectID = "p2" }
+            if started == 1, let model {
+                model.selection = .pending(id: "p2", onScreen: model.selection.onScreen)
+            }
             if started > 1, let model { areasAfterLeaving.append("\(model.mainAreaContent)") }
         }
         await model.load()
@@ -1019,7 +1021,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         await Task.yield()
         try? await Task.sleep(nanoseconds: 100_000_000)
 
-        XCTAssertEqual(model.selectedProjectID, "p2")
+        XCTAssertEqual(model.selection.id, "p2")
         XCTAssertEqual(model.activeSessionID, "b1",
                        "p1's restore reached into p2 and moved it off the tab it opened on")
     }
@@ -1157,11 +1159,11 @@ final class WorkspaceSelectionTests: XCTestCase {
     func test_an_index_with_nothing_behind_it_does_nothing() async {
         let (model, _) = await modelWithTwoWorktrees()
         await model.newSession(inWorkspacePath: Self.mainWorktree)
-        let selected = model.selectedProjectID
+        let selected = model.selection.id
 
         await model.selectNumberedPlace(7)
 
-        XCTAssertEqual(model.selectedProjectID, selected)
+        XCTAssertEqual(model.selection.id, selected)
     }
 
     @MainActor
@@ -1186,7 +1188,7 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         await model.selectNumberedPlace(1)
 
-        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertEqual(model.selection.id, "p1")
         XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree,
                        "it went to the project but not to where that project was left")
     }
@@ -1477,7 +1479,7 @@ final class WorkspaceSelectionTests: XCTestCase {
 
     // MARK: - A write mid-switch belongs to the project that asked for it
     //
-    // `selectedProjectID` moves on the click; `selectedProject` arrives a git
+    // The chosen id moves on the click; the detail arrives a git
     // round trip later. Three writers read both in the same breath, so during
     // that window they filed project B's work under project A's identity — and
     // unlike the sidebar blink, these reach the store and survive a restart.
@@ -1592,7 +1594,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         await switching.value
     }
 
-    /// `selectedProjectID` moves the instant the key is pressed; the worktrees
+    /// The chosen id moves the instant the key is pressed; the worktrees
     /// arrive a git round trip later. In between, `workspaces` still holds the
     /// project you came *from* — and reading it for the one you are going to
     /// showed the new project with someone else's worktrees, or with none.
@@ -1653,6 +1655,65 @@ final class WorkspaceSelectionTests: XCTestCase {
         await press.value
     }
 
+    /// And the same window has one more thing in it. An ssh project with no
+    /// tabs offers to reconnect, and `mainAreaContent` puts that offer ahead of
+    /// everything — but it never asks *whose* offer it is, while its sibling
+    /// `progressForSelectedProject` does. So opening another project keeps the
+    /// reconnect screen up over it, with its button wired to the host you left,
+    /// for the whole round trip.
+    @MainActor
+    func test_the_reconnect_offer_does_not_follow_you_to_another_project() async {
+        func summary(id: String, path: String, transport: String) -> ProjectSummaryViewData {
+            ProjectSummaryViewData(id: id, name: id, path: path, transport: transport,
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: [])
+        }
+        // `ssh://box` names no directory, so nothing tries to scan a real host.
+        let core = MockProjectCoreClient(
+            summaries: [summary(id: "remote", path: "ssh://box", transport: "ssh"),
+                        summary(id: "local", path: Self.otherProject, transport: "local")],
+            details: [
+                ProjectDetailViewData(id: "remote", name: "remote", path: "ssh://box",
+                                      transport: "ssh", liveSessions: []),
+                ProjectDetailViewData(id: "local", name: "local", path: Self.otherProject,
+                                      transport: "local", liveSessions: [])
+            ],
+            detailLatencyByID: ["local": 400_000_000]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        XCTAssertEqual(model.mainAreaContent, .sshReconnect,
+                       "precondition: the remote project with no tabs offers to reconnect")
+
+        let press = Task { await model.selectProject(id: "local") }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(model.mainAreaContent, .empty,
+                       "the project you left went on offering to reconnect over the one you opened")
+        await press.value
+    }
+
+    /// Clicking a project row is also how its tree is toggled, so the project
+    /// you are already standing in gets reselected constantly — and that starts
+    /// a fresh lookup. While it runs the app must go on knowing that the
+    /// worktree under the tab bar is this project's, because it is: the detail
+    /// on screen belongs to the project being asked about. Forget that and a
+    /// Cmd+T during those milliseconds opens in the repo root instead.
+    @MainActor
+    func test_reselecting_the_project_you_are_in_keeps_you_in_your_worktree() async {
+        let model = await modelWithASlowLookup()
+        await model.selectProject(id: "p1")
+        model.activeWorkspacePath = Self.featureWorktree
+
+        let press = Task { await model.selectProject(id: "p1") }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        await model.newSession()
+
+        XCTAssertEqual(model.liveSessions.last?.workspacePath, Self.featureWorktree,
+                       "a tab opened during a reselect landed outside the worktree it was opened in")
+        await press.value
+    }
+
     @MainActor
     func test_worktree_rows_survive_switching_to_another_project() async {
         forgetExpandedProjects()
@@ -1703,7 +1764,7 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         await model.selectProjectAndToggleWorktrees(id: "p1")
 
-        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertEqual(model.selection.id, "p1")
         XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
                       "the row click has to open the tree — nothing else can")
     }
@@ -1718,7 +1779,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         await model.selectProjectAndToggleWorktrees(id: "p1")
         await model.selectProjectAndToggleWorktrees(id: "p1")
 
-        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertEqual(model.selection.id, "p1")
         XCTAssertTrue(model.expandedProjectIDs.isEmpty)
     }
 
@@ -1795,7 +1856,7 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         await model.selectWorktree(projectID: "p1", path: Self.featureWorktree)
 
-        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertEqual(model.selection.id, "p1")
         XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
     }
 
@@ -2302,7 +2363,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         let model = await modelWithTwoProjects()
 
         await model.selectProjectAndToggleWorktrees(id: "p1")
-        XCTAssertEqual(model.selectedProjectID, "p1")
+        XCTAssertEqual(model.selection.id, "p1")
         XCTAssertTrue(model.expandedProjectIDs.contains("p1"), "the first click opens the tree")
 
         await model.selectProjectAndToggleWorktrees(id: "p1")
@@ -2430,7 +2491,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         await model.selectProjectAndToggleWorktrees(id: "p2")
         let p2 = model.projects.first { $0.id == "p2" }!
 
-        XCTAssertEqual(model.selectedProjectID, "p2")
+        XCTAssertEqual(model.selection.id, "p2")
         XCTAssertTrue(model.sidebarWorktrees(for: p2).isEmpty,
                       "and there is still nothing under it to show")
     }
@@ -2702,7 +2763,7 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         await model.selectNumberedPlace(2)
 
-        XCTAssertEqual(model.selectedProjectID, "p2")
+        XCTAssertEqual(model.selection.id, "p2")
         XCTAssertTrue(model.expandedProjectIDs.contains("p2"),
                       "the digit took us there but left the tree shut")
     }

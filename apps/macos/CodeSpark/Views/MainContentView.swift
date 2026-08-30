@@ -10,7 +10,7 @@ struct MainContentView: View {
 
     var body: some View {
         Group {
-        if let project = model.selectedProject {
+        if let project = model.selection.onScreen {
             VStack(spacing: 0) {
                 SessionTabBarView(
                     sessions: model.visibleSessions,
@@ -19,7 +19,7 @@ struct MainContentView: View {
                     onClose: { id in model.closeSession(id: id) },
                     onNew: { Task { await model.newSession() } },
                     onNewWorktree: {
-                        guard model.selectedProject?.transport == "local" else { return }
+                        guard model.selection.onScreen?.transport == "local" else { return }
                         newWorktreeBranch = ""
                         showAddWorktreeSheet = true
                     },
@@ -83,7 +83,7 @@ struct MainContentView: View {
         }
         } // Group
         .sheet(isPresented: $showAddWorktreeSheet) {
-            if let project = model.selectedProject {
+            if let project = model.selection.onScreen {
                 AddWorktreeSheet(
                     branchName: $newWorktreeBranch,
                     projectPath: project.path,
@@ -137,7 +137,7 @@ struct MainContentView: View {
             titleVisibility: .visible
         ) {
             if let projectID = model.pendingWorkspaceRecoveryProjectID,
-               let project = model.selectedProject,
+               let project = model.selection.onScreen,
                project.id == projectID {
                 let interruptedCount = project.interruptedSessions.count
                 if model.liveSessions.isEmpty && interruptedCount > 0 {
@@ -211,7 +211,7 @@ struct MainContentView: View {
             Text("SSH Project")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            if let info = model.selectedProject.flatMap({ SSHConnectionInfo(uri: $0.path) }) {
+            if let info = model.selection.onScreen.flatMap({ SSHConnectionInfo(uri: $0.path) }) {
                 Text(info.displayLabel)
                     .font(.system(.body, design: .monospaced))
                     .foregroundStyle(.tertiary)

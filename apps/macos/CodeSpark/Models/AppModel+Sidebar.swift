@@ -40,8 +40,8 @@ extension AppModel {
     /// selected project reads the live grouping; the rest are grouped from their
     /// summaries, so their tabs stay accounted for while focus is elsewhere.
     ///
-    /// Keyed on `selectedProject` — the detail that has *landed* — and not on
-    /// `selectedProjectID`, which moves the instant a row is clicked or a digit
+    /// Keyed on the detail the live grouping belongs to, and not on the id,
+    /// which moves the instant a row is clicked or a digit
     /// pressed. `workspaces` belongs to the project it was computed for, so
     /// through the round trip in between it still describes the project you came
     /// from, and handing it to the one you are going to made both rows lie: the
@@ -49,7 +49,7 @@ extension AppModel {
     /// worktrees that were not its own. Until the detail arrives, a project is
     /// its summary — the same thing every unselected row already reads.
     func workspaces(for project: ProjectSummaryViewData) -> [WorkspaceViewData] {
-        guard project.id != selectedProject?.id else { return workspaces }
+        guard project.id != selection.onScreen?.id else { return workspaces }
         return WorkspaceViewData.groupSessions(
             project.liveSessionDetails,
             into: gitWorktreeService.worktrees(for: project.path),
@@ -298,7 +298,7 @@ extension AppModel {
     /// A worktree row can belong to a project that is not the selected one, so
     /// picking it has to bring its project along.
     func selectWorktree(projectID: String, path: String) async {
-        if selectedProjectID != projectID {
+        if selection.id != projectID {
             await selectProject(id: projectID, promptForRecovery: true)
         }
         activeWorkspacePath = path
@@ -333,8 +333,8 @@ extension AppModel {
         // comparing — and through this project's own connection, so a path can
         // never match a worktree on some other host.
         let address: String
-        if selectedProject?.transport == "ssh" {
-            guard let info = SSHConnectionInfo(uri: selectedProject?.path ?? "") else { return nil }
+        if selection.onScreen?.transport == "ssh" {
+            guard let info = SSHConnectionInfo(uri: selection.onScreen?.path ?? "") else { return nil }
             address = info.workspaceURI(forRemotePath: cwd)
         } else {
             address = cwd
@@ -354,7 +354,7 @@ extension AppModel {
            let workspace = workspaces.first(where: { $0.path == path }) {
             return workspace.branch
         }
-        return gitBranches[selectedProject?.path ?? ""] ?? ""
+        return gitBranches[selection.onScreen?.path ?? ""] ?? ""
     }
 
     /// Status of one worktree, from the tabs that belong to it. Mirrors

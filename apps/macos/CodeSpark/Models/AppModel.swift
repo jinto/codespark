@@ -6,8 +6,10 @@ import UserNotifications
 @MainActor
 final class AppModel: ObservableObject {
     @Published var projects: [ProjectSummaryViewData] = []
-    @Published var selectedProjectID: String?
-    @Published var selectedProject: ProjectDetailViewData?
+    /// The project on screen, as one value — see `Selection`. It replaced a
+    /// pair (`selectedProjectID`, `selectedProject`) that could name two
+    /// different projects at once, and did, for the length of every lookup.
+    @Published var selection: Selection = .none
     @Published var activeSessionID: String? {
         didSet {
             guard let id = activeSessionID else { return }
@@ -48,7 +50,7 @@ final class AppModel: ObservableObject {
             guard let path = activeWorkspacePath else { return }
             // The project remembers where you were, so coming back to it does not
             // drop you at the repo root.
-            if let projectID = selectedProjectID { projectSelectedWorkspaces[projectID] = path }
+            if let projectID = selection.id { projectSelectedWorkspaces[projectID] = path }
             selectRememberedSession(in: path)
         }
     }
@@ -110,7 +112,7 @@ final class AppModel: ObservableObject {
 
     /// The restore the project on screen is waiting for, if it is waiting for one.
     private var progressForSelectedProject: RestoreProgress? {
-        guard let restoreProgress, restoreProgress.projectID == selectedProjectID else { return nil }
+        guard let restoreProgress, restoreProgress.projectID == selection.id else { return nil }
         return restoreProgress
     }
 
@@ -124,7 +126,13 @@ final class AppModel: ObservableObject {
     }
 
     var mainAreaContent: MainAreaContent {
-        if pendingSSHReconnectProjectID != nil && liveSessions.isEmpty { return .sshReconnect }
+        // Whose offer it is, not merely that there is one. Left unasked, the
+        // reconnect screen followed you onto the next project and sat there for
+        // its whole lookup, with its button wired to the host you had left.
+        // `progressForSelectedProject` asks; this did not.
+        if pendingSSHReconnectProjectID != nil,
+           pendingSSHReconnectProjectID == selection.id,
+           liveSessions.isEmpty { return .sshReconnect }
         // A tab that is already back gets the room. Restoring the rest is said in
         // a strip above it, not by covering the terminal the user can use now.
         guard visibleSessions.isEmpty else { return .terminals }
@@ -218,7 +226,7 @@ final class AppModel: ObservableObject {
     }
 
     func attachLiveSessions() async {
-        guard let project = selectedProject else { return }
+        guard let project = selection.detail else { return }
         // SSH projects: reattach existing sessions if any, otherwise show reconnect prompt
         if project.transport == "ssh" {
             let existingSSH = project.liveSessions.filter { hosts[$0.id] != nil }
@@ -268,15 +276,15 @@ final class AppModel: ObservableObject {
 
             guard !projects.isEmpty else {
                 cancelInflightWork()
-                selectedProjectID = nil
+                selection = .none
                 clearDetailState()
                 loadErrorMessage = nil
                 return
             }
 
-            let resolvedProjectID = if let selectedProjectID,
-                                       projects.contains(where: { $0.id == selectedProjectID }) {
-                selectedProjectID
+            let resolvedProjectID = if let chosen = selection.id,
+                                       projects.contains(where: { $0.id == chosen }) {
+                chosen
             } else {
                 projects[0].id
             }
@@ -286,7 +294,7 @@ final class AppModel: ObservableObject {
         } catch {
             cancelInflightWork()
             projects = []
-            selectedProjectID = nil
+            selection = .none
             clearDetailState()
             loadErrorMessage = error.localizedDescription
         }
@@ -297,13 +305,27 @@ final class AppModel: ObservableObject {
         pendingWorkspaceRecoveryProjectID = nil
 
         guard let id else {
-            selectedProjectID = nil
+            selection = .none
             clearDetailState()
             loadErrorMessage = nil
             return
         }
 
-        selectedProjectID = id
+        // Picked now; its detail lands below. The project being left stays on
+        // screen meanwhile — the pane must not blink empty for a round trip —
+        // and `Selection` is what keeps that borrowed detail out of reach of
+        // everything acting for the new one.
+        //
+        // Unless the project on screen *is* the one being asked about, which a
+        // row click always is: clicking a row is how its tree toggles, so the
+        // project you are standing in is reselected constantly. The detail on
+        // screen is genuinely its own, so it stays landed and the worktree
+        // under the tab bar goes on counting while the refresh runs.
+        if let onScreen = selection.onScreen, onScreen.id == id {
+            selection = .loaded(onScreen)
+        } else {
+            selection = .pending(id: id, onScreen: selection.onScreen)
+        }
 
         let task = Task {
             do {
@@ -323,6 +345,10 @@ final class AppModel: ObservableObject {
                 if worktreeProjectPaths.contains(detail.path) {
                     gitWorktreeService.expireCache(for: detail.path)
                     await gitWorktreeService.refreshWorktrees(for: worktreeProjectPaths)
+                    // The longest wait in here, and an impatient second click
+                    // cancels this one halfway through it. Everything below
+                    // speaks for a project that is no longer the one on screen.
+                    guard !Task.isCancelled else { return }
                     recomputeWorkspaces()
                 }
                 refreshAgentSessions()
@@ -347,7 +373,7 @@ final class AppModel: ObservableObject {
     }
 
     private func apply(detail: ProjectDetailViewData) {
-        selectedProject = detail
+        selection = .loaded(detail)
         liveSessions = detail.liveSessions
         // The selection still names the *previous* project's worktree. Let it go
         // before recomputing, or the missing-worktree guard below reads it as a
@@ -363,7 +389,10 @@ final class AppModel: ObservableObject {
     }
 
     func recomputeWorkspaces() {
-        guard let project = selectedProject else {
+        // The project `liveSessions` belongs to, which during a switch is still
+        // the one being left — grouping those tabs under the incoming project
+        // would put them in a repo that never opened them.
+        guard let project = selection.onScreen else {
             workspaces = []
             return
         }
@@ -430,10 +459,8 @@ final class AppModel: ObservableObject {
         if let index = projects.firstIndex(where: { $0.id == id }) {
             projects[index].name = newName
         }
-        if selectedProject?.id == id {
-            selectedProject = selectedProject.map {
-                ProjectDetailViewData(id: $0.id, name: newName, path: $0.path, transport: $0.transport, liveSessions: $0.liveSessions)
-            }
+        selection.updateDetail(id: id) {
+            ProjectDetailViewData(id: $0.id, name: newName, path: $0.path, transport: $0.transport, liveSessions: $0.liveSessions)
         }
         do {
             try await core.renameProject(id: id, newName: newName)
@@ -446,10 +473,8 @@ final class AppModel: ObservableObject {
         if let index = projects.firstIndex(where: { $0.id == id }) {
             projects[index].path = newPath
         }
-        if selectedProject?.id == id {
-            selectedProject = selectedProject.map {
-                ProjectDetailViewData(id: $0.id, name: $0.name, path: newPath, transport: $0.transport, liveSessions: $0.liveSessions)
-            }
+        selection.updateDetail(id: id) {
+            ProjectDetailViewData(id: $0.id, name: $0.name, path: newPath, transport: $0.transport, liveSessions: $0.liveSessions)
         }
         do {
             try await core.updateProjectPath(id: id, newPath: newPath)
@@ -480,7 +505,7 @@ final class AppModel: ObservableObject {
         let nextID = adjacentProjectID(excluding: id)
         // Close sessions belonging to this project (from summary details or current liveSessions)
         let sessionIDs: [String]
-        if selectedProjectID == id {
+        if selection.id == id {
             sessionIDs = liveSessions.map(\.id)
         } else if let proj = projects.first(where: { $0.id == id }) {
             sessionIDs = proj.liveSessionDetails.map(\.id)
@@ -501,7 +526,7 @@ final class AppModel: ObservableObject {
         hiddenProjectIDs.insert(id)
 
         let nextID = teardownProject(id: id)
-        if selectedProjectID == id {
+        if selection.id == id {
             await selectProject(id: nextID)
         }
     }
@@ -524,7 +549,7 @@ final class AppModel: ObservableObject {
             deleteError = error.localizedDescription
         }
 
-        if selectedProjectID == id {
+        if selection.id == id {
             await selectProject(id: nextID)
         }
 
@@ -541,7 +566,7 @@ final class AppModel: ObservableObject {
     /// filesystem walk the UI waited on.
     func refreshAgentSessions() {
         let paths = Set(
-            [selectedProject?.path, activeWorkspacePath]
+            [selection.onScreen?.path, activeWorkspacePath]
                 .compactMap { $0 }
                 .filter { !$0.isEmpty }
                 + workspaces.map(\.path)
@@ -556,8 +581,8 @@ final class AppModel: ObservableObject {
 
     /// Presents the same session chooser used when opening an interrupted workspace.
     func presentSessionChooser() {
-        guard selectedProjectID != nil else { return }
-        pendingWorkspaceRecoveryProjectID = selectedProjectID
+        guard let projectID = selection.id else { return }
+        pendingWorkspaceRecoveryProjectID = projectID
     }
 
     /// The single project order shared by the sidebar and Cmd+1…9 shortcuts.
@@ -660,7 +685,7 @@ final class AppModel: ObservableObject {
         // trip each, and clicking another project mid-restore used to pour them
         // into whatever was on screen. The surface stays alive either way — its
         // own project picks it up from the store when it is opened again.
-        guard selectedProjectID == projectID else { return sessionID }
+        guard selection.id == projectID else { return sessionID }
         liveSessions.append(session)
         // The grouping is what the tab bar reads through `visibleSessions`, so a
         // tab that is not in it is a tab nobody can see. `newSession` regrouped
@@ -672,13 +697,12 @@ final class AppModel: ObservableObject {
     }
 
     func newSession(inWorkspacePath: String? = nil) async {
-        // The summary, not `selectedProject`. `selectedProjectID` moves on the
-        // click and the detail lands a git round trip later, so reading both in
-        // one breath filed this tab under the project you were going to with the
+        // The summary, not the detail. Reading an id and a detail in one breath
+        // used to file this tab under the project you were going to with the
         // path of the one you came from — and `core.startSession` below writes
         // that row before any guard can catch it. `projects` is keyed by id, so
         // it cannot disagree with itself.
-        guard let projectID = selectedProjectID,
+        guard let projectID = selection.id,
               let project = projects.first(where: { $0.id == projectID }) else { return }
 
         let workspacePath: String
@@ -688,8 +712,9 @@ final class AppModel: ObservableObject {
                   // `activeWorkspacePath` and `workspaces` still describe the
                   // previous project until `apply(detail:)` runs, and the
                   // membership check passes against *its* grouping. Only trust
-                  // them once they are this project's.
-                  selectedProject?.id == projectID,
+                  // them once they are this project's — which, now that the
+                  // selection is one value, is simply: once its detail landed.
+                  selection.detail != nil,
                   workspaces.contains(where: { $0.path == active }) {
             // A new tab belongs to the worktree you are looking at. The
             // membership check keeps a removed worktree from taking the tab
@@ -725,7 +750,7 @@ final class AppModel: ObservableObject {
                     command: info.sshCommand(),
                     sshInfo: info
                 )
-                guard selectedProjectID == projectID else { return }
+                guard selection.id == projectID else { return }
                 // Regroup before selecting: `activeWorkspacePath`'s observer
                 // reads `workspaces`, so a stale grouping would not see the new
                 // tab and would bounce the selection to an older one.
@@ -751,7 +776,7 @@ final class AppModel: ObservableObject {
             )
             // The selection may have moved while the session was starting; the
             // tab belongs to the project that asked for it, not to this screen.
-            guard selectedProjectID == projectID else { return }
+            guard selection.id == projectID else { return }
             // Regroup before selecting: `activeWorkspacePath`'s observer reads
             // `workspaces`, so a stale grouping would not see the new tab and
             // would bounce the selection to an older one.
@@ -764,7 +789,7 @@ final class AppModel: ObservableObject {
     }
 
     func restoreInterruptedTabs(projectID: String) async {
-        guard let project = selectedProject,
+        guard let project = selection.detail,
               project.id == projectID,
               liveSessions.isEmpty,
               !project.interruptedSessions.isEmpty else {
@@ -855,8 +880,8 @@ final class AppModel: ObservableObject {
         if let index = projects.firstIndex(where: { $0.id == projectID }) {
             projects[index].hasInterruptedSessions = false
         }
-        if selectedProject?.id == projectID, let detail = selectedProject {
-            selectedProject = ProjectDetailViewData(
+        selection.updateDetail(id: projectID) { detail in
+            ProjectDetailViewData(
                 id: detail.id,
                 name: detail.name,
                 path: detail.path,
@@ -870,7 +895,7 @@ final class AppModel: ObservableObject {
         // `liveSessions` is then theirs. Choosing a tab in it moves them off the
         // one they opened on, and `activeSessionID.didSet` drags the sidebar to
         // that tab's worktree after it.
-        guard selectedProjectID == projectID else { return }
+        guard selection.id == projectID else { return }
         recomputeWorkspaces()
         activeSessionID = liveSessions.last?.id
     }
@@ -879,11 +904,11 @@ final class AppModel: ObservableObject {
         // Same pairing as `newSession`, and the transport made it worse: read
         // from the project you came from, leaving a local project for an ssh one
         // opened a local agent shell and recorded it against the remote project.
-        guard let projectID = selectedProjectID,
+        guard let projectID = selection.id,
               let project = projects.first(where: { $0.id == projectID }),
               project.transport == "local" else { return }
 
-        let workspacePath = selectedProject?.id == projectID
+        let workspacePath = selection.detail != nil
             ? (activeWorkspacePath ?? project.path)
             : project.path
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
@@ -907,7 +932,7 @@ final class AppModel: ObservableObject {
             )
             // The selection may have moved while the session was starting; the
             // tab belongs to the project that asked for it, not to this screen.
-            guard selectedProjectID == projectID else { return }
+            guard selection.id == projectID else { return }
             recomputeWorkspaces()
             activeSessionID = sessionID
             refreshAgentSessions()
@@ -919,7 +944,7 @@ final class AppModel: ObservableObject {
     // MARK: - Worktree lifecycle
 
     func addWorktree(branch: String) async {
-        guard let project = selectedProject, !project.path.isEmpty else { return }
+        guard let project = selection.detail, !project.path.isEmpty else { return }
         do {
             let creation = try await GitWorktreeService.addWorktree(
                 projectPath: project.path, branch: branch
@@ -934,7 +959,7 @@ final class AppModel: ObservableObject {
     }
 
     func removeWorktree(path: String) async {
-        guard let project = selectedProject, !project.path.isEmpty else { return }
+        guard let project = selection.detail, !project.path.isEmpty else { return }
         do {
             // Remove first, close after. A remove that fails must not cost the
             // user their terminals — over ssh that failure is routine.
@@ -1098,7 +1123,7 @@ final class AppModel: ObservableObject {
     /// the same field the sidebar reads for every unselected project, and the
     /// one `workspaces(for:)` falls back to.
     func syncProjectSessionDetails() {
-        guard let projectID = selectedProject?.id,
+        guard let projectID = selection.onScreen?.id,
               let index = projects.firstIndex(where: { $0.id == projectID }) else { return }
         projects[index].liveSessionDetails = liveSessions.map { session in
             SessionSummary(id: session.id, title: session.title, targetLabel: session.targetLabel, lastCwd: session.lastCwd, workspacePath: session.workspacePath)
@@ -1107,7 +1132,12 @@ final class AppModel: ObservableObject {
     }
 
     private func clearDetailState() {
-        selectedProject = nil
+        // The selection names the owner of everything emptied below, so it lets
+        // go here too — in one place, rather than at each of the callers that
+        // used to have to remember. The *choice* survives: a detail that failed
+        // to load leaves the project picked and the pane blank, which is what
+        // the user did.
+        selection.dropDetail()
         activeSessionID = nil
         liveSessions = []
         workspaces = []

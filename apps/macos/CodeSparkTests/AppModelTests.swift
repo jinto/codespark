@@ -21,7 +21,7 @@ final class AppModelTests: XCTestCase {
         await model.load()
 
         XCTAssertEqual(model.projects.map(\.name), ["release"])
-        XCTAssertEqual(model.selectedProjectID, "ws-release")
+        XCTAssertEqual(model.selection.id, "ws-release")
         XCTAssertNil(model.loadErrorMessage)
     }
 
@@ -54,8 +54,8 @@ final class AppModelTests: XCTestCase {
         await model.load()
         await model.selectProject(id: "ws-spark3")
 
-        XCTAssertEqual(model.selectedProject?.id, "ws-spark3")
-        XCTAssertEqual(model.selectedProjectID, "ws-spark3")
+        XCTAssertEqual(model.selection.detail?.id, "ws-spark3")
+        XCTAssertEqual(model.selection.id, "ws-spark3")
         XCTAssertNil(model.loadErrorMessage)
     }
 
@@ -93,8 +93,8 @@ final class AppModelTests: XCTestCase {
         await firstSelection.value
         await secondSelection.value
 
-        XCTAssertEqual(model.selectedProjectID, "ws-spark3")
-        XCTAssertEqual(model.selectedProject?.id, "ws-spark3")
+        XCTAssertEqual(model.selection.id, "ws-spark3")
+        XCTAssertEqual(model.selection.detail?.id, "ws-spark3")
     }
 
     @MainActor
@@ -113,21 +113,21 @@ final class AppModelTests: XCTestCase {
             detailErrorsByID: ["ws-release": CocoaError(.fileReadUnknown)]
         )
         let model = AppModel(core: client)
-        model.selectedProjectID = "stale-project"
-        model.selectedProject = ProjectDetailViewData(
+        model.selection = .loaded(ProjectDetailViewData(
             id: "stale-project",
             name: "stale",
             path: "",
             transport: "local",
             liveSessions: []
-        )
+        ))
         model.liveSessions = [.fixture()]
 
         await model.load()
 
         XCTAssertEqual(model.projects.map(\.id), ["ws-release"])
-        XCTAssertEqual(model.selectedProjectID, "ws-release")
-        XCTAssertNil(model.selectedProject)
+        XCTAssertEqual(model.selection.id, "ws-release")
+        XCTAssertNil(model.selection.detail)
+        XCTAssertNil(model.selection.onScreen, "the pane still showed the project that failed to load")
         XCTAssertEqual(model.liveSessions, [])
         XCTAssertNotNil(model.loadErrorMessage)
     }
@@ -207,9 +207,9 @@ final class AppModelTests: XCTestCase {
         await model.load()
         await model.createProject(name: "NewProj", path: "/tmp/newproj")
 
-        XCTAssertEqual(model.selectedProjectID, "mock-project-id")
-        XCTAssertNotNil(model.selectedProject, "selectedProject should be set after selectProject")
-        XCTAssertEqual(model.liveSessions.count, 1, "New project should auto-create one terminal session (liveSessions=\(model.liveSessions.count), selectedProject=\(model.selectedProject?.name ?? "nil"))")
+        XCTAssertEqual(model.selection.id, "mock-project-id")
+        XCTAssertNotNil(model.selection.detail, "the detail should have landed after selectProject")
+        XCTAssertEqual(model.liveSessions.count, 1, "New project should auto-create one terminal session (liveSessions=\(model.liveSessions.count), detail=\(model.selection.detail?.name ?? "nil"))")
         XCTAssertNotNil(model.activeSessionID, "Active session should be set")
     }
 
