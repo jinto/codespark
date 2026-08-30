@@ -50,20 +50,22 @@ Project 기반 터미널 멀티플렉서. tmux를 대체하되, 상태가 영속
 | 다크 테마 + 커스텀 타이틀바 | Done |
 | Window dragging | Done |
 
-### Layer 2: Enhanced Navigation (M2 — 다음)
+### Layer 2: Enhanced Navigation (M2 — 현재)
 
-사이드바 강화. Project 아래에 세션 목록과 실시간 상태를 표시한다.
+사이드바 강화. **세션이 아니라 워크트리가 사이드바의 계층이다** — 세션은 그 안의 탭바에 있다.
+계획을 세울 때는 "Project 아래에 세션 목록"이었는데, 워크트리 스코핑이 들어오면서
+사이드바는 *어디서 일하는가*를, 탭바는 *무엇을 여는가*를 맡게 됐다.
 
 | 기능 | 상태 |
 |------|------|
-| 사이드바에 live session 목록 표시 | Todo |
-| 세션별 상태 뱃지 (Running/Idle/Needs input) | Todo |
-| Project 확장/축소 (disclosure) | Todo |
-| 세션 이름 변경 (더블클릭 or F2) | Todo |
+| 세션 목록 (탭바, `Cmd+[`/`]`) | Done — 사이드바가 아니라 탭바 |
+| 워크트리 행 + 상태 점 (Running/Idle/Needs input) | Done — 세션마다가 아니라 행 하나로 집계 |
+| Project 확장/축소 | Done — 삼각형 없이 행 클릭이 곧 토글 |
+| Project 생성/삭제/이름 변경 UI | Done |
+| Git 브랜치 + 경로 표시 | Done |
+| 세션 복원 (앱 재시작 후 자리 복귀) | Done |
+| 세션 이름 변경 (더블클릭 or F2) | Todo — 모델·스토어는 있고 UI만 없다 |
 | 세션/project 검색 (Cmd+K) | Todo |
-| Project 생성/삭제/이름 변경 UI | Todo |
-| Git 브랜치 + 경로 표시 | Todo |
-| Window state restoration | Todo |
 
 ### Layer 3: Project Management (M3)
 
@@ -129,6 +131,6 @@ Code Spark
 | Milestone | 내용 | 상태 |
 |-----------|------|------|
 | M1 | Terminal Multiplexer MVP | Done |
-| M2 | Enhanced Sidebar + Navigation | Next |
+| M2 | Enhanced Sidebar + Navigation | 대부분 Done (검색·세션 rename UI 남음) |
 | M3 | Project Management | Planned |
 | M4 | Team & Agent Integration | Planned |
