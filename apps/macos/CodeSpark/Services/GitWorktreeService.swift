@@ -271,10 +271,11 @@ final class GitWorktreeService: @unchecked Sendable {
     /// git prints the resolved directory — `/private/tmp/proj`, never
     /// `/tmp/proj` — while a project keeps whatever spelling it was added with.
     /// Two spellings are two workspaces, and the tabs of one of them end up
-    /// belonging to a row nothing can select: `recomputeWorkspaces` matches
-    /// through `sameWorkspace(as:)` and correctly leaves the selection alone,
-    /// then `visibleSessions` compares with `==`, finds nothing, and the main
-    /// area offers "New Terminal" over a running tab.
+    /// belonging to a row nothing can select: `recomputeWorkspaces` matched and
+    /// correctly left the selection alone, then `visibleSessions` compared and
+    /// found nothing, and the main area offered "New Terminal" over a running
+    /// tab. `WorkspaceAddress` settles the spelling; this hands it every path
+    /// git reports.
     ///
     /// Local only — and the address decides which it is, so this no longer has
     /// to ask. `parseWorktreeList` is shared with the remote scan, and resolving
