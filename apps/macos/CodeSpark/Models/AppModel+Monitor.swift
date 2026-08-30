@@ -18,6 +18,12 @@ extension AppModel {
         checkpointTimer = Timer.publish(every: 30, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
+                // The same guard as the tick above, which this was missing: a
+                // checkpoint reads every open tab's whole viewport out of
+                // Ghostty and writes it to the store. In the background that ran
+                // forever, once every thirty seconds per tab, for snapshots
+                // nobody was going to look at.
+                guard NSApp.isActive else { return }
                 self?.captureCheckpoints()
             }
         // The tick above stands down while the app is in the background, so

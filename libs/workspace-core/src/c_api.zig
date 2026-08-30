@@ -19,10 +19,21 @@ const c_allocator = std.heap.c_allocator;
 const Mutex = struct {
     state: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
 
+    /// Yields rather than burning the CPU while it waits. `saveSnapshotForRestore`
+    /// is deliberately synchronous and runs from `applicationWillTerminate` on
+    /// the main thread, so a pure spin there is the main thread busy-waiting on a
+    /// lower-priority thread doing disk I/O — and macOS donates no priority
+    /// across a lock it knows nothing about. That is a beachball at quit.
     fn lock(self: *Mutex) void {
+        var spins: usize = 0;
         while (self.state.cmpxchgWeak(false, true, .acquire, .monotonic) != null) {
             while (self.state.load(.monotonic)) {
-                std.atomic.spinLoopHint();
+                spins += 1;
+                if (spins < 64) {
+                    std.atomic.spinLoopHint();
+                } else {
+                    std.Thread.yield() catch std.atomic.spinLoopHint();
+                }
             }
         }
     }
@@ -658,6 +669,12 @@ pub export fn project_free_summaries(
     count: i32,
 ) void {
     if (summaries) |ptr| {
+        // Debug traps on a negative count; ReleaseFast — which is what ships —
+        // wraps it to a vast `usize` and frees whatever follows. Swift only ever
+        // passes back what Zig wrote, so this is unreachable today; it is the
+        // one place a caller's mistake would become heap corruption instead of a
+        // crash.
+        if (count <= 0) return;
         const slice = ptr[0..@intCast(count)];
         for (slice) |*summary| freeProjectSummary(summary);
         c_allocator.free(slice);
@@ -671,15 +688,19 @@ pub export fn project_free_detail(detail: ?*project_detail_t) void {
         project_free_string(ptr.path);
 
         if (ptr.live_sessions) |live_sessions| {
-            const slice = live_sessions[0..@intCast(ptr.live_session_count)];
-            for (slice) |*session| freeSessionSummary(session);
-            c_allocator.free(slice);
+            if (ptr.live_session_count > 0) {
+                const slice = live_sessions[0..@intCast(ptr.live_session_count)];
+                for (slice) |*session| freeSessionSummary(session);
+                c_allocator.free(slice);
+            }
         }
 
         if (ptr.interrupted_sessions) |interrupted_sessions| {
-            const slice = interrupted_sessions[0..@intCast(ptr.interrupted_session_count)];
-            for (slice) |*session| freeSessionSummary(session);
-            c_allocator.free(slice);
+            if (ptr.interrupted_session_count > 0) {
+                const slice = interrupted_sessions[0..@intCast(ptr.interrupted_session_count)];
+                for (slice) |*session| freeSessionSummary(session);
+                c_allocator.free(slice);
+            }
         }
 
         ptr.* = std.mem.zeroes(project_detail_t);

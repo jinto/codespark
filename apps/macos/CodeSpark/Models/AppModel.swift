@@ -535,6 +535,10 @@ final class AppModel: ObservableObject {
 
     // MARK: - Session lifecycle
 
+    /// Off the main actor, because finding these means walking
+    /// `~/.codex/sessions` and opening every rollout file in it — and this runs
+    /// on every project switch. For anyone with a long Codex history that was a
+    /// filesystem walk the UI waited on.
     func refreshAgentSessions() {
         let paths = Set(
             [selectedProject?.path, activeWorkspacePath]
@@ -542,7 +546,12 @@ final class AppModel: ObservableObject {
                 .filter { !$0.isEmpty }
                 + workspaces.map(\.path)
         )
-        resumableAgentSessions = AgentSessionDiscovery.discover(for: Array(paths))
+        Task { [weak self] in
+            let found = await Task.detached(priority: .utility) {
+                AgentSessionDiscovery.discover(for: Array(paths))
+            }.value
+            self?.resumableAgentSessions = found
+        }
     }
 
     /// Presents the same session chooser used when opening an interrupted workspace.

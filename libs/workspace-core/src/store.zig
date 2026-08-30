@@ -786,7 +786,14 @@ pub const Store = struct {
         var err_msg: [*c]u8 = null;
         defer if (err_msg) |msg| sqlite.sqlite3_free(msg);
 
-        try checkSqlite(sqlite.sqlite3_exec(self.db, sql_z.ptr, null, null, &err_msg), self.db);
+        const code = sqlite.sqlite3_exec(self.db, sql_z.ptr, null, null, &err_msg);
+        if (code != sqlite.SQLITE_OK) {
+            // `sqlite3_exec` writes the more specific message here — which
+            // statement of a multi-statement script failed, and why — and it was
+            // being freed unread.
+            if (err_msg) |msg| std.log.err("sqlite exec: {s}", .{std.mem.span(msg)});
+        }
+        try checkSqlite(code, self.db);
     }
 };
 
@@ -913,10 +920,24 @@ fn encodeTerminalGridLines(grid: models.TerminalGridInput) StoreError![]u8 {
     return buffer.toOwnedSlice(std.heap.c_allocator);
 }
 
+/// Every sqlite failure used to collapse to a bare `error.Database`, and the
+/// handle carrying the explanation was taken as a parameter and then discarded.
+/// So a store that would not open — including the migration failure that made
+/// the app unlaunchable — reached the user as "Project operation failed (code
+/// 4)" with nothing anywhere saying why.
+///
+/// This is the same gap the git lookups already closed by keeping stderr; the
+/// database layer never got it.
 fn checkSqlite(code: c_int, db: ?*sqlite.sqlite3) StoreError!void {
     if (code == sqlite.SQLITE_OK) return;
     if (code == sqlite.SQLITE_DONE) return;
     if (code == sqlite.SQLITE_ROW) return;
-    _ = db;
+    if (db) |handle| {
+        if (sqlite.sqlite3_errmsg(handle)) |message| {
+            std.log.err("sqlite {d}: {s}", .{ code, std.mem.span(message) });
+            return error.Database;
+        }
+    }
+    std.log.err("sqlite {d}", .{code});
     return error.Database;
 }
