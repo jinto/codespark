@@ -198,67 +198,18 @@ final class RemoteDirectoryLister: @unchecked Sendable {
     }
 
     private func run(_ info: SSHConnectionInfo, script: String) async throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        process.arguments = Self.arguments(for: info, script: script)
-
-        let out = Pipe()
-        let err = Pipe()
-        process.standardOutput = out
-        process.standardError = err
-
-        // Both pipes have to drain while ssh is still running: a host with a long
-        // banner fills the stderr buffer and deadlocks a stdout-first read.
-        async let outData = Self.readToEnd(out)
-        async let errData = Self.readToEnd(err)
-
-        let status: Int32
+        let result: Subprocess.Result
         do {
-            status = try await Self.exitStatus(of: process)
+            result = try await Subprocess.run(
+                "/usr/bin/ssh",
+                Self.arguments(for: info, script: script),
+                timeout: 25)
         } catch {
-            // Nothing was spawned, so nothing will ever close the write ends and
-            // the two readers above would wait for an EOF that never comes.
-            try? out.fileHandleForWriting.close()
-            try? err.fileHandleForWriting.close()
-            _ = await (outData, errData)
             throw RemoteDirectoryError.connectionFailed(error.localizedDescription)
         }
-
-        let (stdout, stderr) = await (outData, errData)
-        guard status == 0 else {
-            throw Self.failure(
-                exitCode: status,
-                stderr: String(data: stderr, encoding: .utf8) ?? ""
-            )
+        guard result.status == 0 else {
+            throw Self.failure(exitCode: result.status, stderr: result.err)
         }
-        return String(data: stdout, encoding: .utf8) ?? ""
+        return result.out
     }
-
-    /// Launches ssh and waits for it the only way that is safe here.
-    ///
-    /// `Process.waitUntilExit()` spins the *calling thread's* run loop, and an
-    /// `await` can resume this function on a different thread of the cooperative
-    /// pool than the one that launched ssh — that run loop never hears about the
-    /// exit and the call hangs forever, long after ssh is gone. The termination
-    /// handler is installed before `run()` so an instant exit cannot slip past.
-    private static func exitStatus(of process: Process) async throws -> Int32 {
-        try await withCheckedThrowingContinuation { continuation in
-            process.terminationHandler = { continuation.resume(returning: $0.terminationStatus) }
-            do {
-                try process.run()
-            } catch {
-                process.terminationHandler = nil
-                continuation.resume(throwing: error)
-            }
-        }
-    }
-
-    private static func readToEnd(_ pipe: Pipe) async -> Data {
-        await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(returning: pipe.fileHandleForReading.readDataToEndOfFile())
-            }
-        }
-    }
-
 }

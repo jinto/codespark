@@ -58,27 +58,20 @@ final class GitBranchService: @unchecked Sendable {
         }
     }
 
+    /// This used to install the termination handler *after* reading stdout to
+    /// EOF — that is, after git had already exited — and it had no deadline at
+    /// all. A handler set that late may never fire, and the continuation waiting
+    /// on it never resumes; `refreshBranches` latches `isRefreshing` on the way
+    /// in and clears it in a `defer` that would then never run, so one missed
+    /// callback froze every branch label for the life of the app.
     private static func fetchBranch(at path: String) async -> (String, String?) {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = ["-C", path, "rev-parse", "--abbrev-ref", "HEAD"]
-        process.standardError = FileHandle.nullDevice
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-
         do {
-            try process.run()
-            // Read stdout BEFORE waiting for termination to avoid pipe deadlock
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let exitStatus: Int32 = await withCheckedContinuation { cont in
-                process.terminationHandler = { proc in
-                    cont.resume(returning: proc.terminationStatus)
-                }
-            }
-            guard exitStatus == 0 else { return (path, nil) }
-            let branch = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (path, branch)
+            let result = try await Subprocess.run(
+                "/usr/bin/git",
+                ["-C", path, "rev-parse", "--abbrev-ref", "HEAD"],
+                timeout: 10)
+            guard result.status == 0 else { return (path, nil) }
+            return (path, result.out.trimmingCharacters(in: .whitespacesAndNewlines))
         } catch {
             return (path, nil)
         }

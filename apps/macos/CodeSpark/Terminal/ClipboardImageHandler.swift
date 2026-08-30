@@ -33,7 +33,10 @@ enum ClipboardImageHandler {
     static func scpArguments(localPath: String, sshInfo: SSHConnectionInfo) -> (args: [String], remotePath: String) {
         let filename = (localPath as NSString).lastPathComponent
         let remotePath = "/tmp/\(filename)"
-        var args: [String] = []
+        // The only ssh/scp call in the app that used to prompt: without
+        // BatchMode a password-authenticating host leaves scp waiting on stdin
+        // the app never gives it, so the paste silently never happened.
+        var args = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8"]
         if let port = sshInfo.port { args.append(contentsOf: ["-P", "\(port)"]) }
         let target = sshInfo.user.map { "\($0)@\(sshInfo.host)" } ?? sshInfo.host
         // Guards both positionals: the destination, and a local path that could
@@ -47,18 +50,10 @@ enum ClipboardImageHandler {
     /// Calls completion on main thread with the remote path on success, nil on failure.
     static func scpToRemote(localPath: String, sshInfo: SSHConnectionInfo, completion: @escaping (String?) -> Void) {
         let (args, remotePath) = scpArguments(localPath: localPath, sshInfo: sshInfo)
-        DispatchQueue.global().async {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/scp")
-            process.arguments = args
-            do {
-                try process.run()
-                process.waitUntilExit()
-                let result = process.terminationStatus == 0 ? remotePath : nil
-                DispatchQueue.main.async { completion(result) }
-            } catch {
-                DispatchQueue.main.async { completion(nil) }
-            }
+        Task {
+            let status = try? await Subprocess.run("/usr/bin/scp", args, timeout: 60).status
+            let result = status == 0 ? remotePath : nil
+            await MainActor.run { completion(result) }
         }
     }
 

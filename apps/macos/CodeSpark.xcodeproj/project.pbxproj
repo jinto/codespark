@@ -28,6 +28,7 @@
 		3F0129AAAF55357541A4D8B6 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 68D431120939D317364A97A9 /* CoreGraphics.framework */; };
 		47E722B3A80D8F6EA4095FAA /* SessionTabBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */; };
 		A1B2C3D40004E5F600001004 /* RestoredScreenReplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40003E5F600001003 /* RestoredScreenReplay.swift */; };
+		D7E1A2B3C4D50025E5F600001025 /* Subprocess.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50024E5F600001024 /* Subprocess.swift */; };
 		D7E1A2B3C4D50023E5F600001023 /* RemoteShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50022E5F600001022 /* RemoteShell.swift */; };
 		D7E1A2B3C4D50021E5F600001021 /* AgentSessionDiscovery.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50020E5F600001020 /* AgentSessionDiscovery.swift */; };
 		4A72F1CFFEF80585ED500C3F /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E88E37B7F37CF55D219D6B /* SettingsView.swift */; };
@@ -67,6 +68,7 @@
 		A1B2C3D40010E5F600002101 /* RemoteDirectoryLister.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40010E5F600002001 /* RemoteDirectoryLister.swift */; };
 		0EEC708F84CF823A8E360EC4 /* NewSSHProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */; };
 		7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */; };
+		D7E1A2B3C4D50027E5F600001027 /* SubprocessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50026E5F600001026 /* SubprocessTests.swift */; };
 		A1B2C3D40000000000000001 /* RemoteWorktreeScanTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40000000000000002 /* RemoteWorktreeScanTests.swift */; };
 		450EF5449C0B78E86452B863 /* SSHIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */; };
 		93FAA0C0CD93FC076C934EB3 /* ClipboardImageHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257D067859E4ABC83E423AF3 /* ClipboardImageHandler.swift */; };
@@ -116,6 +118,7 @@
 		6465D8D71A356DB935A2D94C /* GhosttyTerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhosttyTerminalHost.swift; sourceTree = "<group>"; };
 		6636DE130FE4EDE8CE895CF3 /* SessionTabBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionTabBarView.swift; sourceTree = "<group>"; };
 		A1B2C3D40003E5F600001003 /* RestoredScreenReplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoredScreenReplay.swift; sourceTree = "<group>"; };
+		D7E1A2B3C4D50024E5F600001024 /* Subprocess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Subprocess.swift; sourceTree = "<group>"; };
 		D7E1A2B3C4D50022E5F600001022 /* RemoteShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteShell.swift; sourceTree = "<group>"; };
 		D7E1A2B3C4D50020E5F600001020 /* AgentSessionDiscovery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentSessionDiscovery.swift; sourceTree = "<group>"; };
 		66BAAF4E673EE8BBBAA95CF7 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
@@ -157,6 +160,7 @@
 		A1B2C3D40010E5F600002001 /* RemoteDirectoryLister.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteDirectoryLister.swift; sourceTree = "<group>"; };
 		A88C24E4892FF11FD3612B8D /* NewSSHProjectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewSSHProjectSheet.swift; sourceTree = "<group>"; };
 		105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionInfoTests.swift; sourceTree = "<group>"; };
+		D7E1A2B3C4D50026E5F600001026 /* SubprocessTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubprocessTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40000000000000002 /* RemoteWorktreeScanTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteWorktreeScanTests.swift; sourceTree = "<group>"; };
 		A71737260CC3DB87A2B26220 /* SSHIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHIntegrationTests.swift; sourceTree = "<group>"; };
 		D1E2F3A4B5C6D7E8F9A0B1C2 /* TerminalStateDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalStateDetector.swift; sourceTree = "<group>"; };
@@ -224,6 +228,7 @@
 				82CF9045C1A9AED8862C73FD /* ClipboardImageHandlerTests.swift */,
 				9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */,
 				105E0A51C433198B8CB4776B /* SSHConnectionInfoTests.swift */,
+				D7E1A2B3C4D50026E5F600001026 /* SubprocessTests.swift */,
 				A1B2C3D40000000000000002 /* RemoteWorktreeScanTests.swift */,
 				A1B2C3D40010E5F600002003 /* RemoteDirectoryListerTests.swift */,
 				A1B2C3D40010E5F600002004 /* RemoteFolderPickerModelTests.swift */,
@@ -253,6 +258,7 @@
 						B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */,
 				D1E2F3A4B5C6D7E8F9A0B1C2 /* TerminalStateDetector.swift */,
 				A1B2C3D40003E5F600001003 /* RestoredScreenReplay.swift */,
+				D7E1A2B3C4D50024E5F600001024 /* Subprocess.swift */,
 				D7E1A2B3C4D50022E5F600001022 /* RemoteShell.swift */,
 				D7E1A2B3C4D50020E5F600001020 /* AgentSessionDiscovery.swift */,
 			);
@@ -520,6 +526,7 @@
 				9F862F9EEFF5775836F6DA22 /* ClipboardImageHandlerTests.swift in Sources */,
 				9ED695B19FC93D927CBF1CBD /* KeyEventRouterTests.swift in Sources */,
 				7BCE92F0A3AA5CC9F58ECFD1 /* SSHConnectionInfoTests.swift in Sources */,
+				D7E1A2B3C4D50027E5F600001027 /* SubprocessTests.swift in Sources */,
 				A1B2C3D40000000000000001 /* RemoteWorktreeScanTests.swift in Sources */,
 				A1B2C3D40010E5F600002103 /* RemoteDirectoryListerTests.swift in Sources */,
 				A1B2C3D40010E5F600002104 /* RemoteFolderPickerModelTests.swift in Sources */,
@@ -572,6 +579,7 @@
 				E8CF80B13D9BFCC8278965D6 /* SessionSidebarRow.swift in Sources */,
 				47E722B3A80D8F6EA4095FAA /* SessionTabBarView.swift in Sources */,
 				A1B2C3D40004E5F600001004 /* RestoredScreenReplay.swift in Sources */,
+				D7E1A2B3C4D50025E5F600001025 /* Subprocess.swift in Sources */,
 				D7E1A2B3C4D50023E5F600001023 /* RemoteShell.swift in Sources */,
 				D7E1A2B3C4D50021E5F600001021 /* AgentSessionDiscovery.swift in Sources */,
 				4A72F1CFFEF80585ED500C3F /* SettingsView.swift in Sources */,

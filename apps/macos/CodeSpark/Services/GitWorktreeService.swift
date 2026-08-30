@@ -47,6 +47,12 @@ final class GitWorktreeService: @unchecked Sendable {
     /// accepted the command and went quiet. Shortened by tests.
     static var remoteTimeout: TimeInterval = 20
 
+    /// Local git had no deadline at all. It is usually instant, but `index.lock`
+    /// held by another process, or a repository on a stalled network mount, is
+    /// enough to wedge it — and refreshes queue behind one another, so one stuck
+    /// lookup took every later one with it.
+    static var localTimeout: TimeInterval = 30
+
     /// A poll over several remote projects should not open one connection per
     /// project all at once.
     private static let maxConcurrentLookups = 4
@@ -202,42 +208,19 @@ final class GitWorktreeService: @unchecked Sendable {
     /// Runs one remote command and returns its stdout, or throws with the
     /// remote's own stderr so the failure reads like git's.
     private static func runRemote(_ info: SSHConnectionInfo, command: String) async throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: sshExecutablePath)
-        process.arguments = remoteSSHArguments(info, remoteCommand: command)
-
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        try process.run()
-        // The lookup path has had this since it was written; creating and
-        // removing had nothing. A remote that takes the command and never
-        // answers left the sheet waiting with no way back.
-        // The lookup path has had this since it was written; creating and
-        // removing had nothing. A remote that takes the command and never
-        // answers left the sheet waiting with no way back.
-        let deadline = Task {
-            try await Task.sleep(nanoseconds: UInt64(remoteTimeout * 1_000_000_000))
-            if process.isRunning { process.terminate() }
-        }
-        defer { deadline.cancel() }
-        let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
-        let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        let exitStatus = process.terminationStatus
-        guard exitStatus == 0 else {
-            let message = String(data: errData, encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let result = try await Subprocess.run(
+            sshExecutablePath,
+            remoteSSHArguments(info, remoteCommand: command),
+            timeout: remoteTimeout)
+        guard result.status == 0 else {
+            let message = result.err.trimmingCharacters(in: .whitespacesAndNewlines)
             throw NSError(
                 domain: "GitWorktree",
-                code: Int(exitStatus),
+                code: Int(result.status),
                 userInfo: [NSLocalizedDescriptionKey: message.isEmpty ? "remote git failed" : message]
             )
         }
-        return String(data: outData, encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return result.out.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func addRemoteWorktree(
@@ -457,26 +440,11 @@ final class GitWorktreeService: @unchecked Sendable {
     // MARK: - Git process
 
     private static func runGit(_ arguments: [String]) async throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = arguments
-
-        let stderrPipe = Pipe()
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = stderrPipe
-
-        try process.run()
-        let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        // Draining the pipe already waited for the write end to close, which git
-        // does as it exits — so by here the process is usually gone, and a
-        // `terminationHandler` installed at that point is relying on Foundation
-        // to call it anyway. It did, every time this was measured; see
-        // `fetchWorktrees`. Waiting outright needs no such favour.
-        process.waitUntilExit()
-        let exitStatus = process.terminationStatus
-        guard exitStatus == 0 else {
-            let msg = String(data: stderrData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "git failed"
-            throw NSError(domain: "GitWorktree", code: Int(exitStatus), userInfo: [NSLocalizedDescriptionKey: msg])
+        let result = try await Subprocess.run("/usr/bin/git", arguments, timeout: localTimeout)
+        guard result.status == 0 else {
+            let msg = result.err.trimmingCharacters(in: .whitespacesAndNewlines)
+            throw NSError(domain: "GitWorktree", code: Int(result.status),
+                          userInfo: [NSLocalizedDescriptionKey: msg.isEmpty ? "git failed" : msg])
         }
     }
 
@@ -514,48 +482,26 @@ final class GitWorktreeService: @unchecked Sendable {
             return (path, await fetchRemoteWorktrees(info: info, repoPath: repoPath))
         }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = ["-C", path, "worktree", "list", "--porcelain"]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        // Kept rather than dropped on the floor: a failure here empties a
-        // project's worktree rows, and with stderr discarded there was nothing
-        // to say why.
-        let errorPipe = Pipe()
-        process.standardError = errorPipe
-
         do {
-            try process.run()
-            // Read stdout BEFORE waiting for termination to avoid pipe deadlock.
-            // If the process writes more than the pipe buffer (64KB), it blocks
-            // until the reader drains — so we must read first, then wait. stderr
-            // comes second for the same reason: it is the small one, and
-            // draining it first would leave a long listing wedged behind it.
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
-            // The read above already waited for git to close its end, which it
-            // does on the way out, so waiting here costs nothing. It replaces a
-            // `terminationHandler` installed at this point — after the process
-            // has usually exited — which Foundation is not obliged to call. It
-            // did call it every time this was measured, so this is not a fix for
-            // anything observed; it is one less thing that has to hold.
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else {
+            let result = try await Subprocess.run(
+                "/usr/bin/git",
+                ["-C", path, "worktree", "list", "--porcelain"],
+                timeout: localTimeout)
+            guard result.status == 0 else {
+                // Kept rather than dropped on the floor: a failure here empties
+                // a project's worktree rows, and with stderr discarded there was
+                // nothing to say why.
                 noteFailure(
                     at: path,
-                    status: process.terminationStatus,
-                    stderr: String(data: errorData, encoding: .utf8)?
-                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                )
+                    status: result.status,
+                    stderr: result.err.trimmingCharacters(in: .whitespacesAndNewlines))
                 return (path, nil)
             }
-            guard let output = String(data: data, encoding: .utf8) else { return (path, nil) }
             failureLog.clear(path)
-            let worktrees = parseWorktreeList(output)
+            let worktrees = parseWorktreeList(result.out)
             return (path, worktrees.isEmpty ? nil : worktrees)
         } catch {
+            noteFailure(at: path, status: -1, stderr: error.localizedDescription)
             return (path, nil)
         }
     }
@@ -564,34 +510,17 @@ final class GitWorktreeService: @unchecked Sendable {
         info: SSHConnectionInfo,
         repoPath: String
     ) async -> [GitWorktree]? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: sshExecutablePath)
-        process.arguments = remoteSSHArguments(
-            info,
-            remoteCommand: remoteWorktreeListCommand(repoPath: repoPath)
-        )
-        process.standardError = FileHandle.nullDevice
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-
         do {
-            try process.run()
-            let deadline = Task {
-                try await Task.sleep(nanoseconds: UInt64(remoteTimeout * 1_000_000_000))
-                if process.isRunning { process.terminate() }
-            }
-            defer { deadline.cancel() }
-            // Read before waiting: a process that outgrows the pipe buffer
-            // blocks until someone drains it.
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            let exitStatus: Int32 = await withCheckedContinuation { cont in
-                process.terminationHandler = { cont.resume(returning: $0.terminationStatus) }
-            }
-            guard exitStatus == 0, let output = String(data: data, encoding: .utf8) else { return nil }
+            let result = try await Subprocess.run(
+                sshExecutablePath,
+                remoteSSHArguments(
+                    info,
+                    remoteCommand: remoteWorktreeListCommand(repoPath: repoPath)),
+                timeout: remoteTimeout)
+            guard result.status == 0 else { return nil }
             // Remote git answers in its own filesystem's terms; the app speaks
             // workspace addresses.
-            let worktrees = parseWorktreeList(output).map { worktree in
+            let worktrees = parseWorktreeList(result.out).map { worktree in
                 GitWorktree(
                     path: info.workspaceURI(forRemotePath: worktree.path),
                     branch: worktree.branch,
