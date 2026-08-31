@@ -35,7 +35,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         XCTAssertEqual(info.user, "jinto")
         XCTAssertEqual(info.port, 2222)
         XCTAssertEqual(info.remotePath, "/srv/app")
-        XCTAssertTrue(info.sshCommand().hasPrefix("ssh -p 2222 -- 'jinto@myhost' -t "), info.sshCommand())
+        XCTAssertTrue(info.sshCommand().hasPrefix("ssh -p 2222 -t -- 'jinto@myhost' "), info.sshCommand())
         XCTAssertEqual(firstLine(info.remoteCommand(replaying: nil)), "cd '/srv/app' || exit")
     }
 
@@ -151,9 +151,14 @@ final class SSHConnectionInfoTests: XCTestCase {
         let info = SSHConnectionInfo(uri: "ssh://myhost/srv/app")!
         let argv = try argumentsSSHReceives(from: info.sshCommand())
         XCTAssertEqual(argv.count, 4, "the remote command must reach ssh whole: \(argv)")
-        XCTAssertEqual(argv.first, "--", "the destination must be separated from the options")
-        XCTAssertEqual(argv.dropFirst().first, "myhost")
-        XCTAssertEqual(argv.dropFirst(2).first, "-t")
+        // `--` ends option parsing, so an option after it is not an option any
+        // more: `-t` there becomes the first *word of the remote command*, and
+        // the far shell dies with `bad option string: '-t /bin/sh -c …'`.
+        // Found live — every tab that carries a command was opening broken.
+        XCTAssertEqual(argv.first, "-t", "options go before `--`, never after")
+        XCTAssertEqual(argv.dropFirst().first, "--",
+                       "the destination must be separated from the options")
+        XCTAssertEqual(argv.dropFirst(2).first, "myhost")
         let remote = try XCTUnwrap(argv.last)
         XCTAssertTrue(remote.hasPrefix("/bin/sh -c "), remote)
     }
@@ -179,7 +184,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         let info = SSHConnectionInfo(host: "box; touch /tmp/codespark-should-not-exist",
                                      remotePath: "/srv/app")
         let argv = try argumentsSSHReceives(from: info.sshCommand())
-        XCTAssertEqual(argv.dropFirst().first, "box; touch /tmp/codespark-should-not-exist")
+        XCTAssertEqual(argv.dropFirst(2).first, "box; touch /tmp/codespark-should-not-exist")
         XCTAssertEqual(argv.count, 4, "\(argv)")
         XCTAssertFalse(FileManager.default.fileExists(atPath: "/tmp/codespark-should-not-exist"),
                        "the local shell ran what was typed into the host field")
@@ -188,7 +193,7 @@ final class SSHConnectionInfoTests: XCTestCase {
     func test_a_user_with_a_shell_metacharacter_stays_one_argument() throws {
         let info = SSHConnectionInfo(host: "box", user: "jay$(id -u)", remotePath: "/srv/app")
         let argv = try argumentsSSHReceives(from: info.sshCommand())
-        XCTAssertEqual(argv.dropFirst().first, "jay$(id -u)@box")
+        XCTAssertEqual(argv.dropFirst(2).first, "jay$(id -u)@box")
         XCTAssertEqual(argv.count, 4, "\(argv)")
     }
 

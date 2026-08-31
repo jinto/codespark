@@ -80,12 +80,17 @@ struct SSHConnectionInfo: Equatable, Hashable {
     func sshCommand(replaying replay: String? = nil) -> String {
         var parts = ["ssh"]
         if let port { parts.append(contentsOf: ["-p", "\(port)"]) }
+        let remote = remoteCommand(replaying: replay)
+        // Before `--`, which ends option parsing: after it `-t` is not an
+        // option any more but the first word of the *remote command*, and the
+        // far shell dies on `bad option string: '-t /bin/sh -c …'`.
+        if remote != nil { parts.append("-t") }
         // Quoted for the same reason the remote command is: Ghostty hands this
         // whole string to `/bin/sh -c`, and the host is free text from the New
         // SSH Project sheet. Unquoted, everything a `;` introduces runs here.
         parts.append("--")
         parts.append(RemoteShell.quoted(user.map { "\($0)@\(host)" } ?? host))
-        if let remote = remoteCommand(replaying: replay) {
+        if let remote {
             // Ghostty runs this whole string through `/bin/sh -c`, so the remote
             // command has to survive as one word. Unquoted, the local shell eats
             // the `&&` and expands `$SHELL` here — ssh then runs a bare `cd`,
@@ -96,7 +101,7 @@ struct SSHConnectionInfo: Equatable, Hashable {
             // shell*, which may be fish or csh. Neither parses the `case` the
             // reporter is built from, and today's `cd … && exec` only survived
             // there by being simple enough.
-            parts.append(contentsOf: ["-t", RemoteShell.quoted("/bin/sh -c " + RemoteShell.quoted(remote))])
+            parts.append(RemoteShell.quoted("/bin/sh -c " + RemoteShell.quoted(remote)))
         }
         return parts.joined(separator: " ")
     }
@@ -110,10 +115,13 @@ struct SSHConnectionInfo: Equatable, Hashable {
     var previewCommand: String {
         var parts = ["ssh"]
         if let port { parts.append(contentsOf: ["-p", "\(port)"]) }
+        // The preview is what a person checks the real command against, so it
+        // keeps the same shape: options before `--`.
+        if remotePath != nil { parts.append("-t") }
         parts.append("--")
         parts.append(RemoteShell.quoted(user.map { "\($0)@\(host)" } ?? host))
         if let remotePath {
-            parts.append(contentsOf: ["-t", RemoteShell.quoted("cd \(Self.remotePathExpression(remotePath))")])
+            parts.append(RemoteShell.quoted("cd \(Self.remotePathExpression(remotePath))"))
         }
         return parts.joined(separator: " ")
     }

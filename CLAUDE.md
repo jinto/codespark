@@ -138,6 +138,12 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
     - **데드라인은 항상 있다**: 원격에만 있었다. `index.lock`에 막힌 로컬 git이 같은 줄을 통째로 세웠다.
   - **동시 ssh는 4개까지**, `ControlMaster`는 쓰지 않는다(고아 마스터·소켓 경로 길이·dead socket 재사용을 들이는 대가가 지연시간 절약보다 크다). refresh는 겹치면 버리지 않고 **줄을 선다** — 버리면 워크트리 생성/삭제 직후의 refresh가 사라진다.
 
+## ssh 옵션은 `--` 앞에 (v1.2.0 회귀)
+
+`sshCommand()`가 `-t`를 **`-- host` 뒤에** 붙이고 있었다. `--`는 옵션 파싱의 끝이라 그 뒤의 `-t`는 옵션이 아니라 **원격 명령의 첫 단어**가 되고, 원격 셸이 `bad option string: '-t /bin/sh -c …'`로 죽는다 — **명령을 싣는 모든 ssh 탭**(새 원격 세션·복원·replay)이 여는 순간 깨지는 회귀이고, `--` 방어를 넣은 39fb7ea(v1.2.0 포함)가 만들었다.
+- 스텁 ssh 테스트는 **argv 순서를 그대로 고정하고 있어서** 못 잡았다 — argv가 어떻게 생겼는지는 봐도, 원격 셸이 그걸 어떻게 읽는지는 스텁이 모른다. 실제 `ssh localhost` 왕복에서만 드러났다.
+- 규칙: 옵션(`-p`, `-t`)은 전부 `--` 앞, `--` 뒤는 목적지와 명령뿐. `test_the_remote_command_reaches_ssh_as_a_single_argument`가 순서를 고정한다.
+
 ## Keyboard Shortcuts
 
 앱 단축키는 **반드시 `AppShortcuts.swift`의 `AppShortcut`에 케이스로 선언**하고 `.keyboardShortcut(.그케이스)`로 쓴다. 시트 안의 `.defaultAction`/`.cancelAction`은 메뉴 단축키가 아니므로 예외다.
