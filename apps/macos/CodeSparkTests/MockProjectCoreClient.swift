@@ -8,6 +8,7 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
     private let detailLatencyByID: [String: UInt64]
     private(set) var closedSessionIDs: [String] = []
     private(set) var recordedCwds: [(sessionId: String, cwd: String)] = []
+    private(set) var movedSessions: [(sessionId: String, projectId: String, workspacePath: String)] = []
     private(set) var startedSessions: [(initialCwd: String?, workspacePath: String)] = []
     private(set) var savedRestoreSnapshots: [String] = []
     var snapshotsBySessionID: [String: TerminalSnapshotViewData] = [:]
@@ -119,6 +120,10 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
 
     func updateSessionCwd(sessionId: String, cwd: String) async throws {
         recordedCwds.append((sessionId: sessionId, cwd: cwd))
+    }
+
+    func updateSessionWorkspace(sessionId: String, projectId: String, workspacePath: String) async throws {
+        movedSessions.append((sessionId: sessionId, projectId: projectId, workspacePath: workspacePath))
     }
 
     func consumeInterruptedSession(sessionId: String) async throws {

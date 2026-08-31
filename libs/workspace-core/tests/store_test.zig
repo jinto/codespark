@@ -738,6 +738,37 @@ test "session remembers the workspace it was opened in, independent of cwd" {
     try std.testing.expectEqualStrings("/Users/me", detail.live_sessions[0].last_cwd.?);
 }
 
+test "moving a session refiles it under the target project and workspace" {
+    var store = try core.Store.open(":memory:");
+    defer store.deinit();
+    const project_a = try store.createProject(std.testing.allocator, "codespark", "/Users/me/codespark", .local);
+    defer std.testing.allocator.free(project_a);
+    const project_b = try store.createProject(std.testing.allocator, "sajubogo", "/Users/me/sajubogo", .local);
+    defer std.testing.allocator.free(project_b);
+
+    const session_id = try store.startSession(std.testing.allocator, .{
+        .project_id = project_a,
+        .transport = .local,
+        .target_label = "local",
+        .title = "Terminal",
+        .shell = "zsh",
+        .initial_cwd = "/Users/me/codespark",
+        .workspace_path = "/Users/me/codespark",
+    });
+    defer std.testing.allocator.free(session_id);
+
+    try store.updateSessionWorkspace(session_id, project_b, "/Users/me/sajubogo-wt");
+
+    var old_home = try store.projectDetail(std.testing.allocator, project_a);
+    defer old_home.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 0), old_home.live_sessions.len);
+
+    var new_home = try store.projectDetail(std.testing.allocator, project_b);
+    defer new_home.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 1), new_home.live_sessions.len);
+    try std.testing.expectEqualStrings("/Users/me/sajubogo-wt", new_home.live_sessions[0].workspace_path);
+}
+
 test "sessions created before the workspace column report an empty workspace" {
     const path = try uniqueDbPath("workspace-migration");
     defer std.testing.allocator.free(path);

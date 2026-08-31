@@ -504,6 +504,24 @@ pub export fn project_service_update_session_cwd(
     return .PROJECT_STATUS_OK;
 }
 
+pub export fn project_service_update_session_workspace(
+    ptr: ?*project_service,
+    session_id: ?[*:0]const u8,
+    project_id: ?[*:0]const u8,
+    workspace_path: ?[*:0]const u8,
+) project_status_t {
+    const svc = ptr orelse return .PROJECT_STATUS_POISONED_STATE;
+    svc.mutex.lock();
+    defer svc.mutex.unlock();
+
+    const sid = spanOrNull(session_id) orelse return .PROJECT_STATUS_CLOSE_SESSION_FAILED;
+    const pid = spanOrNull(project_id) orelse return .PROJECT_STATUS_CLOSE_SESSION_FAILED;
+    const workspace = spanOrNull(workspace_path) orelse return .PROJECT_STATUS_CLOSE_SESSION_FAILED;
+
+    svc.store.updateSessionWorkspace(sid, pid, workspace) catch return .PROJECT_STATUS_CLOSE_SESSION_FAILED;
+    return .PROJECT_STATUS_OK;
+}
+
 pub export fn project_service_update_session_title(
     ptr: ?*project_service,
     session_id: ?[*:0]const u8,

@@ -24,7 +24,9 @@ struct MainContentView: View {
                         showAddWorktreeSheet = true
                     },
                     canCreateWorktree: project.transport == "local",
-                    visitingBranch: { model.visitingBranch(for: $0) }
+                    visitingBranch: { model.visitingBranch(for: $0) },
+                    moveTargets: { model.sessionMoveTargets(for: $0) },
+                    onMove: { id, target in Task { await model.moveSession(sessionID: id, to: target) } }
                 )
                 .frame(height: 24)
 

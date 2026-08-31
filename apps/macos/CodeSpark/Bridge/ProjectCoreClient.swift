@@ -18,6 +18,8 @@ protocol ProjectCoreClientProtocol {
     ) async throws
     func updateSessionTitle(sessionId: String, newTitle: String) async throws
     func updateSessionCwd(sessionId: String, cwd: String) async throws
+    /// Refiles a tab under another workspace — possibly another project's.
+    func updateSessionWorkspace(sessionId: String, projectId: String, workspacePath: String) async throws
     func consumeInterruptedSession(sessionId: String) async throws
     func reconcileInterruptedSessions() async throws
     func recordCheckpointSnapshot(sessionID: String, snapshot: TerminalSnapshotViewData) async throws
@@ -228,6 +230,17 @@ final class LiveProjectCoreClient: ProjectCoreClientProtocol {
         let status = sessionId.withCString { idPtr in
             cwd.withCString { cwdPtr in
                 project_service_update_session_cwd(service, idPtr, cwdPtr)
+            }
+        }
+        guard status == PROJECT_STATUS_OK else { throw projectError(status) }
+    }
+
+    func updateSessionWorkspace(sessionId: String, projectId: String, workspacePath: String) async throws {
+        let status = sessionId.withCString { idPtr in
+            projectId.withCString { projectPtr in
+                workspacePath.withCString { workspacePtr in
+                    project_service_update_session_workspace(service, idPtr, projectPtr, workspacePtr)
+                }
             }
         }
         guard status == PROJECT_STATUS_OK else { throw projectError(status) }

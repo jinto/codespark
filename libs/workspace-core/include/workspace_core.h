@@ -132,6 +132,13 @@ project_status_t project_service_update_session_cwd(
     const char *cwd
 );
 
+project_status_t project_service_update_session_workspace(
+    project_service_t *service,
+    const char *session_id,
+    const char *project_id,
+    const char *workspace_path
+);
+
 project_status_t project_service_consume_interrupted_session(
     project_service_t *service,
     const char *session_id

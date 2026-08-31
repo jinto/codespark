@@ -928,6 +928,170 @@ final class AppModel: ObservableObject {
         host.close(sessionID: id)
     }
 
+    // MARK: - Moving a tab to another worktree
+
+    /// The project a tab-bar session belongs to. Drags and menus only start
+    /// from the tab bar, so the source is always the project on screen.
+    private var moveSourceProject: ProjectSummaryViewData? {
+        guard let id = selection.onScreen?.id else { return nil }
+        return projects.first { $0.id == id }
+    }
+
+    /// Whether two projects live on the same machine. For remote projects the
+    /// answer compares who and where ssh connects, not the string spelling.
+    private static func onSameHost(_ a: ProjectSummaryViewData, _ b: ProjectSummaryViewData) -> Bool {
+        guard a.transport == "ssh" || b.transport == "ssh" else { return true }
+        guard a.transport == "ssh", b.transport == "ssh",
+              let left = SSHConnectionInfo(uri: a.path),
+              let right = SSHConnectionInfo(uri: b.path) else { return false }
+        return left.host == right.host && left.user == right.user && left.port == right.port
+    }
+
+    /// Everywhere this tab could be refiled to: every worktree of every project
+    /// on the same host, minus the one it is in. Unselected projects answer
+    /// from the worktree cache, so a remote host that cannot be scanned simply
+    /// offers no rows — the same limit its sidebar tree already has.
+    func sessionMoveTargets(for session: SessionViewData) -> [SessionMoveTarget] {
+        guard let source = moveSourceProject else { return [] }
+        let current = WorkspaceAddress(
+            session.workspacePath.isEmpty ? source.path : session.workspacePath)
+        var targets: [SessionMoveTarget] = []
+        for project in orderedProjects where Self.onSameHost(source, project) {
+            let rows: [(path: String, branch: String?)]
+            if project.id == source.id {
+                rows = workspaces.map { ($0.path, workspaces.count > 1 ? $0.branch : nil) }
+            } else if let worktrees = gitWorktreeService.worktrees(for: project.path),
+                      !worktrees.isEmpty {
+                rows = worktrees.map { ($0.path, worktrees.count > 1 ? $0.branch : nil) }
+            } else if !project.path.isEmpty {
+                rows = [(project.path, nil)]
+            } else {
+                rows = []
+            }
+            for row in rows where WorkspaceAddress(row.path) != current {
+                targets.append(SessionMoveTarget(
+                    projectID: project.id,
+                    projectName: project.name,
+                    branch: row.branch,
+                    workspacePath: row.path
+                ))
+            }
+        }
+        return targets
+    }
+
+    /// The project rows that light up under a dragged tab. Eligibility does not
+    /// depend on which tab is in flight — every draggable tab is the on-screen
+    /// project's — which is what lets the sidebar answer before the drop.
+    var sessionDropEligibleProjectIDs: Set<String> {
+        guard let source = moveSourceProject else { return [] }
+        return Set(projects.filter { Self.onSameHost(source, $0) }.map(\.id))
+    }
+
+    /// Refiles a tab under another worktree. Ownership only: the shell stays in
+    /// its directory, and the visiting-branch pill says so when that is now
+    /// somewhere else.
+    func moveSession(sessionID: String, to target: SessionMoveTarget) async {
+        guard let source = moveSourceProject,
+              let session = liveSessions.first(where: { $0.id == sessionID }),
+              WorkspaceAddress(session.workspacePath) != WorkspaceAddress(target.workspacePath)
+        else { return }
+
+        // The store first: memory forked from a write that never landed would
+        // be quietly undone by the next restore.
+        do {
+            try await core.updateSessionWorkspace(
+                sessionId: sessionID,
+                projectId: target.projectID,
+                workspacePath: target.workspacePath
+            )
+        } catch {
+            loadErrorMessage = error.localizedDescription
+            return
+        }
+
+        if let index = allSessions.firstIndex(where: { $0.id == sessionID }) {
+            allSessions[index].workspacePath = target.workspacePath
+        }
+
+        // The user may have switched projects during the write; this screen's
+        // lists are then another project's, and the moved tab reaches its new
+        // place through the store when either project is opened again.
+        guard selection.onScreen?.id == source.id,
+              let index = liveSessions.firstIndex(where: { $0.id == sessionID }) else { return }
+
+        let neighbourID = leftNeighbour(of: sessionID)
+        let wasActive = activeSessionID == sessionID
+        let oldPath = liveSessions[index].workspacePath
+
+        if target.projectID == source.id {
+            liveSessions[index].workspacePath = target.workspacePath
+        } else {
+            let moved = liveSessions.remove(at: index)
+            // The target's sidebar row counts through its summary; its live
+            // detail follows from the store whenever that project is opened.
+            if let t = projects.firstIndex(where: { $0.id == target.projectID }) {
+                projects[t].liveSessionDetails.append(SessionSummary(
+                    id: moved.id,
+                    title: moved.title,
+                    targetLabel: moved.targetLabel,
+                    lastCwd: moved.lastCwd,
+                    workspacePath: target.workspacePath
+                ))
+                projects[t].liveSessions = projects[t].liveSessionDetails.count
+            }
+        }
+        if workspaceSelectedSessions[oldPath] == sessionID {
+            workspaceSelectedSessions[oldPath] = nil
+        }
+        // Regroup before touching the selection — its observers read `workspaces`.
+        recomputeWorkspaces()
+        if wasActive {
+            // The move sends the tab, not the user: left pointing at the moved
+            // tab, `activeSessionID.didSet` would drag the sidebar after it.
+            activeSessionID = neighbourID
+        }
+        syncProjectSessionDetails()
+    }
+
+    /// A drop on a sidebar row. A worktree row names its path; a project row
+    /// means that project's main worktree — the row *is* that worktree when the
+    /// tree is collapsed. Ineligible drops resolve to no target and do nothing.
+    func dropSession(sessionID: String, onProjectID projectID: String, workspacePath: String?) async {
+        guard let session = liveSessions.first(where: { $0.id == sessionID }),
+              let path = workspacePath ?? mainWorkspacePath(ofProjectID: projectID),
+              let target = sessionMoveTargets(for: session)
+                  .first(where: { $0.projectID == projectID && $0.workspacePath == path })
+        else { return }
+        await moveSession(sessionID: sessionID, to: target)
+    }
+
+    private func mainWorkspacePath(ofProjectID id: String) -> String? {
+        guard let project = projects.first(where: { $0.id == id }) else { return nil }
+        if selection.onScreen?.id == id,
+           let main = workspaces.first(where: \.isMainWorktree) {
+            return main.path
+        }
+        if let worktrees = gitWorktreeService.worktrees(for: project.path),
+           let main = worktrees.first(where: \.isMainWorktree) {
+            return main.path
+        }
+        return project.path.isEmpty ? nil : project.path
+    }
+
+    /// The tab focus falls to when `sessionID` leaves the bar: its left
+    /// neighbour, where the eye already is; only the leftmost hands right.
+    /// Answered before the lists change under it.
+    private func leftNeighbour(of sessionID: String) -> String? {
+        let bar = workspaces.first { $0.sessions.contains { $0.id == sessionID } }?
+            .sessions.map(\.id) ?? liveSessions.map(\.id)
+        guard let index = bar.firstIndex(of: sessionID) else { return nil }
+        var rest = bar
+        rest.remove(at: index)
+        guard !rest.isEmpty else { return nil }
+        return rest[max(0, index - 1)]
+    }
+
     /// The terminal reports its working directory on every prompt, so this is a
     /// hot path — only a real directory change is written through to the store.
     func sessionDidReportCwd(sessionID: String, cwd: String) {
@@ -1108,15 +1272,7 @@ extension AppModel: TerminalHostDelegate {
             // working in threw you to the far end of the bar to walk back. The
             // leftmost tab has nothing on its left and hands over to its right,
             // the tab that is leftmost now.
-            let neighbourID: String? = {
-                let bar = workspaces.first { $0.sessions.contains { $0.id == sessionID } }?
-                    .sessions.map(\.id) ?? liveSessions.map(\.id)
-                guard let index = bar.firstIndex(of: sessionID) else { return nil }
-                var rest = bar
-                rest.remove(at: index)
-                guard !rest.isEmpty else { return nil }
-                return rest[max(0, index - 1)]
-            }()
+            let neighbourID = leftNeighbour(of: sessionID)
 
             liveSessions.removeAll { $0.id == sessionID }
             recomputeWorkspaces()

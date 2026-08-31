@@ -19,6 +19,17 @@ struct SidebarView: View {
     @State private var changeFolderPath = ""
     /// Where a dragged row would land right now — nil when nothing is over the list.
     @State private var dropTarget: ProjectDropTarget?
+    /// The row a dragged *tab* is over — a project id or a worktree path.
+    /// Only rows on the tab's host ever set it, so lighting up is the offer.
+    @State private var sessionDropRowID: String?
+
+    /// Whether the drag in flight carries a tab. A hover cannot read the
+    /// payload — only the drop can — but the highlight must choose between
+    /// the reorder line and the refile ring before then, and the drag
+    /// pasteboard already knows what it holds.
+    private var dragIsTab: Bool {
+        NSPasteboard(name: .drag).types?.contains { $0.rawValue == "public.json" } == true
+    }
     @State private var pendingRemoveWorktree: WorktreeRemoval?
 
     /// A worktree the user asked to remove, held until they confirm. Carries its
@@ -64,6 +75,9 @@ struct SidebarView: View {
                     // what made drawing N projects regroup every project's
                     // sessions N times over, on every `@Published` change.
                     let groups = model.sidebarGroups
+                    // Bound once with the groups, same rule: eligibility is per
+                    // drag source (the on-screen project), not per row.
+                    let sessionDropEligible = model.sessionDropEligibleProjectIDs
                     ForEach(groups) { group in
                         let project = group.project
                         VStack(alignment: .leading, spacing: 3) {
@@ -79,20 +93,51 @@ struct SidebarView: View {
                                 DropInsertionLine(isShowing: dropTarget == .before(project.id))
                             }
                             .draggable(project.id)
-                            .dropDestination(for: String.self) { droppedIDs, _ in
+                            .dropDestination(for: ProjectRowDrop.self) { drops, _ in
                                 dropTarget = nil
-                                guard let draggedID = droppedIDs.first else { return false }
-                                model.moveProject(id: draggedID, to: .before(project.id))
-                                return true
+                                sessionDropRowID = nil
+                                switch drops.first {
+                                case .projectRow(let draggedID):
+                                    model.moveProject(id: draggedID, to: .before(project.id))
+                                    return true
+                                case .tab(let sessionID):
+                                    // No worktree named: the project row means main.
+                                    guard sessionDropEligible.contains(project.id) else { return false }
+                                    Task {
+                                        await model.dropSession(
+                                            sessionID: sessionID,
+                                            onProjectID: project.id,
+                                            workspacePath: nil
+                                        )
+                                    }
+                                    return true
+                                case nil:
+                                    return false
+                                }
                             } isTargeted: { targeted in
-                                // Nothing else can clear it: the row that loses the
-                                // pointer is the one that reports leaving.
+                                // Nothing else can clear these: the row that loses
+                                // the pointer is the one that reports leaving.
                                 if targeted {
-                                    dropTarget = .before(project.id)
-                                } else if dropTarget == .before(project.id) {
-                                    dropTarget = nil
+                                    if dragIsTab {
+                                        if sessionDropEligible.contains(project.id) {
+                                            sessionDropRowID = project.id
+                                        }
+                                    } else {
+                                        dropTarget = .before(project.id)
+                                    }
+                                } else {
+                                    if dropTarget == .before(project.id) { dropTarget = nil }
+                                    if sessionDropRowID == project.id { sessionDropRowID = nil }
                                 }
                             }
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .strokeBorder(AppTheme.accent, lineWidth: 1.5)
+                                    .opacity(sessionDropRowID == project.id ? 1 : 0)
+                                    // Invisible is not intangible — same reason
+                                    // as `DropInsertionLine`.
+                                    .allowsHitTesting(false)
+                            )
                             .onTapGesture {
                                 Task { await model.selectProjectAndToggleWorktrees(id: project.id) }
                             }
@@ -140,6 +185,34 @@ struct SidebarView: View {
                                     pathLine: row.pathLine
                                 )
                                 .contentShape(Rectangle())
+                                .dropDestination(for: SessionDragPayload.self) { payloads, _ in
+                                    sessionDropRowID = nil
+                                    guard sessionDropEligible.contains(project.id),
+                                          let payload = payloads.first else { return false }
+                                    Task {
+                                        await model.dropSession(
+                                            sessionID: payload.sessionID,
+                                            onProjectID: project.id,
+                                            workspacePath: workspace.path
+                                        )
+                                    }
+                                    return true
+                                } isTargeted: { targeted in
+                                    if targeted {
+                                        if sessionDropEligible.contains(project.id) {
+                                            sessionDropRowID = workspace.path
+                                        }
+                                    } else if sessionDropRowID == workspace.path {
+                                        sessionDropRowID = nil
+                                    }
+                                }
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .strokeBorder(AppTheme.accent, lineWidth: 1.5)
+                                        .opacity(sessionDropRowID == workspace.path ? 1 : 0)
+                                        .padding(.leading, 12)
+                                        .allowsHitTesting(false)
+                                )
                                 .onTapGesture {
                                     Task {
                                         await model.selectWorktree(
@@ -197,7 +270,9 @@ struct SidebarView: View {
                                 model.moveProject(id: draggedID, to: .end)
                                 return true
                             } isTargeted: { targeted in
-                                if targeted {
+                                // A dragged tab has no business past the last row;
+                                // promising it a landing line would be a lie.
+                                if targeted, !dragIsTab {
                                     dropTarget = .end
                                 } else if dropTarget == .end {
                                     dropTarget = nil

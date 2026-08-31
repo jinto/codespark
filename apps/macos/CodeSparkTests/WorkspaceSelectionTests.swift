@@ -3044,6 +3044,121 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(model.sidebarWorktreeRows(for: p1).foldedCount, before.foldedCount + 1)
     }
 
+    // MARK: - Moving a tab to another worktree
+
+    /// Dragging a tab onto a worktree row (or picking it in Move to…) refiles
+    /// the tab: ownership changes, the shell stays where it is.
+    @MainActor
+    func test_moving_a_tab_refiles_it_under_the_target_worktree() async throws {
+        let (model, core) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+        let targets = model.sessionMoveTargets(for: tab)
+        XCTAssertFalse(targets.contains { $0.workspacePath == Self.mainWorktree },
+                       "a tab is never offered the worktree it is already in")
+        let target = try XCTUnwrap(targets.first { $0.workspacePath == Self.featureWorktree })
+
+        await model.moveSession(sessionID: tab.id, to: target)
+
+        XCTAssertEqual(model.liveSessions[0].workspacePath, Self.featureWorktree)
+        XCTAssertEqual(core.movedSessions.map(\.workspacePath), [Self.featureWorktree])
+        XCTAssertEqual(core.movedSessions.first?.projectId, "p1")
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree,
+                       "the move sends the tab, not the user")
+        XCTAssertTrue(model.visibleSessions.isEmpty,
+                      "the tab bar the user is looking at no longer shows it")
+    }
+
+    /// `activeSessionID.didSet` drags the sidebar to the active tab's worktree,
+    /// so moving the active tab has to hand focus over first — to the left
+    /// neighbour, the same rule closing a tab uses.
+    @MainActor
+    func test_moving_the_active_tab_leaves_the_user_in_their_worktree() async throws {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let mover = model.liveSessions[1]
+        XCTAssertEqual(model.activeSessionID, mover.id)
+        let target = try XCTUnwrap(model.sessionMoveTargets(for: mover)
+            .first { $0.workspacePath == Self.featureWorktree })
+
+        await model.moveSession(sessionID: mover.id, to: target)
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree)
+        XCTAssertEqual(model.activeSessionID, model.liveSessions[0].id,
+                       "focus hands over to the neighbour, like closing does")
+        XCTAssertEqual(model.visibleSessions.map(\.id), [model.liveSessions[0].id])
+    }
+
+    @MainActor
+    func test_moving_a_tab_to_another_project_updates_both_rows() async throws {
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+        let target = try XCTUnwrap(model.sessionMoveTargets(for: tab)
+            .first { $0.projectID == "p2" })
+        XCTAssertEqual(target.workspacePath, Self.otherProject)
+
+        await model.moveSession(sessionID: tab.id, to: target)
+
+        XCTAssertTrue(model.liveSessions.isEmpty, "the tab left this project's bar")
+        XCTAssertTrue(model.allSessions.contains { $0.id == tab.id },
+                      "its surface stays alive — the move is bookkeeping, not a close")
+        XCTAssertEqual(model.projects.first { $0.id == "p1" }?.liveSessions, 0)
+        XCTAssertEqual(model.projects.first { $0.id == "p2" }?.liveSessions, 1)
+        XCTAssertEqual(model.projects.first { $0.id == "p2" }?.liveSessionDetails.first?.workspacePath,
+                       Self.otherProject)
+        let core = model.core as? MockProjectCoreClient
+        XCTAssertEqual(core?.movedSessions.first?.projectId, "p2")
+    }
+
+    /// "Same host" is a property of the owning project against the target
+    /// project — a local tab is never offered a remote project's worktrees.
+    @MainActor
+    func test_move_targets_stay_on_the_same_host() async {
+        func summary(id: String, path: String, transport: String) -> ProjectSummaryViewData {
+            ProjectSummaryViewData(id: id, name: id, path: path, transport: transport,
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: [])
+        }
+        let core = MockProjectCoreClient(
+            summaries: [summary(id: "p1", path: Self.mainWorktree, transport: "local"),
+                        summary(id: "p2", path: Self.otherProject, transport: "local"),
+                        summary(id: "p3", path: "ssh://jinto@emac/srv/repo", transport: "ssh")],
+            details: [ProjectDetailViewData(id: "p1", name: "p1", path: Self.mainWorktree,
+                                            transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+
+        let targets = model.sessionMoveTargets(for: tab)
+
+        XCTAssertTrue(targets.contains { $0.projectID == "p2" })
+        XCTAssertFalse(targets.contains { $0.projectID == "p3" },
+                       "a remote project is another machine")
+        XCTAssertEqual(model.sessionDropEligibleProjectIDs, ["p1", "p2"])
+    }
+
+    /// A drop on the project row itself means its main worktree — the row is
+    /// that worktree when the tree is collapsed.
+    @MainActor
+    func test_dropping_on_a_project_row_files_the_tab_under_its_main_worktree() async {
+        let model = await modelWithTwoProjects()
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.otherProject, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.otherProject + "-wt", branch: "wt", isMainWorktree: false)
+        ], for: Self.otherProject)
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        let tab = model.liveSessions[0]
+
+        await model.dropSession(sessionID: tab.id, onProjectID: "p2", workspacePath: nil)
+
+        XCTAssertEqual(model.projects.first { $0.id == "p2" }?.liveSessionDetails.first?.workspacePath,
+                       Self.otherProject)
+    }
+
     /// The subtitle is a string in a view body, and no test that renders the
     /// view can read it. What a test *can* read is the source: the row must
     /// never fade its own line out again.

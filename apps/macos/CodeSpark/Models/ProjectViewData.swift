@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 
 enum ProjectStatus: Equatable {
     case running
@@ -33,6 +34,51 @@ struct SessionSummary: Identifiable, Equatable {
 enum ProjectDropTarget: Equatable {
     case before(String)
     case end
+}
+
+/// A tab in flight between the tab bar and a sidebar row. Carried as JSON,
+/// which keeps it apart from the plain-text `String` a project row drags to
+/// reorder — sharing that would let a dropped tab be read as a project and
+/// vice versa. Not a custom UTType: an identifier the bundle does not declare
+/// is one the drop side silently never targets.
+struct SessionDragPayload: Codable, Transferable {
+    let sessionID: String
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: .json)
+    }
+}
+
+/// What can land on a project row: a tab being refiled, or a project row being
+/// reordered. One type for both because a view gets ONE `dropDestination` —
+/// the innermost wins for every drag and swallows payloads it cannot read, so
+/// stacking a destination per payload type leaves one of them dead.
+enum ProjectRowDrop: Transferable {
+    case tab(sessionID: String)
+    case projectRow(id: String)
+
+    static var transferRepresentation: some TransferRepresentation {
+        ProxyRepresentation(importing: { (payload: SessionDragPayload) in
+            ProjectRowDrop.tab(sessionID: payload.sessionID)
+        })
+        ProxyRepresentation(importing: { (id: String) in
+            ProjectRowDrop.projectRow(id: id)
+        })
+    }
+}
+
+/// Somewhere a tab can be refiled to: a worktree of a project on the same host.
+/// `workspacePath` is carried verbatim — it is the string the store files the
+/// tab under, and remote URIs only work because nothing respells them.
+struct SessionMoveTarget: Identifiable, Equatable {
+    let projectID: String
+    let projectName: String
+    /// Named only when the project has several worktrees to tell apart.
+    let branch: String?
+    let workspacePath: String
+
+    var id: String { workspacePath }
+    var label: String { branch.map { "\(projectName) — \($0)" } ?? projectName }
 }
 
 struct ProjectSummaryViewData: Identifiable, Equatable {

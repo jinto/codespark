@@ -138,10 +138,22 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
     - **데드라인은 항상 있다**: 원격에만 있었다. `index.lock`에 막힌 로컬 git이 같은 줄을 통째로 세웠다.
   - **동시 ssh는 4개까지**, `ControlMaster`는 쓰지 않는다(고아 마스터·소켓 경로 길이·dead socket 재사용을 들이는 대가가 지연시간 절약보다 크다). refresh는 겹치면 버리지 않고 **줄을 선다** — 버리면 워크트리 생성/삭제 직후의 refresh가 사라진다.
 
+## Moving Tabs Between Worktrees
+
+탭을 사이드바의 워크트리/프로젝트 행으로 드래그하거나 탭 우클릭 → Move to…로 **소속만** 옮긴다(`moveSession`). 같은 호스트끼리만 — 로컬↔로컬, ssh는 같은 user@host:port(`onSameHost`, 세션의 `targetLabel`이 아니라 **소속 프로젝트끼리** 비교한다). 셸은 그대로라 cwd가 다른 워크트리면 visiting 알약이 말한다. 프로젝트 행에 떨어뜨리면 main 워크트리다 — 접힌 행이 곧 그 워크트리이므로.
+
+- **코어는 `updateSessionWorkspace` 하나이고 `project_id`를 같이 바꾼다.** 복원이 프로젝트 단위로 읽으므로(`sessionsForProject`), 워크스페이스만 바꾸면 다음 실행에 탭이 옛 프로젝트로 돌아간다.
+- **활성 탭을 옮기면 사용자는 남고 탭만 간다**: `activeSessionID.didSet`이 탭의 워크트리로 사이드바를 끌고 가므로, 탭 닫기와 같은 왼쪽-이웃 규칙(`leftNeighbour`)으로 먼저 넘긴 뒤 재그룹핑한다.
+- **드래그 페이로드는 JSON이다 — 커스텀 UTType이 아니라.** `UTType(exportedAs:)`는 번들이 선언하지 않으면 **드랍 쪽이 조용히 무시한다**. 드래그 프리뷰는 소스 쪽 일이라 멀쩡히 떠서, 기능이 죽었는데 살아 보인다.
+- **한 뷰에 `dropDestination`은 하나다.** 가장 안쪽 것이 **모든** 드래그를 이기고, 못 읽는 페이로드는 그냥 삼킨다 — 타입별로 하나씩 쌓으면 순서와 무관하게 한쪽이 죽는다(양방향 다 재봤다). 프로젝트 행이 재정렬(String)과 탭(JSON)을 `ProjectRowDrop` union 하나로 받는 이유다.
+- **호버 중에는 페이로드를 못 읽는다.** 재정렬 줄이냐 이동 링이냐는 드랍 전에 정해야 하므로 `dragIsTab`이 드래그 페이스트보드(`NSPasteboard(name: .drag)`)를 직접 본다.
+- 터미널 위에 놓친 드랍은 무해하다 — Ghostty가 JSON 페이로드를 붙여넣지 않는 것을 실제 드래그로 확인했다(2026-08-31).
+- **알려진 대가**: 크로스 프로젝트로 옮긴 탭은 재시작 후 `created_at` 순서로 다시 선다. Move to…의 다른 프로젝트 워크트리 목록은 스캔 캐시에서 오므로, 키 인증이 안 되는 원격 호스트는 항목이 안 뜬다(사이드바 트리와 같은 한계).
+
 ## ssh 옵션은 `--` 앞에 (v1.2.0 회귀)
 
 `sshCommand()`가 `-t`를 **`-- host` 뒤에** 붙이고 있었다. `--`는 옵션 파싱의 끝이라 그 뒤의 `-t`는 옵션이 아니라 **원격 명령의 첫 단어**가 되고, 원격 셸이 `bad option string: '-t /bin/sh -c …'`로 죽는다 — **명령을 싣는 모든 ssh 탭**(새 원격 세션·복원·replay)이 여는 순간 깨지는 회귀이고, `--` 방어를 넣은 39fb7ea(v1.2.0 포함)가 만들었다.
-- 스텁 ssh 테스트는 **argv 순서를 그대로 고정하고 있어서** 못 잡았다 — argv가 어떻게 생겼는지는 봐도, 원격 셸이 그걸 어떻게 읽는지는 스텁이 모른다. 실제 `ssh localhost` 왕복에서만 드러났다.
+- 스텁 ssh 테스트는 **argv 순서를 그대로 고정하고 있어서** 못 잡았다 — argv가 어떻게 생겼는지는 봐도, 원격 셸이 그걸 어떻게 읽는지는 스텁이 모른다. 실제 `ssh localhost` 왕복(E2E)에서만 드러났다.
 - 규칙: 옵션(`-p`, `-t`)은 전부 `--` 앞, `--` 뒤는 목적지와 명령뿐. `test_the_remote_command_reaches_ssh_as_a_single_argument`가 순서를 고정한다.
 
 ## Keyboard Shortcuts

@@ -179,6 +179,24 @@ pub const Store = struct {
         try stmt.expectDone();
     }
 
+    /// Refiles a tab under another workspace — possibly another project's.
+    /// `project_id` must move with `workspace_path`: restore reads rows by
+    /// project, so a stale project id sends the tab back to its old home.
+    pub fn updateSessionWorkspace(self: *Store, session_id: []const u8, project_id: []const u8, workspace_path: []const u8) StoreError!void {
+        var stmt = try Statement.init(
+            self.db,
+            "update sessions\n" ++
+                " set project_id = ?2, workspace_path = ?3, updated_at = ?4\n" ++
+                " where id = ?1",
+        );
+        defer stmt.deinit();
+        try stmt.bindText(1, session_id);
+        try stmt.bindText(2, project_id);
+        try stmt.bindText(3, workspace_path);
+        try stmt.bindInt64(4, now());
+        try stmt.expectDone();
+    }
+
     pub fn startSession(self: *Store, allocator: std.mem.Allocator, input: models.NewSession) StoreError![]u8 {
         const updated_at = now();
         var stmt = try Statement.init(

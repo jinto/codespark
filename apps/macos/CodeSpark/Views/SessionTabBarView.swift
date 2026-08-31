@@ -10,6 +10,10 @@ struct SessionTabBarView: View {
     let canCreateWorktree: Bool
     /// Branch a tab is working in when that is not the worktree it belongs to.
     var visitingBranch: (SessionViewData) -> String? = { _ in nil }
+    /// Where this tab could be refiled to. Asked when the menu opens, not per
+    /// body pass — a context menu is rare and the answer walks every project.
+    var moveTargets: (SessionViewData) -> [SessionMoveTarget] = { _ in [] }
+    var onMove: (String, SessionMoveTarget) -> Void = { _, _ in }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -23,6 +27,16 @@ struct SessionTabBarView: View {
                             onSelect: { onSelect(session.id) },
                             onClose: { onClose(session.id) }
                         )
+                        .draggable(SessionDragPayload(sessionID: session.id))
+                        .contextMenu {
+                            let targets = moveTargets(session)
+                            Menu("Move to") {
+                                ForEach(targets) { target in
+                                    Button(target.label) { onMove(session.id, target) }
+                                }
+                            }
+                            .disabled(targets.isEmpty)
+                        }
                     }
                 }
             }
