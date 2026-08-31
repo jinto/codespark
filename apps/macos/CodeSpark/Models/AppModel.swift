@@ -94,6 +94,9 @@ final class AppModel: ObservableObject {
     /// and two menu items, which made "which kind of project is this" the first
     /// question rather than a detail of the answer.
     @Published var showNewProjectSheet = false
+    /// One flag rather than view state, so the sidebar's context menu and the
+    /// tab bar's button open the same sheet over the main area.
+    @Published var showNewWorktreeSheet = false
 
     /// How far a restore has got. Each tab costs a round trip, and an ssh tab
     /// waits on a remote host after that, so the wait is long enough to need
@@ -884,18 +887,100 @@ final class AppModel: ObservableObject {
 
     // MARK: - Worktree lifecycle
 
-    func addWorktree(branch: String) async {
-        guard let project = selection.detail, !project.path.isEmpty else { return }
+    /// Whether the issue sheet can work here: a local project, or a remote
+    /// one whose URI says where the repository is.
+    static func canCreateIssueWorktree(path: String, transport: String) -> Bool {
+        guard transport == "ssh" else { return !path.isEmpty }
+        return SSHConnectionInfo(uri: path)?.remotePath != nil
+    }
+
+    /// How an issue becomes a worktree — injectable so tests never spawn
+    /// claude or ssh.
+    var worktreeIssueCreator: (_ projectPath: String, _ issue: String)
+        async throws -> ClaudeWorktreeCreator.Creation = {
+        try await ClaudeWorktreeCreator.create(projectPath: $0, issue: $1)
+    }
+
+    /// The sheet's whole journey: headless claude makes the worktree (over ssh
+    /// for a remote project), the mission is filed on the machine that will
+    /// read it, and a claude tab opens there told to do so. Returns the error
+    /// to show in the sheet, nil on success.
+    func createWorktreeFromIssue(_ issue: String) async -> String? {
+        guard let project = selection.onScreen,
+              Self.canCreateIssueWorktree(path: project.path, transport: project.transport)
+        else { return "이 프로젝트에서는 만들 수 없습니다." }
+        let issue = issue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !issue.isEmpty else { return "issue를 입력하세요." }
+
+        let creation: ClaudeWorktreeCreator.Creation
+        let worktreeKey: String
         do {
-            let creation = try await GitWorktreeService.addWorktree(
-                at: WorkspaceAddress(project.path), branch: branch
-            )
-            gitWorktreeService.expireCache(for: project.path)
-            await gitWorktreeService.refreshWorktrees(for: worktreeProjectPaths)
-            recomputeWorkspaces()
-            await newSession(inWorkspacePath: creation.path)
+            creation = try await worktreeIssueCreator(project.path, issue)
+            // Cancelled while claude was working: the worktree may exist (the
+            // scan will find it) but nobody asked for a tab in it any more.
+            guard !Task.isCancelled else { return nil }
+            // claude prints the path as git resolved it; the scan speaks
+            // canonical addresses. One spelling, settled at the boundary —
+            // two would be two workspaces, one of them holding the new tab
+            // where no sidebar row can show it. Idempotent for a URI.
+            worktreeKey = WorkspaceAddress(creation.workspaceKey).storageKey
         } catch {
-            loadErrorMessage = error.localizedDescription
+            return error.localizedDescription
+        }
+
+        gitWorktreeService.expireCache(for: project.path)
+        await gitWorktreeService.refreshWorktrees(for: worktreeProjectPaths)
+        // The worktree exists either way; past this point the user has moved
+        // on and the tab belongs to a screen that is no longer theirs.
+        guard selection.id == project.id else { return nil }
+        recomputeWorkspaces()
+
+        // Prompt first: `--add-dir <directories...>` is variadic, and a
+        // positional after it is read as another directory — claude then
+        // opens with no prompt at all. Verified against the real CLI.
+        let prompt = "\(creation.missionPath) 를 읽고 작업을 시작해줘"
+        let claudeCommand = "claude \(RemoteShell.quoted(prompt)) --add-dir \(RemoteShell.quoted(creation.missionDirectory))"
+
+        let command: String
+        let transport: String
+        let cwd: String
+        var sshInfo: SSHConnectionInfo?
+        if var info = WorkspaceAddress(project.path).remote {
+            // The tab connects to the same host, landing in the new worktree.
+            info.remotePath = creation.cwd
+            command = info.sshCommand(running: claudeCommand)
+            transport = "ssh"
+            // The remote's own raw path — what Ghostty gets and what the store
+            // files as this tab's position; no OSC 7 will refill it.
+            cwd = creation.cwd
+            sshInfo = info
+        } else {
+            command = claudeCommand
+            transport = "local"
+            cwd = worktreeKey
+        }
+        do {
+            let sessionID = try await startAndAttachSession(
+                projectID: project.id,
+                transport: transport,
+                targetLabel: AgentKind.claude.rawValue,
+                title: AgentKind.claude.title,
+                shell: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh",
+                cwd: cwd,
+                workspacePath: worktreeKey,
+                command: command,
+                sshInfo: sshInfo
+            )
+            guard selection.id == project.id else { return nil }
+            // Regroup before selecting — the selection observers read `workspaces`.
+            recomputeWorkspaces()
+            workspaceSelectedSessions[worktreeKey] = sessionID
+            activeWorkspacePath = worktreeKey
+            activeSessionID = sessionID
+            refreshAgentSessions()
+            return nil
+        } catch {
+            return error.localizedDescription
         }
     }
 

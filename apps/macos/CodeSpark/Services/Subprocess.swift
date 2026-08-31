@@ -50,11 +50,15 @@ enum Subprocess {
     static func run(
         _ executable: String,
         _ arguments: [String],
-        timeout: TimeInterval
+        timeout: TimeInterval,
+        currentDirectory: String? = nil
     ) async throws -> Result {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
+        if let currentDirectory {
+            process.currentDirectoryURL = URL(fileURLWithPath: currentDirectory)
+        }
 
         let out = Pipe(), err = Pipe()
         process.standardOutput = out

@@ -76,11 +76,13 @@ struct SSHConnectionInfo: Equatable, Hashable {
 
     /// The command Ghostty runs for an ssh tab. `replay` is a shell command the
     /// remote side runs before the shell takes over — a restored tab's previous
-    /// screen, which cannot be handed over as a local file.
-    func sshCommand(replaying replay: String? = nil) -> String {
+    /// screen, which cannot be handed over as a local file. `run` replaces the
+    /// interactive shell entirely: the tab belongs to that command (a claude
+    /// session on the far side), and ends with it.
+    func sshCommand(replaying replay: String? = nil, running run: String? = nil) -> String {
         var parts = ["ssh"]
         if let port { parts.append(contentsOf: ["-p", "\(port)"]) }
-        let remote = remoteCommand(replaying: replay)
+        let remote = remoteCommand(replaying: replay, running: run)
         // Before `--`, which ends option parsing: after it `-t` is not an
         // option any more but the first word of the *remote command*, and the
         // far shell dies on `bad option string: '-t /bin/sh -c …'`.
@@ -137,7 +139,7 @@ struct SSHConnectionInfo: Equatable, Hashable {
     /// What the remote `sh` runs. Internal so a test can drive it through a
     /// real zsh, bash, or fish — the reporter's failures live in shell startup
     /// order, which no comparison of command strings can see.
-    func remoteCommand(replaying replay: String?) -> String? {
+    func remoteCommand(replaying replay: String?, running run: String? = nil) -> String? {
         var lines: [String] = []
         if let replay, !replay.isEmpty { lines.append(replay) }
         if let remotePath {
@@ -146,6 +148,13 @@ struct SSHConnectionInfo: Equatable, Hashable {
             // them. A tab whose directory is gone still must not open a shell
             // somewhere else.
             lines.append("cd \(Self.remotePathExpression(remotePath)) || exit")
+        }
+        if let run, !run.isEmpty {
+            // The command owns the tty from here — no shell, so no cwd reporter:
+            // there is never a prompt to fire it. Login *and* interactive, for
+            // the PATH that lives in `.zshrc` (`-lc` never reads it).
+            lines.append("exec \"$SHELL\" -lic \(RemoteShell.quoted(run))")
+            return lines.joined(separator: "\n")
         }
         guard !lines.isEmpty else { return nil }
         lines.append(RemoteCwdReporter.launcher)

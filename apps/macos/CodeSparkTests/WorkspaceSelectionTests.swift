@@ -3159,6 +3159,330 @@ final class WorkspaceSelectionTests: XCTestCase {
                        Self.otherProject)
     }
 
+    // MARK: - Creating a worktree from an issue
+
+    /// The internal -p prompt is the contract with headless claude: it must
+    /// carry the issue, demand the marker line the app parses, and forbid the
+    /// work itself — creation only.
+    func test_the_issue_prompt_pins_the_marker_and_carries_the_issue() {
+        let prompt = ClaudeWorktreeCreator.prompt(for: "STT denylist가 고유명사를 훼손")
+
+        XCTAssertTrue(prompt.contains("WORKTREE_PATH:"))
+        XCTAssertTrue(prompt.contains("STT denylist가 고유명사를 훼손"))
+    }
+
+    /// claude chats before it answers, so the answer is the *last* marker line
+    /// — never the first line of output.
+    func test_the_worktree_path_comes_from_the_last_marker_line() {
+        let output = """
+        워크트리를 만들겠습니다.
+        WORKTREE_PATH: /wrong/earlier
+        생성 완료.
+        WORKTREE_PATH: /Users/me/.worktrees/fix-stt denylist
+        """
+
+        XCTAssertEqual(
+            ClaudeWorktreeCreator.worktreePath(fromOutput: output),
+            "/Users/me/.worktrees/fix-stt denylist"
+        )
+    }
+
+    func test_output_without_a_marker_is_nil_not_a_guess() {
+        XCTAssertNil(ClaudeWorktreeCreator.worktreePath(fromOutput: "Welcome to prod!\n/some/path"))
+    }
+
+    /// The mission lives *outside* the worktree — nothing untracked to commit
+    /// by mistake — and its name says which worktree it was written for.
+    func test_the_mission_file_holds_the_issue_outside_the_worktree() throws {
+        let worktree = "/tmp/repo-fix-stt"
+
+        let path = try ClaudeWorktreeCreator.writeMissionFile(
+            issue: "denylist가 문장 중간 고유명사를 훼손", worktreePath: worktree)
+        defer { try? FileManager.default.removeItem(atPath: path) }
+
+        XCTAssertFalse(path.hasPrefix(worktree))
+        XCTAssertTrue(path.contains("repo-fix-stt"))
+        let content = try String(contentsOfFile: path, encoding: .utf8)
+        XCTAssertTrue(content.contains("denylist가 문장 중간 고유명사를 훼손"))
+    }
+
+    /// The whole pipeline against a real subprocess: a fake `claude` that
+    /// records how it was called, prints chatter and the marker. The creator
+    /// must run it *in the project directory* and hand back the marker path.
+    func test_the_creator_runs_claude_in_the_project_and_reads_the_marker() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cs-issue-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let project = root.appendingPathComponent("proj").path
+        let worktree = root.appendingPathComponent("proj-made").path
+        try FileManager.default.createDirectory(atPath: project, withIntermediateDirectories: true)
+        let callLog = root.appendingPathComponent("call.txt").path
+        let fakeClaude = root.appendingPathComponent("claude").path
+        try """
+        #!/bin/sh
+        printf '%s\\n' "$@" > '\(callLog)'
+        pwd >> '\(callLog)'
+        mkdir -p '\(worktree)'
+        echo '워크트리를 만들었습니다.'
+        echo 'WORKTREE_PATH: \(worktree)'
+        """.write(toFile: fakeClaude, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeClaude)
+
+        let made = try await ClaudeWorktreeCreator.create(
+            projectPath: project, issue: "고유명사 훼손 버그", claudeExecutable: fakeClaude)
+        addTeardownBlock { try? FileManager.default.removeItem(atPath: made.missionPath) }
+
+        XCTAssertEqual(made.cwd, worktree)
+        let call = try String(contentsOfFile: callLog, encoding: .utf8)
+        XCTAssertTrue(call.contains("고유명사 훼손 버그"), "the issue reaches claude")
+        XCTAssertTrue(call.contains("-p"), "creation is headless")
+        XCTAssertTrue(call.hasSuffix(project + "\n") || call.contains("/private" + project),
+                      "claude runs in the project directory")
+        XCTAssertTrue(try String(contentsOfFile: made.missionPath, encoding: .utf8)
+            .contains("고유명사 훼손 버그"), "the mission is written as part of creation")
+    }
+
+    /// A marker pointing nowhere is claude having imagined a path — surfacing
+    /// output beats opening a tab in a directory that does not exist.
+    func test_a_marker_for_a_missing_directory_is_an_error() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cs-issue-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let fakeClaude = root.appendingPathComponent("claude").path
+        try "#!/bin/sh\necho 'WORKTREE_PATH: /nowhere/at/all'\n"
+            .write(toFile: fakeClaude, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: fakeClaude)
+
+        do {
+            _ = try await ClaudeWorktreeCreator.create(
+                projectPath: root.path, issue: "x", claudeExecutable: fakeClaude)
+            XCTFail("a phantom path must throw")
+        } catch { }
+    }
+
+    // MARK: 원격 프로젝트의 issue → 워크트리
+
+    /// The remote script's three load-bearing choices: claude is resolved by a
+    /// login *interactive* shell (`-lic` — PATH additions live in `.zshrc`,
+    /// which `-lc` never reads), chatter is cut with `tail -1`, and the run
+    /// happens inside the repo.
+    func test_the_remote_creation_script_resolves_claude_interactively() {
+        let script = ClaudeWorktreeCreator.remoteCreationScript(
+            repoPath: "/srv/repo", issue: "고유명사 훼손")
+
+        XCTAssertTrue(script.contains("-lic"))
+        XCTAssertTrue(script.contains("command -v claude"))
+        XCTAssertTrue(script.contains("tail -1"), "a chatty zshrc pollutes the substitution")
+        XCTAssertTrue(script.contains("'/srv/repo'"))
+        XCTAssertTrue(script.contains("고유명사 훼손"))
+        XCTAssertTrue(script.contains(ClaudeWorktreeCreator.marker))
+    }
+
+    /// The mission lands in the remote's temp dir and the script answers with
+    /// the resolved absolute path — `$TMPDIR` is theirs to expand, not ours.
+    func test_the_remote_mission_script_writes_under_the_remote_tmpdir() {
+        let script = ClaudeWorktreeCreator.remoteMissionScript(
+            issue: "이슈' 본문", worktreeName: "repo-fix-stt")
+
+        XCTAssertTrue(script.contains(#"${TMPDIR:-/tmp}"#))
+        XCTAssertTrue(script.contains(#"${d%/}/codespark-missions"#),
+                      "macOS's $TMPDIR ends in a slash — unstripped it doubles in every path")
+        XCTAssertTrue(script.contains("mission_for_worktree_repo-fix-stt.md"))
+        XCTAssertTrue(script.contains(#"이슈'\'' 본문"#), "a quote in the issue survives quoting")
+        XCTAssertTrue(script.contains("MISSION_PATH:"))
+    }
+
+    /// The whole remote pipeline against a stub ssh: first call creates (and
+    /// answers with the worktree marker), second call files the mission. The
+    /// creator must hand back the *workspace address* — a URI, spelled the way
+    /// the scan spells it — while the cwd stays the remote's raw path.
+    func test_remote_creation_speaks_uri_for_the_workspace_and_raw_path_for_cwd() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cs-remote-issue-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let stub = root.appendingPathComponent("ssh")
+        try """
+        #!/bin/sh
+        for last; do :; done
+        case "$last" in
+        *mission*) echo 'MISSION_PATH: /remote/tmp/codespark-missions/mission_for_worktree_repo-fix-stt.md' ;;
+        *) echo '워크트리 생성함.'; echo 'WORKTREE_PATH: /srv/worktrees/repo-fix-stt' ;;
+        esac
+        """.write(to: stub, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+        let original = GitWorktreeService.sshExecutablePath
+        GitWorktreeService.sshExecutablePath = stub.path
+        defer { GitWorktreeService.sshExecutablePath = original }
+
+        let made = try await ClaudeWorktreeCreator.create(
+            projectPath: "ssh://jinto@emac/srv/repo", issue: "STT 버그")
+
+        XCTAssertEqual(made.workspaceKey, "ssh://jinto@emac/srv/worktrees/repo-fix-stt")
+        XCTAssertEqual(made.cwd, "/srv/worktrees/repo-fix-stt")
+        XCTAssertEqual(made.missionPath,
+                       "/remote/tmp/codespark-missions/mission_for_worktree_repo-fix-stt.md")
+        XCTAssertEqual(made.missionDirectory, "/remote/tmp/codespark-missions")
+    }
+
+    /// The ssh tab that opens on the new worktree runs claude, not a shell —
+    /// through `-lic` for the same PATH reason, and quoted all the way down.
+    func test_the_remote_claude_tab_command_survives_every_shell() throws {
+        let info = try XCTUnwrap(SSHConnectionInfo(uri: "ssh://jinto@emac/srv/worktrees/wt"))
+
+        let command = info.sshCommand(running: "claude 'mission 을 읽어줘' --add-dir '/tmp/m'")
+
+        XCTAssertTrue(command.hasPrefix("ssh "))
+        XCTAssertTrue(command.contains("cd "), "the tab lands in the worktree first")
+        XCTAssertTrue(command.contains("-lic"))
+        XCTAssertTrue(command.contains("claude"))
+        XCTAssertFalse(command.contains("__codespark"),
+                       "no cwd reporter: claude owns the tty, a shell never prompts")
+    }
+
+    /// The model files a remote creation under its URI and opens an ssh tab
+    /// whose command carries claude and the mission.
+    @MainActor
+    func test_a_remote_issue_worktree_opens_an_ssh_claude_tab() async throws {
+        var hosts: [MockTerminalHost] = []
+        let core = MockProjectCoreClient(
+            summaries: [ProjectSummaryViewData(id: "r1", name: "box", path: "ssh://jinto@emac/srv/repo",
+                                               transport: "ssh", liveSessions: 0,
+                                               recentlyClosedSessions: 0, hasInterruptedSessions: false,
+                                               liveSessionDetails: [])],
+            details: [ProjectDetailViewData(id: "r1", name: "box", path: "ssh://jinto@emac/srv/repo",
+                                            transport: "ssh", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in
+            let host = MockTerminalHost()
+            hosts.append(host)
+            return host
+        })
+        await model.load()
+        model.worktreeIssueCreator = { _, _ in
+            ClaudeWorktreeCreator.Creation(
+                workspaceKey: "ssh://jinto@emac/srv/worktrees/repo-fix-stt",
+                cwd: "/srv/worktrees/repo-fix-stt",
+                missionPath: "/remote/tmp/codespark-missions/m.md",
+                missionDirectory: "/remote/tmp/codespark-missions")
+        }
+
+        let error = await model.createWorktreeFromIssue("STT 버그")
+
+        XCTAssertNil(error)
+        let command = try XCTUnwrap(hosts.last?.commands.last ?? nil)
+        XCTAssertTrue(command.hasPrefix("ssh "), "a remote worktree opens over ssh: \(command)")
+        XCTAssertTrue(command.contains("claude"))
+        XCTAssertTrue(command.contains("/remote/tmp/codespark-missions/m.md"))
+        XCTAssertEqual(model.liveSessions.last?.workspacePath,
+                       "ssh://jinto@emac/srv/worktrees/repo-fix-stt")
+        XCTAssertEqual(model.activeWorkspacePath, "ssh://jinto@emac/srv/worktrees/repo-fix-stt")
+    }
+
+    /// End to end at the model: the sheet's issue becomes a worktree (stubbed),
+    /// a mission file, and a claude tab in that worktree told to read it.
+    @MainActor
+    func test_an_issue_worktree_opens_a_claude_tab_on_its_mission() async throws {
+        var hosts: [MockTerminalHost] = []
+        let (model, _, feature) = try await modelWithTwoRealWorktreesCapturingHosts { hosts.append($0) }
+        let missionPath = ClaudeWorktreeCreator.missionFilePath(forWorktree: feature)
+        model.worktreeIssueCreator = { _, _ in
+            ClaudeWorktreeCreator.Creation(
+                workspaceKey: feature, cwd: feature,
+                missionPath: missionPath,
+                missionDirectory: ClaudeWorktreeCreator.missionDirectory)
+        }
+
+        let error = await model.createWorktreeFromIssue("고유명사 훼손을 고쳐줘")
+
+        XCTAssertNil(error)
+        let command = try XCTUnwrap(hosts.last?.commands.last ?? nil)
+        XCTAssertTrue(command.hasPrefix("claude "), "the tab starts claude, got: \(command)")
+        XCTAssertTrue(command.contains(missionPath), "the prompt names the mission file: \(command)")
+        // `--add-dir <directories...>` is variadic: a positional after it is
+        // read as another directory, and claude opens with no prompt at all.
+        // The prompt goes first — verified against the real CLI.
+        let prompt = try XCTUnwrap(command.range(of: missionPath))
+        let addDir = try XCTUnwrap(command.range(of: "--add-dir"))
+        XCTAssertTrue(prompt.lowerBound < addDir.lowerBound,
+                      "the prompt must precede --add-dir or it is swallowed: \(command)")
+        XCTAssertEqual(model.liveSessions.last?.workspacePath, feature)
+        XCTAssertEqual(model.activeWorkspacePath, feature, "the user lands in the new worktree")
+    }
+
+    /// claude prints the path as git resolved it (`/private/tmp/…`), while the
+    /// scan speaks canonical workspace addresses. Two spellings are two
+    /// workspaces — the new tab must land in the one the sidebar draws.
+    @MainActor
+    func test_the_new_tab_is_filed_under_the_spelling_the_scan_uses() async throws {
+        let (model, _, feature) = try await modelWithTwoRealWorktreesCapturingHosts { _ in }
+        model.worktreeIssueCreator = { _, _ in
+            ClaudeWorktreeCreator.Creation(
+                workspaceKey: "/private" + feature, cwd: "/private" + feature,
+                missionPath: "/tmp/m.md", missionDirectory: "/tmp")
+        }
+
+        let error = await model.createWorktreeFromIssue("철자 사고 재현")
+
+        XCTAssertNil(error)
+        let session = try XCTUnwrap(model.liveSessions.last)
+        XCTAssertEqual(model.activeWorkspacePath, session.workspacePath)
+        XCTAssertTrue(model.visibleSessions.contains { $0.id == session.id },
+                      "the tab bar the user is looking at shows the new tab")
+    }
+
+    @MainActor
+    func test_a_failed_creation_reports_and_opens_nothing() async throws {
+        let (model, _, _) = try await modelWithTwoRealWorktreesCapturingHosts { _ in }
+        model.worktreeIssueCreator = { _, _ in
+            throw Subprocess.Failure.timedOut(seconds: 180)
+        }
+
+        let error = await model.createWorktreeFromIssue("아무 버그")
+
+        XCTAssertNotNil(error)
+        XCTAssertTrue(model.liveSessions.isEmpty)
+    }
+
+    /// Same fixture as `modelWithTwoRealWorktrees`, but the test can hold the
+    /// terminal hosts it creates — the claude command lives on the host.
+    @MainActor
+    private func modelWithTwoRealWorktreesCapturingHosts(
+        _ capture: @escaping (MockTerminalHost) -> Void
+    ) async throws -> (model: AppModel, main: String, feature: String) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cs-worktree-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+
+        let main = root.appendingPathComponent("proj").path
+        let feature = root.appendingPathComponent("proj-feature").path
+        try FileManager.default.createDirectory(atPath: main, withIntermediateDirectories: true)
+        try Self.runGit(["-C", main, "init", "-q", "-b", "main"])
+        try Self.runGit(["-C", main, "-c", "user.email=t@t", "-c", "user.name=t",
+                         "commit", "-q", "--allow-empty", "-m", "init"])
+        try Self.runGit(["-C", main, "worktree", "add", "-q", "-b", "feature", feature])
+
+        let core = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "p1", name: "Proj", path: main, transport: "local",
+                                       liveSessions: 0, recentlyClosedSessions: 0,
+                                       hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "p1", name: "Proj", path: main,
+                                            transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in
+            let host = MockTerminalHost()
+            capture(host)
+            return host
+        })
+        await model.load()
+        return (model, main, feature)
+    }
+
     /// The subtitle is a string in a view body, and no test that renders the
     /// view can read it. What a test *can* read is the source: the row must
     /// never fade its own line out again.

@@ -150,6 +150,20 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - 터미널 위에 놓친 드랍은 무해하다 — Ghostty가 JSON 페이로드를 붙여넣지 않는 것을 실제 드래그로 확인했다(2026-08-31).
 - **알려진 대가**: 크로스 프로젝트로 옮긴 탭은 재시작 후 `created_at` 순서로 다시 선다. Move to…의 다른 프로젝트 워크트리 목록은 스캔 캐시에서 오므로, 키 인증이 안 되는 원격 호스트는 항목이 안 뜬다(사이드바 트리와 같은 한계).
 
+## New Worktree (issue → Claude)
+
+프로젝트 우클릭 / 탭바 브랜치 버튼 → 시트에 **issue를 적으면** headless `claude -p`가 프로젝트 디렉터리에서 브랜치명을 지어 워크트리를 만든다(`ClaudeWorktreeCreator`, 도구는 `--allowedTools "Bash(git:*)" Read Glob Grep`으로 제한, 데드라인 180초). 응답 마지막 줄의 `WORKTREE_PATH:` 마커가 앱과의 계약이다 — 마지막 마커 줄만 믿고, 없거나 실재하지 않는 경로면 출력 꼬리를 에러로 보여준다. 성공하면 앱이 issue를 **임시 디렉터리의 mission 파일**로 남기고(워크트리 안이 아니라 — 실수 커밋할 untracked가 없다), 새 워크트리에 `claude '<mission 경로> 를 읽고 작업을 시작해줘' --add-dir <mission 디렉터리>` 탭을 연다. 로컬 프로젝트만.
+
+- **`--add-dir <directories...>`는 가변 인자다**: positional 프롬프트를 그 뒤에 두면 **디렉터리로 삼켜져 claude가 빈 채로 뜬다**. 프롬프트가 먼저다. `--print`에서는 "Input must be provided" 에러로 드러나지만 대화형에서는 조용히 죽는 종류라, 유닛 테스트가 명령 문자열의 순서를 고정한다.
+- **마커 경로는 git이 해소한 철자다**(`/private/tmp/…`): 스캔의 정규화 철자와 다르면 워크스페이스가 둘이 되어 **새 탭이 어느 행에도 안 보인다**. `WorkspaceAddress(…).storageKey`로 경계에서 한 번 정규화한다 — 위 "주소는 git이 부르는 대로 쓴다"의 headless판.
+- **claude 바이너리는 로그인 셸로 찾는다**(`$SHELL -lc 'command -v claude'`, 캐시): GUI 앱의 PATH에는 없다.
+- 생성 중 취소는 결과를 버리는 것이다: 프로세스는 데드라인까지 스스로 정리되고, 그 사이 완성된 워크트리는 폴링이 발견한다.
+- **알려진 대가**: 새 워크트리의 첫 claude는 폴더 신뢰 다이얼로그를 먼저 묻는다. mission 파일명은 워크트리 디렉터리명만 키라서 이름이 같은 워크트리가 두 프로젝트에 있으면 서로 덮어쓴다 — 읽고 나면 역할이 끝나는 파일이라 실해는 없다.
+- **원격(ssh) 프로젝트도 된다** — claude가 **저쪽에서** 돈다. 생성 스크립트와 mission 기록이 각각 ssh 왕복 하나씩이고(`remoteCreationScript`/`remoteMissionScript`, `/bin/sh -c` 한 단어로 감싸서), 탭은 `sshCommand(running:)`으로 원격 claude를 직접 exec한다. 키 인증(BatchMode)과 원격에 claude 설치가 전제이고, 실패는 시트에 ssh stderr로 뜬다.
+  - **claude는 `"$SHELL" -lic`로 찾는다 — `-lc`가 아니라.** PATH 추가가 `.zshrc`(대화형 전용)에 사는 기계에서 `-lc`는 claude를 못 본다. 로컬에서 `-lc`가 통과하는 건 부모 셸의 PATH를 물려받아서일 뿐, ssh의 새 환경에서 바로 죽는다 — localhost로 재현했다. 수다스러운 rc 출력은 `tail -1`로 자른다.
+  - 마커가 주는 원격 raw 경로는 `address(forRemotePath:).storageKey`로 URI가 되어 파일되고, `last_cwd`에는 raw 그대로 — 두 네임스페이스 규칙 그대로다.
+  - macOS의 `$TMPDIR`는 슬래시로 끝난다 — 안 떼면 모든 경로에 `//`가 박힌다(`${d%/}`).
+
 ## ssh 옵션은 `--` 앞에 (v1.2.0 회귀)
 
 `sshCommand()`가 `-t`를 **`-- host` 뒤에** 붙이고 있었다. `--`는 옵션 파싱의 끝이라 그 뒤의 `-t`는 옵션이 아니라 **원격 명령의 첫 단어**가 되고, 원격 셸이 `bad option string: '-t /bin/sh -c …'`로 죽는다 — **명령을 싣는 모든 ssh 탭**(새 원격 세션·복원·replay)이 여는 순간 깨지는 회귀이고, `--` 방어를 넣은 39fb7ea(v1.2.0 포함)가 만들었다.

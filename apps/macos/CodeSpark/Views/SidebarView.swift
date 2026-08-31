@@ -152,6 +152,15 @@ struct SidebarView: View {
                                     editProjectName = project.name
                                     editingProjectID = project.id
                                 }
+                                if AppModel.canCreateIssueWorktree(
+                                    path: project.path, transport: project.transport) {
+                                    Button("New Worktree...") {
+                                        Task {
+                                            await model.selectProject(id: project.id)
+                                            model.showNewWorktreeSheet = true
+                                        }
+                                    }
+                                }
                                 if project.transport == "ssh" {
                                     Button("Change Remote Folder...") {
                                         if let info = SSHConnectionInfo(uri: project.path) {

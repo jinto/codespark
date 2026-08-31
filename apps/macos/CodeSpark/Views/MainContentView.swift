@@ -5,8 +5,6 @@ struct MainContentView: View {
     var onToggleSidebar: (() -> Void)?
     @State private var showCloseSessionAlert = false
     @State private var showCloseProjectAlert = false
-    @State private var showAddWorktreeSheet = false
-    @State private var newWorktreeBranch = ""
 
     var body: some View {
         Group {
@@ -19,11 +17,13 @@ struct MainContentView: View {
                     onClose: { id in model.closeSession(id: id) },
                     onNew: { Task { await model.newSession() } },
                     onNewWorktree: {
-                        guard model.selection.onScreen?.transport == "local" else { return }
-                        newWorktreeBranch = ""
-                        showAddWorktreeSheet = true
+                        guard let project = model.selection.onScreen,
+                              AppModel.canCreateIssueWorktree(
+                                path: project.path, transport: project.transport) else { return }
+                        model.showNewWorktreeSheet = true
                     },
-                    canCreateWorktree: project.transport == "local",
+                    canCreateWorktree: AppModel.canCreateIssueWorktree(
+                        path: project.path, transport: project.transport),
                     visitingBranch: { model.visitingBranch(for: $0) },
                     moveTargets: { model.sessionMoveTargets(for: $0) },
                     onMove: { id, target in Task { await model.moveSession(sessionID: id, to: target) } }
@@ -84,19 +84,11 @@ struct MainContentView: View {
             .background(AppTheme.surfaceBackground)
         }
         } // Group
-        .sheet(isPresented: $showAddWorktreeSheet) {
-            if let project = model.selection.onScreen {
-                AddWorktreeSheet(
-                    branchName: $newWorktreeBranch,
-                    projectPath: project.path,
-                    onCreate: {
-                        let branch = newWorktreeBranch
-                        showAddWorktreeSheet = false
-                        Task { await model.addWorktree(branch: branch) }
-                    },
-                    onCancel: { showAddWorktreeSheet = false }
-                )
-            }
+        .sheet(isPresented: $model.showNewWorktreeSheet) {
+            AddWorktreeSheet(
+                onCreate: { issue in await model.createWorktreeFromIssue(issue) },
+                onDismiss: { model.showNewWorktreeSheet = false }
+            )
         }
         .onChange(of: model.pendingCloseSessionID) { _, newValue in
             showCloseSessionAlert = newValue != nil

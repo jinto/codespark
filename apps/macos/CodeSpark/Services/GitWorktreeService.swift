@@ -439,12 +439,6 @@ final class GitWorktreeService: @unchecked Sendable {
         ].joined(separator: "-")
     }
 
-    /// What the create sheet shows. The root setting is the same string either
-    /// way — on a remote project it names a directory on the other machine.
-    static func previewWorktreePath(projectPath: String, branch: String) -> String {
-        "\(configuredWorktreeRoot)/\(previewWorktreeName(projectPath: projectPath, branch: branch))"
-    }
-
     static func worktreeID(from path: String) -> String {
         let component = URL(fileURLWithPath: path).lastPathComponent
         let pieces = component.split(separator: "-")
@@ -578,5 +572,264 @@ final class GitWorktreeService: @unchecked Sendable {
         } catch {
             return nil
         }
+    }
+}
+
+// MARK: - Creating a worktree from an issue
+
+/// Hands an issue to headless claude and gets a worktree back.
+///
+/// The user writes what the work *is*; claude names the branch and runs the
+/// project's own worktree conventions (a repo-local skill, if one exists —
+/// the same thing the user gets by asking in a chat tab). The contract that
+/// makes the answer parseable is the marker line the prompt demands.
+enum ClaudeWorktreeCreator {
+
+    enum Failure: Error, LocalizedError {
+        case claudeNotFound
+        case noMarker(outputTail: String)
+        case markerPointsNowhere(String)
+        case claudeFailed(status: Int32, outputTail: String)
+        case notARemoteRepository
+
+        var errorDescription: String? {
+            switch self {
+            case .claudeNotFound:
+                "claude CLI를 찾을 수 없습니다. PATH에 claude가 있는지 확인하세요."
+            case .noMarker(let tail):
+                "claude가 워크트리 경로를 알려주지 않았습니다.\n\(tail)"
+            case .markerPointsNowhere(let path):
+                "claude가 알린 경로가 존재하지 않습니다: \(path)"
+            case .claudeFailed(let status, let tail):
+                "claude 실행 실패 (exit \(status)).\n\(tail)"
+            case .notARemoteRepository:
+                "원격 리포지토리 경로가 없는 프로젝트입니다."
+            }
+        }
+    }
+
+    /// What creation hands back: where the tab is filed (`workspaceKey` — a
+    /// canonical local path or an ssh URI, the scan's spelling), where the
+    /// shell lands (`cwd` — raw, the remote machine's own path), and where the
+    /// mission was written *on the machine that will read it*.
+    struct Creation: Equatable {
+        let workspaceKey: String
+        let cwd: String
+        let missionPath: String
+        let missionDirectory: String
+    }
+
+    static let marker = "WORKTREE_PATH:"
+    static let missionMarker = "MISSION_PATH:"
+
+    /// The contract with headless claude: make the worktree, nothing else, and
+    /// end with the one line the app can parse.
+    static func prompt(for issue: String) -> String {
+        """
+        다음 issue를 위한 git 워크트리를 이 리포지토리에 만들어줘.
+
+        규칙:
+        - 워크트리 생성까지만 해라. 코드 수정, 커밋, 작업 시작은 하지 마라.
+        - 브랜치 이름은 issue 내용을 짧은 kebab-case로 요약해서 지어라.
+        - 이 프로젝트에 워크트리 생성 규칙이나 스킬이 있으면 그것을 따라라.
+        - 응답의 마지막 줄에 정확히 `\(marker) <생성된 워크트리의 절대경로>` 를 출력해라.
+
+        issue:
+        \(issue)
+        """
+    }
+
+    /// The *last* marker line is the answer — claude narrates before it
+    /// concludes, and anything earlier is narration.
+    static func worktreePath(fromOutput output: String) -> String? {
+        lastLine(prefixed: marker, in: output)
+    }
+
+    private static func lastLine(prefixed prefix: String, in output: String) -> String? {
+        output
+            .components(separatedBy: .newlines)
+            .reversed()
+            .first { $0.hasPrefix(prefix) }
+            .map { String($0.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces) }
+            .flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    /// Where the mission for a worktree lives: the app's temp directory, never
+    /// the worktree — nothing untracked to commit by mistake, and the file has
+    /// done its job the moment the tab's claude has read it.
+    static func missionFilePath(forWorktree worktreePath: String) -> String {
+        let name = (worktreePath as NSString).lastPathComponent
+        return missionDirectory + "/mission_for_worktree_\(name).md"
+    }
+
+    static var missionDirectory: String {
+        NSTemporaryDirectory() + "codespark-missions"
+    }
+
+    @discardableResult
+    static func writeMissionFile(issue: String, worktreePath: String) throws -> String {
+        try FileManager.default.createDirectory(
+            atPath: missionDirectory, withIntermediateDirectories: true)
+        let path = missionFilePath(forWorktree: worktreePath)
+        try issue.write(toFile: path, atomically: true, encoding: .utf8)
+        return path
+    }
+
+    /// The whole creation, wherever the repository lives: headless claude
+    /// makes the worktree, the mission is written on the machine that will
+    /// read it. Tools are limited to git — creation needs nothing else, and a
+    /// headless agent should not be handed more than the job takes.
+    static func create(
+        projectPath: String,
+        issue: String,
+        claudeExecutable: String? = nil
+    ) async throws -> Creation {
+        if let info = WorkspaceAddress(projectPath).remote {
+            return try await createRemote(info: info, issue: issue)
+        }
+        return try await createLocal(
+            projectPath: projectPath, issue: issue, claudeExecutable: claudeExecutable)
+    }
+
+    private static func createLocal(
+        projectPath: String,
+        issue: String,
+        claudeExecutable: String?
+    ) async throws -> Creation {
+        let executable: String
+        if let claudeExecutable {
+            executable = claudeExecutable
+        } else {
+            executable = try await resolveClaude()
+        }
+
+        let result = try await Subprocess.run(
+            executable,
+            ["-p", prompt(for: issue),
+             "--allowedTools", "Bash(git:*)", "Read", "Glob", "Grep"],
+            timeout: 180,
+            currentDirectory: projectPath
+        )
+        let tail = String((result.out + "\n" + result.err).suffix(400))
+        guard result.status == 0 else {
+            throw Failure.claudeFailed(status: result.status, outputTail: tail)
+        }
+        guard let path = worktreePath(fromOutput: result.out) else {
+            throw Failure.noMarker(outputTail: tail)
+        }
+        guard FileManager.default.fileExists(atPath: path) else {
+            throw Failure.markerPointsNowhere(path)
+        }
+        let missionPath = try writeMissionFile(issue: issue, worktreePath: path)
+        return Creation(
+            workspaceKey: path,
+            cwd: path,
+            missionPath: missionPath,
+            missionDirectory: missionDirectory
+        )
+    }
+
+    // MARK: 원격
+
+    /// claude on the far side, in two round trips: one that makes the worktree,
+    /// one that files the mission next to the remote's temp dir. Both scripts
+    /// go through `/bin/sh -c` as a single word — the remote login shell may be
+    /// fish, and `$(…)` is not its syntax.
+    private static func createRemote(
+        info: SSHConnectionInfo,
+        issue: String
+    ) async throws -> Creation {
+        guard let repoPath = info.remotePath else { throw Failure.notARemoteRepository }
+
+        let made = try await runRemoteScript(
+            info: info, script: remoteCreationScript(repoPath: repoPath, issue: issue),
+            timeout: 240)
+        guard let rawPath = worktreePath(fromOutput: made.out) else {
+            throw Failure.noMarker(outputTail: String((made.out + "\n" + made.err).suffix(400)))
+        }
+        let worktreePath = SSHConnectionInfo.canonicalRemotePath(rawPath)
+
+        let mission = try await runRemoteScript(
+            info: info,
+            script: remoteMissionScript(
+                issue: issue,
+                worktreeName: (worktreePath as NSString).lastPathComponent),
+            timeout: 30)
+        guard let missionPath = lastLine(prefixed: missionMarker, in: mission.out) else {
+            throw Failure.noMarker(outputTail: String((mission.out + "\n" + mission.err).suffix(400)))
+        }
+
+        return Creation(
+            workspaceKey: info.address(forRemotePath: worktreePath).storageKey,
+            cwd: worktreePath,
+            missionPath: missionPath,
+            missionDirectory: (missionPath as NSString).deletingLastPathComponent
+        )
+    }
+
+    /// Exit code the creation script uses for "no claude over there".
+    static let remoteClaudeMissingExitCode: Int32 = 9
+
+    /// Finds claude with a login *interactive* shell — PATH additions live in
+    /// `.zshrc`, which `-lc` never reads — trims a chatty rc's output down to
+    /// the last line, and runs the resolved binary inside the repository.
+    static func remoteCreationScript(repoPath: String, issue: String) -> String {
+        """
+        p=$("$SHELL" -lic 'command -v claude' 2>/dev/null | tail -1)
+        [ -n "$p" ] || exit \(remoteClaudeMissingExitCode)
+        cd \(RemoteShell.quoted(repoPath)) || exit 1
+        exec "$p" -p \(RemoteShell.quoted(prompt(for: issue))) --allowedTools 'Bash(git:*)' Read Glob Grep
+        """
+    }
+
+    /// Writes the mission where the *remote* claude can read it and answers
+    /// with the resolved absolute path — `$TMPDIR` is the remote's to expand.
+    static func remoteMissionScript(issue: String, worktreeName: String) -> String {
+        """
+        d=${TMPDIR:-/tmp}; d="${d%/}/codespark-missions"
+        mkdir -p "$d" || exit 1
+        f="$d"/\(RemoteShell.quoted("mission_for_worktree_\(worktreeName).md"))
+        printf '%s' \(RemoteShell.quoted(issue)) > "$f" || exit 1
+        printf '\(missionMarker) %s\\n' "$f"
+        """
+    }
+
+    private static func runRemoteScript(
+        info: SSHConnectionInfo,
+        script: String,
+        timeout: TimeInterval
+    ) async throws -> Subprocess.Result {
+        let result = try await Subprocess.run(
+            GitWorktreeService.sshExecutablePath,
+            GitWorktreeService.remoteSSHArguments(
+                info, remoteCommand: "/bin/sh -c " + RemoteShell.quoted(script)),
+            timeout: timeout
+        )
+        guard result.status == 0 else {
+            if result.status == remoteClaudeMissingExitCode { throw Failure.claudeNotFound }
+            throw Failure.claudeFailed(
+                status: result.status,
+                outputTail: String((result.out + "\n" + result.err).suffix(400)))
+        }
+        return result
+    }
+
+    /// GUI apps inherit no shell PATH, and this machine's claude lives wherever
+    /// the user's shell says it does — so ask that shell, once. Interactive as
+    /// well as login, for the same `.zshrc` reason as the remote script.
+    private static var cachedClaudePath: String?
+
+    private static func resolveClaude() async throws -> String {
+        if let cachedClaudePath { return cachedClaudePath }
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let result = try? await Subprocess.run(
+            shell, ["-lic", "command -v claude"], timeout: 10)
+        let path = result.map {
+            $0.out.trimmingCharacters(in: .whitespacesAndNewlines)
+                .components(separatedBy: .newlines).last ?? ""
+        } ?? ""
+        guard result?.status == 0, !path.isEmpty else { throw Failure.claudeNotFound }
+        cachedClaudePath = path
+        return path
     }
 }
