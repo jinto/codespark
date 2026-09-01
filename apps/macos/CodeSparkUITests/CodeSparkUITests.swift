@@ -377,20 +377,24 @@ final class CodeSparkUITests: XCTestCase {
     /// all folded away then left an unexplained gap under the name. The handoff
     /// is decided in the sidebar's view body, so only a running app can prove
     /// it.
-    func test_opening_a_tree_moves_the_path_onto_the_main_worktree_row() throws {
+    ///
+    /// The main worktree is the repository itself, and since the path line is
+    /// gone that identity is worn as a mark — on exactly one row of an open
+    /// tree, whatever branch that worktree has checked out.
+    func test_an_open_tree_marks_its_main_worktree_row() throws {
         let infoLines = app.staticTexts.matching(identifier: "projectInfoLine")
-        let worktreePaths = app.staticTexts.matching(identifier: "worktreePath")
+        let marks = app.images.matching(identifier: "mainWorktreeMark")
         let row = try projectRowWithATree()
-        let pathsOpen = worktreePaths.count
+        XCTAssertTrue(wait { marks.count == 1 }, "one open tree, one repo mark: \(marks.count)")
         let infoLinesOpen = infoLines.count
 
-        // Fold it back up: the path has to travel the other way too.
+        // Fold it back up: the mark belongs to a row that is gone.
         row.click()
         dismissSessionChooserIfPresent()
 
         XCTAssertTrue(
-            wait { worktreePaths.count < pathsOpen },
-            "folding the tree left the path on a worktree row that is gone"
+            wait { marks.count == 0 },
+            "folding the tree left the repo mark on a worktree row that is gone"
         )
         XCTAssertTrue(
             wait { infoLines.count == infoLinesOpen },

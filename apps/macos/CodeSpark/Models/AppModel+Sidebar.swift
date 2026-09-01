@@ -87,10 +87,6 @@ extension AppModel {
             && !SidebarPresenter.worktreeRows(of: project, in: snapshot).isEmpty
     }
 
-    func worktreePathLine(for workspace: WorkspaceViewData) -> String? {
-        SidebarPresenter.pathLine(for: workspace)
-    }
-
     func displayPath(for workspacePath: String) -> String {
         SidebarPresenter.displayPath(for: workspacePath)
     }

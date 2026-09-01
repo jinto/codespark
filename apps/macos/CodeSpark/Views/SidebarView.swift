@@ -89,6 +89,7 @@ struct SidebarView: View {
                                 hotkeyIndex: showHotkeys ? group.hotkeyIndex : nil
                             )
                             .contentShape(Rectangle())
+                            .help(group.hoverPath)
                             .overlay(alignment: .top) {
                                 DropInsertionLine(isShowing: dropTarget == .before(project.id))
                             }
@@ -190,10 +191,10 @@ struct SidebarView: View {
                                     workspace: workspace,
                                     isSelected: row.isSelected,
                                     status: row.status,
-                                    hotkeyIndex: showHotkeys ? row.hotkeyIndex : nil,
-                                    pathLine: row.pathLine
+                                    hotkeyIndex: showHotkeys ? row.hotkeyIndex : nil
                                 )
                                 .contentShape(Rectangle())
+                                .help(row.hoverPath)
                                 .dropDestination(for: SessionDragPayload.self) { payloads, _ in
                                     sessionDropRowID = nil
                                     guard sessionDropEligible.contains(project.id),
@@ -588,8 +589,6 @@ struct WorktreeSidebarRow: View {
     let isSelected: Bool
     let status: ProjectStatus
     var hotkeyIndex: Int? = nil
-    /// Only the main worktree gets one — see `SidebarPresenter.pathLine`.
-    var pathLine: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -606,6 +605,19 @@ struct WorktreeSidebarRow: View {
                     .truncationMode(.middle)
                     .accessibilityIdentifier("worktreeBranch")
 
+                if workspace.isMainWorktree {
+                    // The repository itself, said as a mark rather than a path
+                    // line: the line made this the one row with a different
+                    // height, and hanging the identity on the branch happening
+                    // to be "main" lost it the moment the repo checked out
+                    // anything else.
+                    Image(systemName: "house.fill")
+                        .font(.system(size: 7, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.35))
+                        .accessibilityIdentifier("mainWorktreeMark")
+                        .help("Main worktree — the repository itself")
+                }
+
                 Spacer()
 
                 if !workspace.sessions.isEmpty {
@@ -620,16 +632,6 @@ struct WorktreeSidebarRow: View {
                         .fixedSize()
                         .accessibilityIdentifier("worktreeSessionCount")
                 }
-            }
-
-            if let pathLine {
-                Text(pathLine)
-                    .font(.system(size: 10))
-                    .foregroundStyle(isSelected ? .white.opacity(0.6) : .white.opacity(0.4))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.leading, 10)
-                    .accessibilityIdentifier("worktreePath")
             }
         }
         .padding(.horizontal, 8)

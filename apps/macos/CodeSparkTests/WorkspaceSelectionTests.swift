@@ -1836,20 +1836,6 @@ final class WorkspaceSelectionTests: XCTestCase {
     }
 
     @MainActor
-    func test_only_the_main_worktree_row_carries_a_path() async {
-        let model = await modelWithTwoProjects()
-        let p1 = model.projects.first { $0.id == "p1" }!
-        let rows = model.sidebarWorktrees(for: p1)
-        let main = rows.first { $0.isMainWorktree }!
-        let feature = rows.first { !$0.isMainWorktree }!
-
-        XCTAssertEqual(model.worktreePathLine(for: main), Self.mainWorktree,
-                       "the path lands on the row that is that worktree")
-        XCTAssertNil(model.worktreePathLine(for: feature),
-                     "a linked worktree's directory is named after its branch — the path would repeat the title")
-    }
-
-    @MainActor
     func test_picking_a_worktree_of_another_project_switches_to_that_project() async {
         let model = await modelWithTwoProjects()
         await model.selectProject(id: "p2")

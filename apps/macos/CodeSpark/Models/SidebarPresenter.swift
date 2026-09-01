@@ -57,6 +57,8 @@ struct SidebarProjectGroup: Identifiable, Equatable {
     let hotkeyIndex: Int?
     let worktrees: [SidebarWorktreeRow]
     let foldedCount: Int
+    /// The project's directory, for hover — a path takes no row space anywhere.
+    let hoverPath: String
 
     var id: String { project.id }
 }
@@ -66,7 +68,11 @@ struct SidebarWorktreeRow: Identifiable, Equatable {
     let isSelected: Bool
     let status: ProjectStatus
     let hotkeyIndex: Int?
-    let pathLine: String?
+    /// Every row offers its directory on hover, the main worktree included —
+    /// the second line only it used to carry made it the one row with a
+    /// different height. Its identity is worn as a mark instead
+    /// (`workspace.isMainWorktree`), which survives any checked-out branch.
+    let hoverPath: String
 
     var id: String { workspace.id }
 }
@@ -112,10 +118,11 @@ enum SidebarPresenter {
                         hotkeyIndex: badges.byWorktree[
                             NumberedPlace.worktree(projectID: project.id, path: workspace.path)
                         ],
-                        pathLine: pathLine(for: workspace).map(displayPath)
+                        hoverPath: displayPath(for: workspace.path)
                     )
                 } : [],
-                foldedCount: showsRows ? folded.foldedCount : 0
+                foldedCount: showsRows ? folded.foldedCount : 0,
+                hoverPath: displayPath(for: project.path)
             )
         }
     }
@@ -299,17 +306,6 @@ enum SidebarPresenter {
         in snapshot: SidebarSnapshot
     ) -> Int? {
         snapshot.worktreesByPath[project.path]?.count
-    }
-
-    /// A linked worktree's directory is named after its branch, which the row
-    /// already says. Only the main one carries a path worth reading.
-    ///
-    /// Two halves of one rule: a path belongs to the row that *is* that
-    /// worktree. While a tree is open the project row is only a heading, so it
-    /// lets go of its path and the main worktree row picks it up — otherwise the
-    /// same directory is spelled out twice, one line apart.
-    static func pathLine(for workspace: WorkspaceViewData) -> String? {
-        workspace.isMainWorktree ? workspace.path : nil
     }
 
     /// How a workspace address reads on screen — the address knows, because it

@@ -212,15 +212,27 @@ final class SidebarPresenterTests: XCTestCase {
 
     // MARK: - Paths
 
-    func test_only_the_main_worktree_carries_a_path_and_a_uri_is_not_one() {
-        let local = WorkspaceViewData(path: Self.main, branch: "main", isMainWorktree: true,
-                                      sessions: [])
-        let linked = WorkspaceViewData(path: Self.feature, branch: "feature",
-                                       isMainWorktree: false, sessions: [])
+    /// A path is hover text now, and it is hover text on *every* row alike —
+    /// the second line the main worktree used to carry made it the one row
+    /// with a different height, read as "why only this one?". What sets the
+    /// main worktree apart is its identity, which the view wears as a mark
+    /// (`isMainWorktree`) and which survives the repo being checked out on
+    /// any branch — the old rule hung it on the branch happening to be main.
+    func test_a_path_is_hover_text_on_every_row_never_a_second_line() {
+        let repo = project("repo", path: Self.main)
+        let snapshot = SidebarSnapshot(
+            projects: [repo],
+            worktreesByPath: [Self.main: threeWorktrees()],
+            expandedProjectIDs: ["repo"]
+        )
 
-        XCTAssertEqual(SidebarPresenter.pathLine(for: local), Self.main)
-        XCTAssertNil(SidebarPresenter.pathLine(for: linked),
-                     "a linked worktree's directory is named after the branch the row already says")
+        let group = SidebarPresenter.groups(snapshot)[0]
+
+        XCTAssertEqual(group.hoverPath, SidebarPresenter.displayPath(for: Self.main))
+        XCTAssertFalse(group.worktrees.isEmpty)
+        for row in group.worktrees {
+            XCTAssertEqual(row.hoverPath, SidebarPresenter.displayPath(for: row.workspace.path))
+        }
         XCTAssertEqual(SidebarPresenter.displayPath(for: "ssh://box/srv/repo"), "/srv/repo",
                        "a URI is not a filesystem path — tilde abbreviation eats its slashes")
     }
