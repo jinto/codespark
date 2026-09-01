@@ -60,7 +60,13 @@ final class SidebarPresenterTests: XCTestCase {
                        "one worktree is no scale to report, and git has said nothing about a branch")
     }
 
-    func test_a_worktree_with_no_tabs_folds_but_main_never_does() {
+    /// Main included: a tab-less main row is a row nobody is working in, and
+    /// "the repository itself" is no reason to hold a line of the sidebar. It
+    /// used to be exempt so an open tree always showed at least one row — but
+    /// the info line now speaks in every state, so a lone "⋯ N more" has its
+    /// explanation right above it. (2026-09-01, chosen over the old rule from a
+    /// screenshot full of idle main rows.)
+    func test_a_worktree_with_no_tabs_folds_main_included() {
         let p = project("p", path: Self.main, sessions: [session("s1", in: Self.feature)])
         let snapshot = SidebarSnapshot(
             projects: [p],
@@ -70,11 +76,55 @@ final class SidebarPresenterTests: XCTestCase {
 
         let group = SidebarPresenter.groups(snapshot)[0]
 
-        XCTAssertEqual(group.worktrees.map(\.workspace.path), [Self.main, Self.feature],
-                       "main stays whatever happens, and a worktree with tabs is where the work is")
-        XCTAssertEqual(group.foldedCount, 1, "the idle worktree folds behind a count")
+        XCTAssertEqual(group.worktrees.map(\.workspace.path), [Self.feature],
+                       "a worktree with tabs is where the work is — nothing else holds a row")
+        XCTAssertEqual(group.foldedCount, 2, "main folds like any other idle worktree")
         XCTAssertEqual(group.infoLine, "3 worktrees",
-                       "open, the branch is the main row's to say and this line keeps the scale")
+                       "open, this line keeps the scale — and explains the fold row under it")
+    }
+
+    /// The tab count is said in one place only. Shut, the project row is the
+    /// whole repo and wears the total; open, every tab sits visible on a
+    /// worktree row with its own count, and repeating the sum on the heading
+    /// counts the same tabs twice down one column.
+    func test_the_tab_count_moves_to_the_worktree_rows_when_they_show() {
+        let p = project("p", path: Self.main, sessions: [session("s1", in: Self.feature)])
+        var snapshot = SidebarSnapshot(
+            projects: [p],
+            worktreesByPath: [Self.main: threeWorktrees()]
+        )
+
+        XCTAssertEqual(SidebarPresenter.groups(snapshot)[0].sessionCount, 1,
+                       "shut, the project row is the only place the count can live")
+
+        snapshot.expandedProjectIDs = ["p"]
+        XCTAssertNil(SidebarPresenter.groups(snapshot)[0].sessionCount,
+                     "open, the worktree rows say it — the heading saying it again is a duplicate")
+
+        let empty = project("q", path: "/tmp/plain")
+        XCTAssertNil(SidebarPresenter.groups(SidebarSnapshot(projects: [empty]))[0].sessionCount,
+                     "no tabs, no badge")
+    }
+
+    /// The one exception: the row the user is standing in right now. It is the
+    /// highlighted row, and a highlight on a folded row is a selection nobody
+    /// can see — the same predicate the highlight uses, so the two can never
+    /// disagree.
+    func test_the_row_you_stand_in_never_folds() {
+        let p = project("p", path: Self.main)
+        let snapshot = SidebarSnapshot(
+            projects: [p],
+            selectedProjectID: "p",
+            activeWorkspacePath: Self.idle,
+            worktreesByPath: [Self.main: threeWorktrees()],
+            expandedProjectIDs: ["p"]
+        )
+
+        let group = SidebarPresenter.groups(snapshot)[0]
+
+        XCTAssertEqual(group.worktrees.map(\.workspace.path), [Self.idle])
+        XCTAssertTrue(group.worktrees[0].isSelected)
+        XCTAssertEqual(group.foldedCount, 2)
     }
 
     func test_a_folded_project_says_its_branch_and_its_scale() {
@@ -219,7 +269,9 @@ final class SidebarPresenterTests: XCTestCase {
     /// (`isMainWorktree`) and which survives the repo being checked out on
     /// any branch — the old rule hung it on the branch happening to be main.
     func test_a_path_is_hover_text_on_every_row_never_a_second_line() {
-        let repo = project("repo", path: Self.main)
+        let repo = project("repo", path: Self.main,
+                           sessions: [session("s1", in: Self.main),
+                                      session("s2", in: Self.feature)])
         let snapshot = SidebarSnapshot(
             projects: [repo],
             worktreesByPath: [Self.main: threeWorktrees()],

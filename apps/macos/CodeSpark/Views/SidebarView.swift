@@ -86,7 +86,8 @@ struct SidebarView: View {
                                 isSelected: group.isSelected,
                                 status: group.status,
                                 infoLine: group.infoLine,
-                                hotkeyIndex: showHotkeys ? group.hotkeyIndex : nil
+                                hotkeyIndex: showHotkeys ? group.hotkeyIndex : nil,
+                                sessionCount: group.sessionCount
                             )
                             .contentShape(Rectangle())
                             .help(group.hoverPath)
@@ -463,6 +464,9 @@ struct ProjectSidebarRow: View {
     let status: ProjectStatus
     var infoLine: String? = nil
     var hotkeyIndex: Int? = nil
+    /// nil while the worktree rows below carry their own counts — the total is
+    /// said in one place only (`SidebarProjectGroup.sessionCount`).
+    var sessionCount: Int? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -485,14 +489,16 @@ struct ProjectSidebarRow: View {
 
                 Spacer()
 
-                if project.liveSessions > 0 {
-                    Text("\(project.liveSessions)")
+                if let sessionCount {
+                    Text("\(sessionCount)")
                         .font(.system(size: 9, weight: .bold, design: .rounded))
                         .foregroundStyle(.white.opacity(0.7))
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .background(Color.white.opacity(0.10), in: Capsule())
-                        .layoutPriority(-1)
+                        // A digit or two that must stay readable — a long name
+                        // truncates instead of shaving the badge to a sliver.
+                        .fixedSize()
                 }
             }
 

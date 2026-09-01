@@ -2633,10 +2633,12 @@ final class WorkspaceSelectionTests: XCTestCase {
 
     /// A repo collects worktrees, and the ones with no tabs are the ones nobody
     /// is in. They fold behind a count rather than pushing the rest off screen.
-    /// Only those: a worktree with tabs carries a `Cmd` digit, and hiding it
-    /// would leave a number with nothing on screen to point at. `main` is
-    /// exempt too — an open tree has to show at least one row, or it reads as a
-    /// blank space rather than as a fold.
+    /// Only two survive: a worktree with tabs, which carries a `Cmd` digit that
+    /// must not point at nothing — and the row being stood in, which is
+    /// highlighted and must not be highlighted off screen. `main` folds like
+    /// any other idle row (2026-09-01): its old exemption guarded against an
+    /// open tree showing a bare "N more" under a blank line, and the line has
+    /// not been blank since `infoLine` learned to speak in every state.
     @MainActor
     private func modelWithFourWorktrees() async -> AppModel {
         let (model, _) = await modelWithTwoWorktrees()
@@ -2659,15 +2661,15 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         let rows = model.sidebarWorktreeRows(for: project)
 
-        XCTAssertEqual(rows.shown.map(\.branch), ["main", "feature"],
-                       "the worktree with a tab stands, and main always does")
-        XCTAssertEqual(rows.foldedCount, 2)
+        XCTAssertEqual(rows.shown.map(\.branch), ["feature"],
+                       "only the worktree with a tab stands — main folds with the rest")
+        XCTAssertEqual(rows.foldedCount, 3)
     }
 
     /// You can be standing in a worktree you have not opened a tab in yet, and
     /// folding away the row you are on would leave the tree with nothing
-    /// selected on screen. Read from `projectSelectedWorkspaces` so the answer
-    /// does not change when the selection moves to another project.
+    /// selected on screen. The exception is the *standing* row alone — the same
+    /// predicate the highlight uses — never the remembered one.
     @MainActor
     func test_the_worktree_you_are_standing_in_never_folds() async {
         let model = await modelWithFourWorktrees()
@@ -2677,8 +2679,8 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         let rows = model.sidebarWorktreeRows(for: project)
 
-        XCTAssertEqual(rows.shown.map(\.branch), ["main", "feature", "idle-a"])
-        XCTAssertEqual(rows.foldedCount, 1)
+        XCTAssertEqual(rows.shown.map(\.branch), ["feature", "idle-a"])
+        XCTAssertEqual(rows.foldedCount, 2)
     }
 
     @MainActor
@@ -2957,15 +2959,16 @@ final class WorkspaceSelectionTests: XCTestCase {
                        "one worktree has no scale to add")
     }
 
-    // MARK: - An open tree always has something in it
+    // MARK: - An open tree with nothing in use is all fold
 
-    /// Folding hides the worktrees nobody is working in. Folding *all* of them
-    /// leaves an open project showing one grey "2 more" and a blank line, which
-    /// is indistinguishable from a rendering bug — and it was the state every
-    /// relaunch started in, since the tree's expansion is remembered while the
-    /// "show me the rest" flag is not.
+    /// Folding hides the worktrees nobody is working in — all of them, when
+    /// nobody is working anywhere in the repo. `main` used to be held back so
+    /// an open tree never showed a bare "2 more" under a blank line; the line
+    /// is never blank now (`infoLine` speaks in every state, "2 worktrees"
+    /// right above the fold), and a sidebar of idle `main` rows was the noise
+    /// that got this reversed (2026-09-01).
     @MainActor
-    func test_an_open_tree_always_shows_at_least_the_main_worktree() async {
+    func test_an_open_tree_with_no_tabs_anywhere_folds_to_just_the_count() async {
         forgetExpandedProjects()
         defer { forgetExpandedProjects() }
         let model = await modelWithTwoProjects()
@@ -2976,31 +2979,34 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         let rows = model.sidebarWorktreeRows(for: p1)
 
-        XCTAssertEqual(rows.shown.map(\.path), [Self.mainWorktree],
-                       "no tabs, no remembered worktree — main still stands for the tree")
-        XCTAssertEqual(rows.foldedCount, 1)
+        XCTAssertTrue(rows.shown.isEmpty,
+                      "no tabs and nobody standing here — every row folds, main included")
+        XCTAssertEqual(rows.foldedCount, 2)
     }
 
-    /// The rows must not depend on where the selection stands. They used to:
-    /// the "do not fold the worktree being stood in" exception only applied to
-    /// the selected project, so clicking a row grew the list by one and turned
-    /// "2 more" into "1 more" with no other change on screen.
+    /// The standing exception follows the user: walk away from an idle worktree
+    /// and its row folds behind the count. This is the flap the old remembered-
+    /// worktree rule avoided — accepted deliberately (2026-09-01): a row held
+    /// open for a project you are not even in reads as clutter, not as memory.
     @MainActor
-    func test_the_shown_worktrees_do_not_change_when_the_project_is_selected() async {
+    func test_leaving_a_project_folds_the_idle_worktree_you_stood_in() async {
         forgetExpandedProjects()
         defer { forgetExpandedProjects() }
         let model = await modelWithTwoProjects()
         model.toggleWorktrees(projectID: "p1")
-        await model.selectProject(id: "p2")
-        let unselected = model.sidebarWorktreeRows(
-            for: model.projects.first { $0.id == "p1" }!)
-
         await model.selectProject(id: "p1")
-        let selected = model.sidebarWorktreeRows(
+        model.activeWorkspacePath = Self.featureWorktree
+        let standing = model.sidebarWorktreeRows(
+            for: model.projects.first { $0.id == "p1" }!)
+        XCTAssertEqual(standing.shown.map(\.path), [Self.featureWorktree],
+                       "the row being stood in is the one row an idle tree shows")
+
+        await model.selectProject(id: "p2")
+        let left = model.sidebarWorktreeRows(
             for: model.projects.first { $0.id == "p1" }!)
 
-        XCTAssertEqual(unselected.shown.map(\.path), selected.shown.map(\.path))
-        XCTAssertEqual(unselected.foldedCount, selected.foldedCount)
+        XCTAssertTrue(left.shown.isEmpty, "nobody is standing there any more")
+        XCTAssertEqual(left.foldedCount, 2)
     }
 
     /// What the plan deliberately keeps: a worktree made elsewhere is found by

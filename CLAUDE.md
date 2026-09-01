@@ -67,7 +67,7 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 
 - **표시**: 워크트리가 2개 이상일 때만 `sidebarWorktrees(for:)`가 자식 행을 낸다. 1개면 평면 — 프로젝트 행이 곧 그 워크트리고, 모든 프로젝트에 "main" 한 줄이 붙는 건 노이즈다.
   - **경로는 줄이 아니라 hover다**: 모든 행(프로젝트·워크트리)이 `.help`로 자기 디렉터리를 말하고(`hoverPath`), 화면에는 어떤 행도 경로 줄을 갖지 않는다 — 예전처럼 main 행만 두 줄이면 "왜 얘만?"으로 읽힌다.
-  - **본체는 표식이 말한다**: main 워크트리 행에는 브랜치명 옆에 집 표식(`mainWorktreeMark`)이 붙는다. "본체임"을 브랜치명이 우연히 main인 것에 실으면, 본체가 다른 브랜치를 체크아웃하는 순간 그 정보가 화면에서 사라진다 — 표식은 어떤 브랜치에서도 남는다. "main은 언제나 접히지 않는다"는 예외가 왜 예외인지도 이 표식이 설명한다.
+  - **본체는 표식이 말한다**: main 워크트리 행에는 브랜치명 옆에 집 표식(`mainWorktreeMark`)이 붙는다. "본체임"을 브랜치명이 우연히 main인 것에 실으면, 본체가 다른 브랜치를 체크아웃하는 순간 그 정보가 화면에서 사라진다 — 표식은 어떤 브랜치에서도 남는다. (한때 "main은 언제나 접히지 않는다"는 예외의 근거이기도 했지만, 그 예외는 2026-09-01 사라졌다 — 아래 "탭 없는 워크트리는 접힌다".)
   - **프로젝트 행의 부제는 비지 않는다**(`projectInfoLine(for:)`). 상태마다 *다른 사실*을 말한다: 접히면 정체(`main`/`non-git`/원격은 `main on emac`)에 규모를 덧붙이고(`main · 3 worktrees`), 펼치면 규모만 말한다(`3 worktrees`) — 정체는 바로 아래 main 행이 이어받으므로. 개수를 아직 모르면(캐시 콜드) 정체만, `non-git`을 조회 전에 말하지 않는 것과 같은 규칙이다.
     - **왜**: 예전엔 펼쳤을 때 이 줄을 `.opacity(0)`으로 감추고 자리만 남겼다. 그런데 자식이 전부 접히는 상태(아래 "탭 없는 워크트리는 접힌다")가 겹치면 이름 밑에 설명 없는 빈 줄만 남아 렌더 오류로 읽힌다. 게다가 `expandedProjectIDs`는 UserDefaults에 남고 "전부 보기"는 메모리라, 그게 **재실행 때마다의 기본 상태**였다.
     - 접힌 행의 개수는 **클릭하면 트리가 열린다는 유일한 예고**이기도 하다. 삼각형을 없앤 뒤로 펼침 여부를 말하는 것은 이 줄뿐이다.
@@ -86,7 +86,10 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
       # …XCUITest 실행…
       git worktree remove /tmp/codespark-uiverify && git branch -D tmp/ui-verify
       ```
-  - **탭 없는 워크트리는 접힌다**(`sidebarWorktreeRows(for:)`, `·· N more`). 접히지 않는 것 셋: 탭이 있는 것(= `Cmd` 숫자가 가리키는 곳), **`projectSelectedWorkspaces`에 기록된 마지막으로 서 있던 워크트리**, 그리고 **`main`은 언제나**. 앞의 둘을 "지금 선택된 워크트리"로 판정하면 선택이 행 개수를 바꾼다 — 클릭 한 번에 `2 more`가 `1 more`가 되고 화면엔 다른 변화가 없다. main이 예외인 이유는 위와 같다: 펼친 트리는 최소 한 줄의 실체를 보여야 한다.
+  - **탭 없는 워크트리는 접힌다**(`sidebarWorktreeRows(for:)`, `·· N more`). 접히지 않는 것 **둘뿐**: 탭이 있는 것(= `Cmd` 숫자가 가리키는 곳)과 **지금 서 있는 행**(선택된 프로젝트의 `activeWorkspacePath` — 하이라이트와 같은 판정이라, 강조된 행이 접혀서 화면에서 사라지는 일이 없다).
+    - **main도 remembered도 접힌다**(2026-09-01 반전, 이전 규칙은 "셋이 안 접힌다"였다). main 예외의 근거였던 "빈 줄 밑 `N more`" 문제는 info line이 모든 상태에서 말을 하게 되면서 사라졌는데, 예외는 남아서 리포마다 놀고 있는 main 행이 사이드바에 줄줄이 쌓였다. remembered(`projectSelectedWorkspaces`) 예외도 같이 갔다 — 서 있지도 않은 프로젝트의 빈 행을 잡아두는 건 기억이 아니라 소음이다.
+    - **알고 받아들인 대가**: 빈 워크트리에서 떠나면 그 행이 접혀 **선택이 행 개수를 바꾼다** — remembered 규칙이 피하려던 그 flap이다. 탭이 하나도 없는 리포는 펼쳐도 `·· N more` 한 줄만 남는데, 바로 위 info line(`N worktrees`)이 그걸 설명하므로 렌더 오류로 읽히지 않는다.
+  - **탭 개수는 한 곳에만 적힌다**: 워크트리 행이 보이는 동안 프로젝트 행은 개수 배지를 지운다(`SidebarProjectGroup.sessionCount` — 행이 보이면 nil). 같은 탭이 한 열에서 두 번 세지면 안 되므로. 배지 숫자는 `.fixedSize()`로 고정한다 — `.layoutPriority(-1)`은 긴 프로젝트 이름이 배지를 깎아 반쪽 숫자를 그렸다(워크트리 배지가 먼저 맞고 고친 병과 같은 것).
   - **`prunable`은 이유를 달고 온다**: git은 `prunable <reason>`을 찍지 `prunable` 한 단어를 찍지 않는다. 완전 일치로 비교하던 동안 **prunable 워크트리가 한 번도 걸러지지 않았고**, 디렉터리가 사라진 워크트리가 사이드바에 남아 클릭하면 없는 경로에 서게 됐다.
     - 걸러낼 때 **"첫 번째" 표시를 지우면 안 된다**: 그 플래그는 "우리가 남기는 것 중 첫 번째"라는 뜻이다. 지우면 첫 stanza가 prunable일 때 **main 워크트리가 하나도 없는 목록**이 나오고, `projectIdentityLine`의 `.first(where: \.isMainWorktree)?.branch`가 nil이 되어 원격 행이 조용히 브랜치를 잃는다.
   - **밖에서 만든 워크트리는 폴링으로만 발견된다**: 앱이 만든 것(`addWorktree`)은 즉시 반영되지만, 에이전트가 탭 안에서 만든 것이나 다른 체크아웃의 것은 10초 타이머가 찾는다. 타이머는 `NSApp.isActive`일 때만 돌고 TTL은 30초(실패 60초)라 최대 ~40초. **앱이 배경에 있으면 아예 돌지 않으므로** 활성화되는 순간(`didBecomeActiveNotification`) 한 번 더 묻는다 — 안 그러면 몇 시간 자리를 비운 뒤 돌아와도 다음 tick까지 낡은 목록을 본다.

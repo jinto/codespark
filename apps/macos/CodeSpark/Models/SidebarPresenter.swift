@@ -55,6 +55,10 @@ struct SidebarProjectGroup: Identifiable, Equatable {
     let status: ProjectStatus
     let infoLine: String?
     let hotkeyIndex: Int?
+    /// The tab total the project row wears — nil while worktree rows are shown,
+    /// because every one of those tabs is then on screen with its own count and
+    /// the heading repeating the sum counts them twice down one column.
+    let sessionCount: Int?
     let worktrees: [SidebarWorktreeRow]
     let foldedCount: Int
     /// The project's directory, for hover — a path takes no row space anywhere.
@@ -109,6 +113,8 @@ enum SidebarPresenter {
                 status: status(of: project, in: snapshot),
                 infoLine: infoLine(for: project, worktreeRowsShown: showsRows, in: snapshot),
                 hotkeyIndex: badges.byProject[project.id],
+                sessionCount: showsRows || project.liveSessions == 0
+                    ? nil : project.liveSessions,
                 worktrees: showsRows ? folded.shown.map { workspace in
                     SidebarWorktreeRow(
                         workspace: workspace,
@@ -166,21 +172,23 @@ enum SidebarPresenter {
     /// is working in. They fold behind a count rather than pushing everything
     /// else off the screen.
     ///
-    /// Three never fold. A worktree with tabs, because it carries a `Cmd` digit
+    /// Two never fold. A worktree with tabs, because it carries a `Cmd` digit
     /// and folding it would leave a number pointing at nothing on screen — the
     /// same reason a folded project row wears the digit that leads inside it.
-    /// The worktree the project was last left standing in, because coming back
-    /// to a tree whose selection is hidden reads as no selection at all. And
-    /// `main`, always: an open tree with every row folded away shows one grey
-    /// "2 more" under a blank line, which reads as a rendering fault rather than
-    /// as a fold — and since the expansion is remembered across launches while
-    /// the "show me the rest" flag is not, that was the state the sidebar came
-    /// back in every morning.
+    /// And the row being stood in *right now*, under the same predicate the
+    /// highlight uses, because a highlighted row that is folded away is a
+    /// selection nobody can see.
     ///
-    /// The remembered worktree is read from `projectSelectedWorkspaces`, not
-    /// from the live selection: the old test only held for the selected project,
-    /// so a click that changed nothing else grew the list by a row and turned
-    /// "2 more" into "1 more".
+    /// Nothing else. `main` folded like any other idle row on 2026-09-01: its
+    /// old exemption guarded an open tree from showing a bare "2 more" under a
+    /// blank line, and the line stopped being blank when `infoLine` learned to
+    /// speak in every state — while a sidebar of repos collecting worktrees
+    /// showed an idle `main` row under every one. The remembered worktree
+    /// (`projectSelectedWorkspaces`) went with it: a row held open for a
+    /// project you are not even in reads as clutter, not as memory. The cost,
+    /// accepted: walking away from an idle worktree folds its row, so selection
+    /// now changes the row count — the flap the remembered rule existed to
+    /// avoid.
     static func fold(
         _ all: [WorkspaceViewData],
         of project: ProjectSummaryViewData,
@@ -189,11 +197,10 @@ enum SidebarPresenter {
         guard !snapshot.projectsShowingEveryWorktree.contains(project.id) else {
             return FoldedWorktrees(shown: all, foldedCount: 0)
         }
-        let remembered = snapshot.projectSelectedWorkspaces[project.id]
+        let standing = snapshot.selectedProjectID == project.id
+            ? snapshot.activeWorkspacePath : nil
         let shown = all.filter { workspace in
-            !workspace.sessions.isEmpty
-                || workspace.isMainWorktree
-                || workspace.path == remembered
+            !workspace.sessions.isEmpty || workspace.path == standing
         }
         return FoldedWorktrees(shown: shown, foldedCount: all.count - shown.count)
     }
