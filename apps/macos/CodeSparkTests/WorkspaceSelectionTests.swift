@@ -2166,7 +2166,8 @@ final class WorkspaceSelectionTests: XCTestCase {
         // The whole remote command is re-quoted for the local `/bin/sh -c`, so
         // compare against what the connection itself builds rather than against
         // a hand-written fragment.
-        let expected = SSHConnectionInfo(host: "box", remotePath: "/srv/wt/feat").sshCommand()
+        let expected = SSHConnectionInfo(host: "box", remotePath: "/srv/wt/feat")
+            .sshCommand(installingTerminfo: RemoteTerminfo.bundledSourceBase64)
         XCTAssertEqual(hosts.last?.commands.last ?? nil, expected)
     }
 

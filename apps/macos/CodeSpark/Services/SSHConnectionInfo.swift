@@ -79,10 +79,11 @@ struct SSHConnectionInfo: Equatable, Hashable {
     /// screen, which cannot be handed over as a local file. `run` replaces the
     /// interactive shell entirely: the tab belongs to that command (a claude
     /// session on the far side), and ends with it.
-    func sshCommand(replaying replay: String? = nil, running run: String? = nil) -> String {
+    func sshCommand(replaying replay: String? = nil, running run: String? = nil,
+                    installingTerminfo terminfoBase64: String? = nil) -> String {
         var parts = ["ssh"]
         if let port { parts.append(contentsOf: ["-p", "\(port)"]) }
-        let remote = remoteCommand(replaying: replay, running: run)
+        let remote = remoteCommand(replaying: replay, running: run, installingTerminfo: terminfoBase64)
         // Before `--`, which ends option parsing: after it `-t` is not an
         // option any more but the first word of the *remote command*, and the
         // far shell dies on `bad option string: '-t /bin/sh -c …'`.
@@ -139,7 +140,8 @@ struct SSHConnectionInfo: Equatable, Hashable {
     /// What the remote `sh` runs. Internal so a test can drive it through a
     /// real zsh, bash, or fish — the reporter's failures live in shell startup
     /// order, which no comparison of command strings can see.
-    func remoteCommand(replaying replay: String?, running run: String? = nil) -> String? {
+    func remoteCommand(replaying replay: String?, running run: String? = nil,
+                       installingTerminfo terminfoBase64: String? = nil) -> String? {
         var lines: [String] = []
         if let replay, !replay.isEmpty { lines.append(replay) }
         if let remotePath {
@@ -148,6 +150,14 @@ struct SSHConnectionInfo: Equatable, Hashable {
             // them. A tab whose directory is gone still must not open a shell
             // somewhere else.
             lines.append("cd \(Self.remotePathExpression(remotePath)) || exit")
+        }
+        // Plant xterm-ghostty on the far side before anything renders under the
+        // pty — ssh carries our TERM over, and a box that never ran Ghostty has
+        // no such entry, so its line editing misrenders. Idempotent and silent
+        // on failure (see `terminfoInstaller`); runs ahead of both the exec'd
+        // command and the interactive launcher.
+        if let terminfoBase64, !terminfoBase64.isEmpty {
+            lines.append(RemoteCwdReporter.terminfoInstaller(base64Source: terminfoBase64))
         }
         if let run, !run.isEmpty {
             // The command owns the tty from here — no shell, so no cwd reporter:
@@ -269,6 +279,34 @@ enum RemoteCwdReporter {
     /// Planting this in the surface environment closes that hole; zsh and fish
     /// never read `PROMPT_COMMAND`, so for them it is inert either way.
     static let bashPromptCommand = #"__cs_p=${PWD//[%]/%25}; __cs_p=${__cs_p//[#]/%23}; __cs_p=${__cs_p//[?]/%3F}; printf "\033]7;file://localhost%s\007" "$__cs_p""#
+
+    /// A POSIX `sh` preamble that plants the `xterm-ghostty` terminfo entry on
+    /// the far side — once, only if it is missing.
+    ///
+    /// ssh propagates our `TERM=xterm-ghostty` over the pty, but a remote box
+    /// that has never run Ghostty has no such entry, so its ncurses/ZLE can't
+    /// resolve the type and backspace/line-editing misrender there — the same
+    /// failure as the local bundle, one hop away, and the local fix does nothing
+    /// for it. The compiled db can't cross the wire (it is machine-specific), so
+    /// we ship the *source* as base64 and let the remote `tic` compile it.
+    ///
+    /// Two guards, both load-bearing:
+    /// - **Idempotent / non-destructive:** if `infocmp` already resolves the
+    ///   entry, do nothing. A Ghostty user's box has its own, possibly newer,
+    ///   copy; `~/.terminfo` shadows the system db, so overwriting would be a
+    ///   regression, not a fix.
+    /// - **Degrades to the old behaviour:** no `tic` (or the compile fails) and
+    ///   it silently does nothing — the worst case is exactly what a remote tab
+    ///   did before this existed.
+    static func terminfoInstaller(base64Source: String) -> String {
+        #"""
+        if ! infocmp xterm-ghostty >/dev/null 2>&1; then
+          if command -v tic >/dev/null 2>&1; then
+            printf '%s' '\#(base64Source)' | base64 -d 2>/dev/null | tic -x -o "${HOME:-/tmp}/.terminfo" - >/dev/null 2>&1 || true
+          fi
+        fi
+        """#
+    }
 
     /// A POSIX `sh` script that installs the reporter and then becomes the
     /// user's shell.

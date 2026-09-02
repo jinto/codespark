@@ -694,7 +694,7 @@ final class AppModel: ObservableObject {
                     shell: shell,
                     cwd: remoteCwd,
                     workspacePath: workspacePath,
-                    command: info.sshCommand(),
+                    command: info.sshCommand(installingTerminfo: RemoteTerminfo.bundledSourceBase64),
                     sshInfo: info
                 )
                 guard selection.id == projectID else { return }
@@ -795,7 +795,8 @@ final class AppModel: ObservableObject {
                         cwd: interrupted.lastCwd,
                         workspacePath: workspacePath,
                         command: info.sshCommand(
-                            replaying: snapshot.flatMap { RestoredScreenReplay.inlineCommand(for: $0) }
+                            replaying: snapshot.flatMap { RestoredScreenReplay.inlineCommand(for: $0) },
+                            installingTerminfo: RemoteTerminfo.bundledSourceBase64
                         ),
                         sshInfo: info
                     )
@@ -951,7 +952,8 @@ final class AppModel: ObservableObject {
         if var info = WorkspaceAddress(project.path).remote {
             // The tab connects to the same host, landing in the new worktree.
             info.remotePath = creation.cwd
-            command = info.sshCommand(running: claudeCommand)
+            command = info.sshCommand(running: claudeCommand,
+                                      installingTerminfo: RemoteTerminfo.bundledSourceBase64)
             transport = "ssh"
             // The remote's own raw path — what Ghostty gets and what the store
             // files as this tab's position; no OSC 7 will refill it.

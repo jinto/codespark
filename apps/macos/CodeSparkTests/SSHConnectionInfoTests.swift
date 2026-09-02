@@ -299,6 +299,8 @@ final class SSHConnectionInfoTests: XCTestCase {
         remotePath: String? = nil,
         planting dotfiles: [String: String] = [:],
         path: String = "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin",
+        installingTerminfo terminfoBase64: String? = nil,
+        inspectingHome inspect: ((URL) -> Void)? = nil,
         typing input: String
     ) throws -> String {
         let home = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -313,7 +315,8 @@ final class SSHConnectionInfoTests: XCTestCase {
         }
 
         let info = SSHConnectionInfo(host: "box", remotePath: remotePath ?? home.path)
-        let script = try XCTUnwrap(info.remoteCommand(replaying: nil))
+        let script = try XCTUnwrap(info.remoteCommand(replaying: nil, installingTerminfo: terminfoBase64))
+        defer { inspect?(home) }
 
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
@@ -343,6 +346,45 @@ final class SSHConnectionInfoTests: XCTestCase {
         let output = try runRemoteScript(shell: "/bin/zsh", typing: "cd /tmp\nexit\n")
         XCTAssertTrue(reportedDirectories(in: output).contains("/tmp"),
                       "zsh never reported a directory: \(output.debugDescription)")
+    }
+
+    /// The installer and the launcher are joined into one `/bin/sh` script and
+    /// pushed through two levels of shell quoting. Each was proven alone; the
+    /// `fi\n__cs_s=` seam between them never ran until now — the exact class of
+    /// bug the `ssh -t` regression was (argv looked right, the far shell
+    /// disagreed). This runs the *whole* remote command and asserts both halves
+    /// survive: the terminfo lands AND the cwd reporter still fires.
+    func test_the_installer_and_launcher_run_as_one_script() throws {
+        for shell in ["/bin/zsh", "/bin/bash"] {
+            let b64 = Data((try infocmpSource()).utf8).base64EncodedString()
+            var planted = false
+            let output = try runRemoteScript(
+                shell: shell,
+                installingTerminfo: b64,
+                inspectingHome: { home in
+                    planted = ["78", "x"].contains { sub in
+                        FileManager.default.fileExists(
+                            atPath: home.appendingPathComponent(".terminfo/\(sub)/xterm-ghostty").path)
+                    }
+                },
+                typing: "cd /tmp\nexit\n")
+            XCTAssertTrue(reportedDirectories(in: output).contains("/tmp"),
+                          "\(shell): the launcher didn't survive the installer preamble: \(output.debugDescription)")
+            XCTAssertTrue(planted, "\(shell): the installer preamble planted no terminfo")
+        }
+    }
+
+    private func infocmpSource() throws -> String {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: "/usr/bin/infocmp")
+        p.arguments = ["-x", "xterm-ghostty"]
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = FileHandle.nullDevice
+        try p.run()
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        return String(decoding: data, as: UTF8.self)
     }
 
     func test_a_real_bash_reports_the_directory_it_moved_to() throws {
@@ -568,5 +610,101 @@ final class SSHConnectionInfoTests: XCTestCase {
             XCTAssertFalse(source.contains(".sshCommand("),
                            "\(file.lastPathComponent) prints the whole remote command — use previewCommand")
         }
+    }
+}
+
+/// A remote shell gets `TERM=xterm-ghostty` (ssh propagates our local TERM over
+/// the pty), but the remote box usually has no such terminfo entry — anyone
+/// who hasn't run Ghostty there. So backspace/line-editing misrender on the
+/// far side exactly like the local bundle bug, and the local terminfo fix does
+/// nothing for it. The connect script plants the entry, once, idempotently.
+///
+/// Real `/bin/sh` + `tic` + `infocmp`, because the whole thing is shell
+/// sequencing: a command-string test would see none of the failures.
+final class RemoteTerminfoInstallerTests: XCTestCase {
+
+    /// The compiled db can't cross the wire; `tic` needs source. We ship source
+    /// as base64 (no quoting hazard) and the far side decodes and compiles it.
+    private func base64Source() throws -> String {
+        let src = try run("/usr/bin/infocmp", ["-x", "xterm-ghostty"])
+        return Data(src.utf8).base64EncodedString()
+    }
+
+    /// A shell whose HOME is a temp dir and whose TERMINFO is a dead path, so
+    /// `xterm-ghostty` does not resolve until the installer plants it.
+    @discardableResult
+    private func runInstaller(base64: String, home: URL, extraProbe: String = "") throws -> String {
+        let script = RemoteCwdReporter.terminfoInstaller(base64Source: base64) + "\n" + extraProbe
+        return try run("/bin/sh", ["-c", script], env: [
+            "HOME": home.path,
+            "PATH": "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin",
+            "TERMINFO": "/nonexistent-terminfo",
+        ])
+    }
+
+    func test_it_plants_the_entry_when_the_remote_has_none() throws {
+        let home = try tempHome(); defer { try? FileManager.default.removeItem(at: home) }
+        try runInstaller(base64: base64Source(), home: home)
+
+        let probe = try run("/bin/sh", ["-c", "infocmp -1 xterm-ghostty >/dev/null 2>&1 && echo OK || echo FAIL"],
+                            env: ["HOME": home.path, "PATH": "/usr/bin:/bin:/opt/homebrew/bin", "TERMINFO": "/nonexistent-terminfo"])
+        XCTAssertTrue(probe.contains("OK"),
+                      "the installer left no resolvable xterm-ghostty: \(probe.debugDescription)")
+        // ncurses stores it under the hex-of-first-letter dir; x = 78 on macOS,
+        // x/ on the linux boxes. Either spelling counts.
+        let hasEntry = FileManager.default.fileExists(atPath: home.appendingPathComponent(".terminfo/78/xterm-ghostty").path)
+            || FileManager.default.fileExists(atPath: home.appendingPathComponent(".terminfo/x/xterm-ghostty").path)
+        XCTAssertTrue(hasEntry, "no entry under ~/.terminfo")
+    }
+
+    /// If the entry already resolves, the installer must not touch it — on a
+    /// remote that already has a good xterm-ghostty (a Ghostty user's box),
+    /// overwriting with our copy could shadow a newer original. The second run
+    /// (entry now present, so `infocmp` resolves) must leave the file untouched.
+    func test_it_is_a_noop_when_the_entry_already_resolves() throws {
+        let home = try tempHome(); defer { try? FileManager.default.removeItem(at: home) }
+        let b64 = try base64Source()
+
+        try runInstaller(base64: b64, home: home)          // plants it
+        let entry = try XCTUnwrap(plantedEntry(in: home), "first run planted nothing")
+        let before = try FileManager.default.attributesOfItem(atPath: entry.path)[.modificationDate] as? Date
+
+        try runInstaller(base64: b64, home: home)          // resolves now → must skip
+        let after = try FileManager.default.attributesOfItem(atPath: entry.path)[.modificationDate] as? Date
+        XCTAssertEqual(before, after, "the installer rewrote an entry that already resolved")
+    }
+
+    /// Where ncurses stored the entry — `78/` (hex of `x`) on macOS, `x/` on the
+    /// linux boxes.
+    private func plantedEntry(in home: URL) -> URL? {
+        for sub in ["78", "x"] {
+            let u = home.appendingPathComponent(".terminfo/\(sub)/xterm-ghostty")
+            if FileManager.default.fileExists(atPath: u.path) { return u }
+        }
+        return nil
+    }
+
+    // MARK: - helpers
+
+    private func tempHome() throws -> URL {
+        let home = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("cs-rti-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        return home
+    }
+
+    @discardableResult
+    private func run(_ path: String, _ args: [String], env: [String: String]? = nil) throws -> String {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: path)
+        p.arguments = args
+        if let env { p.environment = env }
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = FileHandle.nullDevice
+        try p.run()
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        p.waitUntilExit()
+        return String(decoding: data, as: UTF8.self)
     }
 }
