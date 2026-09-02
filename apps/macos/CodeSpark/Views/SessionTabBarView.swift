@@ -6,8 +6,6 @@ struct SessionTabBarView: View {
     let onSelect: (String) -> Void
     let onClose: (String) -> Void
     let onNew: () -> Void
-    let onNewWorktree: () -> Void
-    let canCreateWorktree: Bool
     /// Branch a tab is working in when that is not the worktree it belongs to.
     var visitingBranch: (SessionViewData) -> String? = { _ in nil }
     /// Where this tab could be refiled to. Asked when the menu opens, not per
@@ -49,16 +47,6 @@ struct SessionTabBarView: View {
             }
             .buttonStyle(.plain)
             .help("New session (\u{2318}T)")
-
-            Button(action: onNewWorktree) {
-                Image(systemName: "arrow.triangle.branch")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .help("New worktree")
-            .disabled(!canCreateWorktree)
 
             Spacer()
         }

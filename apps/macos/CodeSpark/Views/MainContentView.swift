@@ -16,14 +16,6 @@ struct MainContentView: View {
                     onSelect: { id in model.activeSessionID = id },
                     onClose: { id in model.closeSession(id: id) },
                     onNew: { Task { await model.newSession() } },
-                    onNewWorktree: {
-                        guard let project = model.selection.onScreen,
-                              AppModel.canCreateIssueWorktree(
-                                path: project.path, transport: project.transport) else { return }
-                        model.showNewWorktreeSheet = true
-                    },
-                    canCreateWorktree: AppModel.canCreateIssueWorktree(
-                        path: project.path, transport: project.transport),
                     visitingBranch: { model.visitingBranch(for: $0) },
                     moveTargets: { model.sessionMoveTargets(for: $0) },
                     onMove: { id, target in Task { await model.moveSession(sessionID: id, to: target) } }

@@ -156,7 +156,7 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 
 ## New Worktree (issue → Claude)
 
-프로젝트 우클릭 / 탭바 브랜치 버튼 → 시트에 **issue를 적으면** headless `claude -p`가 프로젝트 디렉터리에서 브랜치명을 지어 워크트리를 만든다(`ClaudeWorktreeCreator`, 도구는 `--allowedTools "Bash(git:*)" Read Glob Grep`으로 제한, 데드라인 180초). 응답 마지막 줄의 `WORKTREE_PATH:` 마커가 앱과의 계약이다 — 마지막 마커 줄만 믿고, 없거나 실재하지 않는 경로면 출력 꼬리를 에러로 보여준다. 성공하면 앱이 issue를 **임시 디렉터리의 mission 파일**로 남기고(워크트리 안이 아니라 — 실수 커밋할 untracked가 없다), 새 워크트리에 `claude '<mission 경로> 를 읽고 작업을 시작해줘' --add-dir <mission 디렉터리>` 탭을 연다. 로컬 프로젝트만.
+프로젝트 우클릭 → New Worktree… (탭바에도 버튼이 있었지만 2026-09-02 뺐다 — 우클릭이면 충분) → 시트에 **issue를 적으면** headless `claude -p`가 프로젝트 디렉터리에서 브랜치명을 지어 워크트리를 만든다(`ClaudeWorktreeCreator`, 도구는 `--allowedTools "Bash(git:*)" Read Glob Grep`으로 제한, 데드라인 180초). 응답 마지막 줄의 `WORKTREE_PATH:` 마커가 앱과의 계약이다 — 마지막 마커 줄만 믿고, 없거나 실재하지 않는 경로면 출력 꼬리를 에러로 보여준다. 성공하면 앱이 issue를 **임시 디렉터리의 mission 파일**로 남기고(워크트리 안이 아니라 — 실수 커밋할 untracked가 없다), 새 워크트리에 `claude '<mission 경로> 를 읽고 작업을 시작해줘' --add-dir <mission 디렉터리>` 탭을 연다. 로컬 프로젝트만.
 
 - **`--add-dir <directories...>`는 가변 인자다**: positional 프롬프트를 그 뒤에 두면 **디렉터리로 삼켜져 claude가 빈 채로 뜬다**. 프롬프트가 먼저다. `--print`에서는 "Input must be provided" 에러로 드러나지만 대화형에서는 조용히 죽는 종류라, 유닛 테스트가 명령 문자열의 순서를 고정한다.
 - **마커 경로는 git이 해소한 철자다**(`/private/tmp/…`): 스캔의 정규화 철자와 다르면 워크스페이스가 둘이 되어 **새 탭이 어느 행에도 안 보인다**. `WorkspaceAddress(…).storageKey`로 경계에서 한 번 정규화한다 — 위 "주소는 git이 부르는 대로 쓴다"의 headless판.
