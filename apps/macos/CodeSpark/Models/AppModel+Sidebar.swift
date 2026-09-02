@@ -170,6 +170,7 @@ extension AppModel {
         case .worktree(let id, let path):
             await selectWorktree(projectID: id, path: path)
         }
+        requestSidebarScroll(toProjectID: place.projectID)
     }
 
     /// Opens a tree that is shut and leaves an open one alone.

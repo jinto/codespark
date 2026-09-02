@@ -44,6 +44,9 @@ final class AppModel: ObservableObject {
     @Published var nonGitProjectPaths: Set<String> = []
     @Published var workspaces: [WorkspaceViewData] = []
     @Published private(set) var expandedProjectIDs: Set<String> = AppModel.savedExpandedProjectIDs()
+    /// Set by the `Cmd` digits only. A click aims at a row already on screen;
+    /// a digit is pressed blind, and the row it lands in may be scrolled away.
+    @Published private(set) var sidebarScrollRequest: SidebarPresenter.ScrollRequest?
     @Published private(set) var resumableAgentSessions: [ResumableAgentSession] = []
     @Published var activeWorkspacePath: String? {
         didSet {
@@ -1303,6 +1306,26 @@ final class AppModel: ObservableObject {
         UserDefaults.standard.set(
             expandedProjectIDs.sorted().joined(separator: ","),
             forKey: StorageKeys.expandedProjectIDs
+        )
+    }
+
+    /// A digit is pressed blind, so the row it lands in may be scrolled out of
+    /// view — ask the sidebar to bring it back. Called after the selection has
+    /// settled: the landed row is the standing worktree row when one is on
+    /// screen (the fold rule keeps it there), the project row otherwise.
+    func requestSidebarScroll(toProjectID projectID: String) {
+        let rowID: String
+        if let path = activeWorkspacePath,
+           let group = sidebarGroups.first(where: { $0.project.id == projectID }),
+           let row = group.worktrees.first(where: { $0.workspace.path == path }) {
+            rowID = row.id
+        } else {
+            rowID = projectID
+        }
+        sidebarScrollRequest = SidebarPresenter.ScrollRequest(
+            projectID: projectID,
+            rowID: rowID,
+            generation: (sidebarScrollRequest?.generation ?? 0) + 1
         )
     }
 

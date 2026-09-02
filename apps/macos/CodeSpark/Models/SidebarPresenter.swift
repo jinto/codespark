@@ -342,6 +342,23 @@ enum SidebarPresenter {
         }
     }
 
+    /// A digit landed somewhere; the sidebar should bring that row into view.
+    /// The generation makes every press a fresh value — SwiftUI's `onChange`
+    /// stays silent for an equal one, and the second press of the same digit
+    /// must still fetch the row back after the user scrolled away.
+    ///
+    /// It carries the project alongside the row because the row alone can be
+    /// unreachable: a worktree row lives in a nested `ForEach` inside a
+    /// `LazyVStack` item, and a group scrolled far enough away has never been
+    /// built — `scrollTo` on its row id silently matches nothing (measured).
+    /// The project row is a top-level id and always resolves, so the view
+    /// scrolls there first and refines to the row once the group exists.
+    struct ScrollRequest: Equatable {
+        let projectID: String
+        let rowID: String
+        let generation: Int
+    }
+
     struct NumberedBadges: Equatable {
         var byProject: [String: Int] = [:]
         var byWorktree: [NumberedPlace: Int] = [:]

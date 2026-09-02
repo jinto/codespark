@@ -2804,6 +2804,90 @@ final class WorkspaceSelectionTests: XCTestCase {
                       "the second press folded the tree the first one opened")
     }
 
+    // MARK: - A digit scrolls the sidebar to where it lands
+
+    /// The digits are pressed without looking, and the sidebar scrolls. A row
+    /// the digit lands in may be below the fold — arriving there without the
+    /// list moving leaves the user selected into a row they cannot see.
+    @MainActor
+    func test_a_worktree_digit_asks_the_sidebar_to_scroll_to_its_row() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        model.activeWorkspacePath = Self.mainWorktree
+
+        await model.selectNumberedPlace(2)
+
+        let row = model.sidebarGroups.first { $0.project.id == "p1" }?
+            .worktrees.first { $0.workspace.path == Self.featureWorktree }
+        XCTAssertNotNil(row, "precondition: the landed row is on screen")
+        XCTAssertEqual(model.sidebarScrollRequest?.rowID, row?.id)
+        // The row alone is not enough: a group scrolled far away was never
+        // built, and only the project's top-level id is guaranteed to resolve.
+        XCTAssertEqual(model.sidebarScrollRequest?.projectID, "p1")
+    }
+
+    /// A project addressed as itself has no worktree rows to land in — the
+    /// project row is what has to come into view.
+    @MainActor
+    func test_a_project_digit_scrolls_to_the_project_row() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+
+        await model.selectNumberedPlace(2)
+
+        XCTAssertEqual(model.sidebarScrollRequest?.rowID, "p2")
+    }
+
+    /// `onChange` only fires on a different value, and the second press of the
+    /// same digit must still bring the row back if the user scrolled away.
+    @MainActor
+    func test_the_same_digit_pressed_twice_asks_twice() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+
+        await model.selectNumberedPlace(1)
+        let first = model.sidebarScrollRequest
+        await model.selectNumberedPlace(1)
+
+        XCTAssertNotNil(first)
+        XCTAssertNotEqual(model.sidebarScrollRequest, first,
+                          "an identical request cannot re-fire the view's onChange")
+    }
+
+    /// Clicking a row is aiming at something already on screen — the list must
+    /// not move under the cursor.
+    @MainActor
+    func test_clicking_a_row_never_scrolls_the_sidebar() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let model = await modelWithTwoProjects()
+
+        await model.selectProjectAndToggleWorktrees(id: "p2")
+
+        XCTAssertNil(model.sidebarScrollRequest)
+    }
+
+    /// The scroll itself is view wiring — invisible to any test that reads the
+    /// model — so the source has to show the request being consumed.
+    func test_the_sidebar_wires_the_scroll_request_to_a_proxy() throws {
+        let view = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("CodeSpark/Views/SidebarView.swift")
+        let source = try String(contentsOf: view, encoding: .utf8)
+        XCTAssertTrue(source.contains("ScrollViewReader"),
+                      "no ScrollViewReader — nothing can scroll the list")
+        XCTAssertTrue(source.contains("sidebarScrollRequest"),
+                      "the model's scroll request is read by nobody")
+    }
+
     // MARK: - Which directories git is asked about
 
     /// A remote tab reports a directory on the other machine, and `git -C` runs

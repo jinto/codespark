@@ -49,6 +49,7 @@ struct SidebarView: View {
             // "move to the end" is the empty space under the last row, and empty
             // space only exists once the content is stretched to fill.
             GeometryReader { proxy in
+            ScrollViewReader { scroller in
             ScrollView {
                 if model.projects.isEmpty {
                     VStack(spacing: 12) {
@@ -326,6 +327,23 @@ struct SidebarView: View {
                 hotkeyMonitor = nil
                 returnKeyMonitor = nil
             }
+            // A `Cmd` digit lands somewhere that may be scrolled out of view.
+            // Only the digits set this — a click aims at a visible row.
+            //
+            // Two steps, because the landed row can be a worktree row: a nested
+            // `ForEach` inside a `LazyVStack` item that has scrolled far enough
+            // away was never built, and `scrollTo` on its id silently matches
+            // nothing (measured). The project row is a top-level id and always
+            // resolves — go there first, then refine once the group exists.
+            .onChange(of: model.sidebarScrollRequest) { _, request in
+                guard let request else { return }
+                withAnimation { scroller.scrollTo(request.projectID) }
+                guard request.rowID != request.projectID else { return }
+                DispatchQueue.main.async {
+                    withAnimation { scroller.scrollTo(request.rowID) }
+                }
+            }
+            } // ScrollViewReader
             } // GeometryReader
 
             Divider().background(AppTheme.divider)
