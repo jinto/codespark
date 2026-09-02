@@ -53,19 +53,45 @@ targets:
           libtool -static -o "$OLDPWD/$LIBPATH" *.o
           rm -rf "$ARCHIVE_TMP"
     postBuildScripts:
-      - name: Bundle Ghostty shell integration
+      - name: Bundle Ghostty resources (terminfo + shell integration)
         basedOnDependencyAnalysis: false
         script: |
-          # Ghostty finds its shell integration (OSC 7 cwd reporting, prompt marks)
-          # through GHOSTTY_RESOURCES_DIR, which GhosttyRuntime points at this copy.
-          SRC="$SRCROOT/../../vendor/ghostty/zig-out/share/ghostty/shell-integration"
-          DEST="$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/Resources/ghostty"
-          if [ ! -d "$SRC" ]; then
-            echo "warning: ghostty shell-integration not found at $SRC; cwd tracking will be disabled"
-            exit 0
+          # Ships the two Ghostty resource trees the app needs at runtime, and FAILS
+          # the build if either is missing — a phase that half-runs used to produce a
+          # bundle with no terminfo (or no shell integration), and the breakage only
+          # surfaces when a real shell resolves TERM. Regenerate them with
+          # scripts/build-ghostty.sh (which runs `zig build` in vendor/ghostty).
+          set -euo pipefail
+
+          GHOSTTY_SHARE="$SRCROOT/../../vendor/ghostty/zig-out/share"
+          RES="$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/Resources"
+
+          # 1) Shell integration (OSC 7 cwd reporting, prompt marks). Ghostty finds it
+          #    through GHOSTTY_RESOURCES_DIR, which GhosttyRuntime points at Resources/ghostty.
+          SHELL_SRC="$GHOSTTY_SHARE/ghostty/shell-integration"
+          if [ ! -d "$SHELL_SRC" ]; then
+            echo "error: ghostty shell-integration not found at $SHELL_SRC"
+            echo "       run scripts/build-ghostty.sh to generate vendor/ghostty/zig-out"
+            exit 1
           fi
-          mkdir -p "$DEST"
-          rsync -a --delete "$SRC" "$DEST/"
+          mkdir -p "$RES/ghostty"
+          rsync -a --delete "$SHELL_SRC" "$RES/ghostty/"
+
+          # 2) terminfo database. libghostty forces TERM=xterm-ghostty and computes
+          #    TERMINFO=dirname(GHOSTTY_RESOURCES_DIR)/terminfo — i.e. Resources/terminfo,
+          #    a SIBLING of ghostty/, not inside it (Exec.zig). The macOS sentinel entry
+          #    is terminfo/78/xterm-ghostty (78 = hex 'x', resourcesdir.zig). Without it,
+          #    every shell gets a TERM it cannot resolve and line editing misrenders.
+          TERMINFO_SRC="$GHOSTTY_SHARE/terminfo"
+          if [ ! -f "$TERMINFO_SRC/78/xterm-ghostty" ]; then
+            echo "error: ghostty terminfo db missing at $TERMINFO_SRC/78/xterm-ghostty"
+            echo "       run scripts/build-ghostty.sh to generate vendor/ghostty/zig-out"
+            exit 1
+          fi
+          # --delete is scoped to Resources/terminfo so it can never touch other resources.
+          # -a preserves the symlinks the terminfo db may contain (aliases).
+          mkdir -p "$RES/terminfo"
+          rsync -a --delete "$TERMINFO_SRC/" "$RES/terminfo/"
     dependencies:
       - framework: ../../vendor/ghostty/macos/GhosttyKit.xcframework
         embed: false

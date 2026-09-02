@@ -78,6 +78,16 @@ jobs:
             CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
             build
 
+      - name: Verify signature (terminfo tree included)
+        run: |
+          # The bundle now carries a Resources/terminfo tree of small files.
+          # A resource that fails to sign — or a symlink escaping the bundle a
+          # future terminfo db might introduce — would only surface at notarize
+          # or first launch. --deep --strict checks every nested resource here,
+          # where the log is readable, instead of as a Gatekeeper rejection.
+          APP_PATH="build/Build/Products/Release/CodeSpark.app"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
       - name: Notarize app
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
