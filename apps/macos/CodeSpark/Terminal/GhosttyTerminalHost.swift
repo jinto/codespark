@@ -41,7 +41,7 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
         surfaceView = sv
     }
 
-    private static func terminalEnvironment() -> [String: String] {
+    static func terminalEnvironment() -> [String: String] {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         var paths = ProcessInfo.processInfo.environment["PATH"]?.split(separator: ":").map(String.init) ?? []
 
@@ -71,7 +71,16 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
         for path in paths where !path.isEmpty && seen.insert(path).inserted {
             uniquePaths.append(path)
         }
-        return ["PATH": uniquePaths.joined(separator: ":")]
+        return [
+            "PATH": uniquePaths.joined(separator: ":"),
+            // Ghostty will not inject its integration into Apple's /bin/bash,
+            // so on such a login shell OSC 7 never fires and every restore
+            // opens the project folder. Bash reads PROMPT_COMMAND straight from
+            // the environment — it survives `login -flp` and `exec -l` — and
+            // zsh/fish never look at it. Same accepted cost as the ssh
+            // reporter: a dotfile that *assigns* PROMPT_COMMAND drops it.
+            "PROMPT_COMMAND": RemoteCwdReporter.bashPromptCommand,
+        ]
     }
 
     /// List direct child PIDs of the given process.

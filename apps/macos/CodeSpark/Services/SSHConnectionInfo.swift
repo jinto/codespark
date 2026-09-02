@@ -260,6 +260,16 @@ enum RemoteCwdReporter {
     /// leave one behind on every attempt. One directory, rewritten each time.
     static let directory = #"${XDG_CACHE_HOME:-$HOME/.cache}/codespark/shell"#
 
+    /// The bash reporter on its own — one command string, evaluated at every
+    /// prompt. Shared with **local** tabs (`GhosttyTerminalHost`): Ghostty
+    /// refuses, by design, to inject its integration into Apple's `/bin/bash`
+    /// (`shell_integration.zig` — SIP pins bash 3.2, whose `ENV`-based POSIX
+    /// startup the injection needs), so on a machine whose login shell is
+    /// `/bin/bash` a local tab's cwd froze exactly like a remote tab's used to.
+    /// Planting this in the surface environment closes that hole; zsh and fish
+    /// never read `PROMPT_COMMAND`, so for them it is inert either way.
+    static let bashPromptCommand = #"__cs_p=${PWD//[%]/%25}; __cs_p=${__cs_p//[#]/%23}; __cs_p=${__cs_p//[?]/%3F}; printf "\033]7;file://localhost%s\007" "$__cs_p""#
+
     /// A POSIX `sh` script that installs the reporter and then becomes the
     /// user's shell.
     ///
@@ -301,7 +311,7 @@ enum RemoteCwdReporter {
       exec "$__cs_s" -l -i
       ;;
     bash)
-      PROMPT_COMMAND='__cs_p=${PWD//[%]/%25}; __cs_p=${__cs_p//[#]/%23}; __cs_p=${__cs_p//[?]/%3F}; printf "\033]7;file://localhost%s\007" "$__cs_p"'${PROMPT_COMMAND:+;$PROMPT_COMMAND}
+      PROMPT_COMMAND='\#(bashPromptCommand)'${PROMPT_COMMAND:+;$PROMPT_COMMAND}
       export PROMPT_COMMAND
       exec "$__cs_s" -l -i
       ;;
