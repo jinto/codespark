@@ -193,6 +193,16 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
   - 화면이 **잠겨 있으면** 러너가 아예 초기화되지 않는다(`LocalAuthentication Code=-4 "System authentication is running."`). 잠금 화면의 인증 세션이 자동화를 막는 것이라 우회할 방법이 없다 — 풀고 돌려야 한다.
   - `osascript` 기반 `UIVerificationTests`(`TEST_RUNNER_UI_VERIFICATION=1`)는 이 macOS에서 `entire contents of window 1`이 **0을 돌려주어** 사실상 죽어 있다. `static texts of window 1`처럼 직접 지정하면 읽힌다. 눈으로 확인할 일이 있으면 `screencapture`(화면 기록 권한 필요) 쪽이 낫고, 진짜 게이트는 XCUITest다.
 
+### 모디파이어 키는 누름/뗌을 가려 보낸다 (kitty keyboard protocol)
+
+`flagsChanged`(Shift·Ctrl·Alt·Cmd·CapsLock 변화)는 **누름인지 뗌인지 판정**해 `GHOSTTY_ACTION_PRESS`/`RELEASE`를 보낸다(`modifierKeyAction`, `KeyEventRouter.swift`). 예전엔 항상 PRESS였다.
+
+- **왜 오래 안 보였나**: 옛 인코딩은 맨 모디파이어를 바이트로 만들지 않으므로 뗌을 PRESS로 보내도 아무 증상이 없다. 그런데 TUI가 **kitty keyboard protocol**을 켜면(atuin의 검색 TUI가 켠다 — 바이너리에 `PushKeyboardEnhancementFlags`) 모든 키의 누름·뗌이 바이트가 되고, Shift 뗌이 "두 번째 누름"으로 도착해 TUI 입장에선 **Shift가 영영 안 떨어진 키보드**가 된다. 사용자 보고: "atuin 깔자마자 입력이 이상하고 텍스트 버퍼가 남은 느낌".
+- **좌/우 구분과 device bit**: AppKit의 `.shift` 플래그는 어느 쪽 Shift인지 안 알려주고, 둘 다 눌렀다 하나만 떼면 플래그가 그대로 켜져 있다. `NSEvent.modifierFlags.rawValue`의 IOKit device bit(`NX_DEVICER*KEYMASK`)로 눌린 쪽을 판정한다 — 공식 Ghostty `SurfaceView_AppKit.swift`의 `flagsChanged` 판정표를 순수 함수로 옮긴 것.
+- **바이트 오라클로 검증한다**: atuin 없이도 합/불이 갈린다. 탭에서 `printf '\e[>11u'; cat -v`로 kitty 모드를 켜고 맨 Shift를 눌렀다 뗀다. **뗌이 `^[[57441;1:3u`(release, `:3`)로 찍히면 통과**, `^[[57441u`(두 번째 press)면 회귀. 같은 각본을 **공식 Ghostty.app**에서 돌린 게 대조군이다(둘의 바이트 열이 일치해야 함 — 실측으로 일치 확인). kitty 모드에선 Ctrl+C조차 바이트라 `cat`이 안 죽으니, 끝낼 땐 탭을 새로 연다.
+- **유닛 게이트**: `ModifierKeyActionTests`가 4종 모디파이어 × 누름/뗌 × 좌/우 device bit를 공식 판정표와 대조한다. 실제 키 이벤트가 필요한 E2E는 위 바이트 오라클(수동)로 남긴다 — `ssh -t` 회귀와 같은 교훈이다.
+- **테스트용 셸 환경**: oh-my-zsh+atuin 재현은 개발자 홈을 안 건드리고 1회용 HOME으로 만든다 — `/tmp`에 `.oh-my-zsh` clone + `.zshrc`에 `eval "$(atuin init zsh)"`, 탭에서 `env HOME=/tmp/… ATUIN_SESSION=$(atuin uuid) exec zsh -il`.
+
 ## Terminal State Detection
 
 Process detection + screen parsing replaces the old hook system:

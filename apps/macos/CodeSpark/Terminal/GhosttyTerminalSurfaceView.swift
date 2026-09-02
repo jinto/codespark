@@ -235,8 +235,17 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
 
     override func flagsChanged(with event: NSEvent) {
         guard let surface else { return }
+        // Press or release — never assume. Under the kitty keyboard protocol
+        // (atuin's TUI turns it on) a bare modifier becomes bytes, and sending
+        // PRESS for a release gave TUIs a Shift that never came back up.
+        let action: ghostty_input_action_e
+        switch modifierKeyAction(keyCode: event.keyCode, flags: event.modifierFlags) {
+        case .ignore: return
+        case .press: action = GHOSTTY_ACTION_PRESS
+        case .release: action = GHOSTTY_ACTION_RELEASE
+        }
         if hasMarkedText() { return }
-        let key = makeKeyInput(event, action: GHOSTTY_ACTION_PRESS)
+        let key = makeKeyInput(event, action: action)
         ghostty_surface_key(surface, key)
     }
 

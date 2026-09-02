@@ -178,3 +178,63 @@ final class KeyEventRouterTests: XCTestCase {
         }
     }
 }
+
+/// A modifier key's flagsChanged must say whether it went down or came up.
+///
+/// We always sent PRESS. Under the legacy encoding that mistake is silent —
+/// bare modifiers never become bytes — but the kitty keyboard protocol, which
+/// atuin's TUI switches on, reports every press *and* release. Measured with
+/// `printf '\e[>11u'; cat -v`: releasing Shift printed `^[[57441u` (a second
+/// press) where official Ghostty prints `^[[57441;1:3u` (a release) — so any
+/// TUI tracking modifiers saw a Shift that never came back up.
+final class ModifierKeyActionTests: XCTestCase {
+    func test_pressing_a_modifier_is_a_press() {
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x38, flags: [.shift]), .press)
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x3B, flags: [.control]), .press)
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x3A, flags: [.option]), .press)
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x37, flags: [.command]), .press)
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x39, flags: [.capsLock]), .press)
+    }
+
+    func test_releasing_a_modifier_is_a_release() {
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x38, flags: []), .release)
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x3B, flags: []), .release)
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x3A, flags: []), .release)
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x37, flags: []), .release)
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x39, flags: []), .release)
+    }
+
+    /// Two Shifts held, right one released: the flag bit is still set, so the
+    /// side has to decide — the event's device bits say which side is down.
+    func test_releasing_one_side_while_the_other_is_held_is_a_release() {
+        let leftShiftStillDown = NSEvent.ModifierFlags(rawValue:
+            NSEvent.ModifierFlags.shift.rawValue | 0x0002) // NX_DEVICELSHIFTKEYMASK
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x3C, flags: leftShiftStillDown), .release,
+                       "the right Shift came up even though shift is still held")
+
+        let rightShiftDown = NSEvent.ModifierFlags(rawValue:
+            NSEvent.ModifierFlags.shift.rawValue | 0x0004) // NX_DEVICERSHIFTKEYMASK
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x3C, flags: rightShiftDown), .press)
+    }
+
+    func test_right_side_modifiers_check_their_own_device_bit() {
+        // control: right device bit 0x2000
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x3E, flags: NSEvent.ModifierFlags(rawValue:
+            NSEvent.ModifierFlags.control.rawValue | 0x2000)), .press)
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x3E, flags: [.control]), .release)
+        // option: right device bit 0x40
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x3D, flags: NSEvent.ModifierFlags(rawValue:
+            NSEvent.ModifierFlags.option.rawValue | 0x40)), .press)
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x3D, flags: [.option]), .release)
+        // command: right device bit 0x10
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x36, flags: NSEvent.ModifierFlags(rawValue:
+            NSEvent.ModifierFlags.command.rawValue | 0x10)), .press)
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x36, flags: [.command]), .release)
+    }
+
+    /// fn, ordinary keys, anything we don't track: not ours to report.
+    func test_keys_that_are_not_modifiers_are_ignored() {
+        XCTAssertEqual(modifierKeyAction(keyCode: 0x3F, flags: [.function]), .ignore)
+        XCTAssertEqual(modifierKeyAction(keyCode: 9, flags: []), .ignore)
+    }
+}
