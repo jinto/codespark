@@ -2861,6 +2861,31 @@ final class WorkspaceSelectionTests: XCTestCase {
                           "an identical request cannot re-fire the view's onChange")
     }
 
+    /// `Cmd+Opt+[`/`]` is the same blind navigation as a digit — with the tree
+    /// folded, the title subtitle used to be the only sign it worked at all.
+    @MainActor
+    func test_cycling_worktrees_asks_the_sidebar_to_scroll() async {
+        forgetExpandedProjects()
+        defer { forgetExpandedProjects() }
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        model.activeWorkspacePath = Self.mainWorktree
+
+        model.selectNextWorktree()
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
+        // Like a digit, the cycle opens the tree — folded, the only sign it
+        // did anything was the title subtitle.
+        XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
+                      "the cycle landed in a row the folded tree never showed")
+        let row = model.sidebarGroups.first { $0.project.id == "p1" }?
+            .worktrees.first { $0.workspace.path == Self.featureWorktree }
+        XCTAssertNotNil(row, "the landed row is on screen once the tree is open")
+        XCTAssertEqual(model.sidebarScrollRequest?.rowID, row?.id)
+        XCTAssertEqual(model.sidebarScrollRequest?.projectID, "p1")
+    }
+
     /// Clicking a row is aiming at something already on screen — the list must
     /// not move under the cursor.
     @MainActor

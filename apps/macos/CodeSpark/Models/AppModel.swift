@@ -1230,6 +1230,16 @@ final class AppModel: ObservableObject {
               let current = activeWorkspacePath,
               let index = workspaces.firstIndex(where: { $0.path == current }) else { return }
         activeWorkspacePath = workspaces[(index + offset + workspaces.count) % workspaces.count].path
+        // The same blind navigation as a digit, with the digit's manners: open
+        // the tree (never fold it) and bring the landed row into view. With the
+        // tree folded, the title subtitle used to be the only sign the cycle
+        // did anything at all — it read as broken.
+        // `onScreen`, not `id` — the cycle walked `workspaces`, and that is
+        // whose project those rows belong to.
+        if let projectID = selection.onScreen?.id {
+            revealWorktrees(projectID: projectID)
+            requestSidebarScroll(toProjectID: projectID)
+        }
     }
 
     private func cycleSession(offset: Int) {
