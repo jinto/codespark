@@ -1527,7 +1527,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         let switching = Task { await model.selectProject(id: "p2") }
         try? await Task.sleep(nanoseconds: 100_000_000)
         await model.newSession()
-        await switching.value
+        _ = await switching.value
 
         XCTAssertEqual(core.startedSessions.last?.workspacePath, "/tmp/other",
                        "the tab was filed under p2 but opened in p1's directory")
@@ -1545,7 +1545,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         let switching = Task { await model.selectProject(id: "p2") }
         try? await Task.sleep(nanoseconds: 100_000_000)
         await model.newAgentSession(.claude)
-        await switching.value
+        _ = await switching.value
 
         XCTAssertTrue(core.startedSessions.isEmpty,
                       "a local agent shell was opened for an ssh project")
@@ -1592,7 +1592,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(p2.liveSessions, 0, "p1's tab count landed on p2's row")
         XCTAssertTrue(p2.liveSessionDetails.isEmpty, "p1's tabs landed on p2's row")
 
-        await switching.value
+        _ = await switching.value
     }
 
     /// The chosen id moves the instant the key is pressed; the worktrees
@@ -1617,7 +1617,7 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         XCTAssertTrue(model.showsWorktreeRows(for: p1),
                       "the tree folded away while the lookup ran")
-        await press.value
+        _ = await press.value
     }
 
     /// The other half of the same window: a project that has no worktrees of its
@@ -1635,7 +1635,7 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         XCTAssertTrue(model.sidebarWorktrees(for: p2).isEmpty,
                       "a project still loading drew the previous project's worktrees")
-        await press.value
+        _ = await press.value
     }
 
     /// And so the digits held still. They are read off the same grouping, so a
@@ -1653,7 +1653,7 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         XCTAssertEqual(model.numberedPlaces, before,
                        "the badges moved while the lookup ran")
-        await press.value
+        _ = await press.value
     }
 
     /// `Cmd+2` names a worktree, not just a project — and coming back to a repo
@@ -1735,7 +1735,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
         await model.selectProject(id: "p2")
         await model.newSession()
-        await overtaken.value
+        _ = await overtaken.value
 
         XCTAssertEqual(model.activeWorkspacePath, Self.otherProject,
                        "the overtaken digit moved the project you landed in to its own worktree")
@@ -1780,7 +1780,7 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         XCTAssertEqual(model.mainAreaContent, .empty,
                        "the project you left went on offering to reconnect over the one you opened")
-        await press.value
+        _ = await press.value
     }
 
     /// Clicking a project row is also how its tree is toggled, so the project
@@ -1801,7 +1801,7 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         XCTAssertEqual(model.liveSessions.last?.workspacePath, Self.featureWorktree,
                        "a tab opened during a reselect landed outside the worktree it was opened in")
-        await press.value
+        _ = await press.value
     }
 
     @MainActor
@@ -2875,7 +2875,7 @@ final class WorkspaceSelectionTests: XCTestCase {
 
         XCTAssertTrue(model.expandedProjectIDs.contains("p1"),
                       "the tree was still shut while the lookup ran")
-        await press.value
+        _ = await press.value
     }
 
     /// Arriving somewhere is no reason to shut what was open. A digit pressed

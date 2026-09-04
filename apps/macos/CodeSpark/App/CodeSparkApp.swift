@@ -233,8 +233,88 @@ struct CodeSparkApp: App {
     }
 }
 
+/// Where the window was when the app was last quit.
+///
+/// SwiftUI already autosaves the window frame — under a name that embeds the
+/// *mangled type of the entire view hierarchy*. Change any view and the name
+/// changes with it, so the remembered position is dropped on the next update.
+/// This machine's defaults hold 35 of those keys, one per shape this app has
+/// ever had, each with a position nothing will ever read again.
+///
+/// `setFrameAutosaveName("CodeSparkMain")` was meant to take that over and did
+/// not: measured on the running app, moving the window wrote the new frame to
+/// SwiftUI's key while `CodeSparkMain` kept the old one. AppKit's autosave name
+/// is not ours to hold — SwiftUI owns that window.
+///
+/// So the frame is not left to AppKit. One key that never changes, written
+/// whenever the window moves or resizes, read back at launch.
+@MainActor
+final class MainWindowFrame {
+    nonisolated static let defaultsKey = "mainWindowFrame"
+
+    private let defaults: UserDefaults
+    private let key: String
+    private var observers: [NSObjectProtocol] = []
+
+    init(defaults: UserDefaults = .standard, key: String = MainWindowFrame.defaultsKey) {
+        self.defaults = defaults
+        self.key = key
+    }
+
+    /// The window the user sees, rather than merely the first one AppKit lists —
+    /// `NSApp.windows` also holds panels and offscreen helpers, and its order is
+    /// not something to rely on.
+    static func mainWindow(among windows: [NSWindow]) -> NSWindow? {
+        windows.first { $0.isVisible && $0.canBecomeMain && $0.styleMask.contains(.titled) }
+    }
+
+    func restoreAndKeep(_ window: NSWindow) {
+        restore(window)
+        keep(window)
+    }
+
+    func restore(_ window: NSWindow) {
+        guard let saved = defaults.string(forKey: key) else { return }
+        let frame = NSRectFromString(saved)
+        // A frame is only worth restoring if it is somewhere the user can reach.
+        // Unplug the display it was saved on and this opens the window off the
+        // side of the world, where the only way back is a defaults edit.
+        guard frame.width > 0, frame.height > 0,
+              NSScreen.screens.contains(where: { $0.visibleFrame.intersects(frame) })
+        else { return }
+        window.setFrame(frame, display: true)
+    }
+
+    /// Saves on every move and resize. Not on quit: an app that is force quit,
+    /// or killed by a crash, never gets to run that code — and the position at
+    /// the moment it died is the one the user wants back.
+    func keep(_ window: NSWindow) {
+        for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification] {
+            let token = NotificationCenter.default.addObserver(
+                forName: name, object: window, queue: .main
+            ) { [weak self] notification in
+                guard let moved = notification.object as? NSWindow else { return }
+                MainActor.assumeIsolated { self?.save(moved) }
+            }
+            observers.append(token)
+        }
+    }
+
+    func save(_ window: NSWindow) {
+        defaults.set(NSStringFromRect(window.frame), forKey: key)
+    }
+
+    deinit {
+        for token in observers { NotificationCenter.default.removeObserver(token) }
+    }
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: AppModel?
+    /// Held for the life of the app: it owns the move/resize observers.
+    private let windowFrame = MainWindowFrame()
+    private var windowObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Intercept Cmd+W before the system handles it
@@ -251,23 +331,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Window title bar is configured via .windowStyle(.hiddenTitleBar) in SwiftUI Scene
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.configureWindowFrame()
+        configureWindowWhenItAppears()
+    }
+
+    /// SwiftUI has not made the window yet when this runs, so there is nothing
+    /// to configure and no delay that reliably says when there will be. This
+    /// used to guess 0.1 seconds and lose: measured, the guess landed before the
+    /// window existed, so the titlebar work was skipped and the frame was never
+    /// saved — the position the user left the window in went nowhere.
+    ///
+    /// The window says when it is ready.
+    private func configureWindowWhenItAppears() {
+        if let window = MainWindowFrame.mainWindow(among: NSApp.windows) {
+            configureWindowFrame(window)
+            return
+        }
+        windowObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeMainNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            guard let self,
+                  let window = notification.object as? NSWindow,
+                  window.styleMask.contains(.titled) else { return }
+            MainActor.assumeIsolated {
+                self.configureWindowFrame(window)
+                if let token = self.windowObserver {
+                    NotificationCenter.default.removeObserver(token)
+                    self.windowObserver = nil
+                }
+            }
         }
     }
 
-    private func configureWindowFrame() {
-        guard let window = NSApp.windows.first else { return }
+    private func configureWindowFrame(_ window: NSWindow) {
         window.titlebarSeparatorStyle = .none
         // Show proxy icon (folder) permanently in titlebar
         if let proxyIcon = window.standardWindowButton(.documentIconButton) {
             proxyIcon.image = NSImage(systemSymbolName: "folder.fill", accessibilityDescription: nil)
             proxyIcon.isHidden = false
         }
-        window.setFrameAutosaveName("CodeSparkMain")
+        windowFrame.restoreAndKeep(window)
     }
 
-    @MainActor
     private func handleCloseShortcut() {
         guard let model else { return }
         if model.activeSessionID != nil {

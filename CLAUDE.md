@@ -54,6 +54,18 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - Sidebar hidden when no projects exist, auto-shown on first project add
 - Sidebar toggle persisted via `@AppStorage(StorageKeys.isSidebarVisible)`
 
+### 창 위치는 우리가 기억한다 — SwiftUI에 맡기면 업데이트마다 잊는다
+
+`MainWindowFrame`이 창 프레임을 `mainWindowFrame` 키 하나에 직접 쓰고(이동·리사이즈 알림마다) 실행 시 되읽는다. AppKit의 autosave를 쓰지 않는다.
+
+- **왜**: SwiftUI가 이미 창을 autosave하는데, 그 이름에 **뷰 계층 전체의 맹글링된 타입**이 박혀 있다(`NSWindow Frame SwiftUI.ModifiedContent<…>-1-AppWindow-1`). 뷰를 하나만 고쳐도 이름이 바뀌고 저장해둔 위치는 아무도 안 읽는 키에 남는다 — 이 기계의 dev 도메인에 그런 키가 **35개** 쌓여 있었다. 즉 "업데이트하면 창 위치를 잊는다".
+- **`setFrameAutosaveName("CodeSparkMain")`은 그걸 뺏어오지 못한다**: 돌고 있는 앱에서 창을 옮겨보면 새 프레임은 **SwiftUI 키에** 찍히고 `CodeSparkMain`은 옛 값 그대로였다(실측). 그 창의 autosave 이름은 SwiftUI 것이고, 우리가 덮어써도 되찾아간다. 그래서 AppKit에 맡기지 않는다.
+- **화면 밖은 복원하지 않는다**: 저장된 프레임과 겹치는 `NSScreen`이 하나도 없으면 그냥 둔다. 외장 모니터를 뽑고 켜면 창이 세상 밖에서 열리고, 거기서 돌아오는 방법은 defaults 편집뿐이다.
+- **종료 시점에 저장하지 않는다** — 강제 종료·크래시는 그 코드를 안 지나고, 그때 있던 자리가 사용자가 원하는 자리다.
+- **창은 지연으로 기다리지 않는다**(원인은 아니었다): 예전엔 `applicationDidFinishLaunching` + 0.1초 뒤에 `NSApp.windows.first`였다. 실측해보니 그 시점에 창은 **이미 있었고**(`windows=1 vis=true`) 이 지연은 이 버그의 원인이 아니다 — 원인은 위의 autosave 이름이다. 그래도 "언젠가 늦으면 조용히 아무것도 안 한다"는 형태라, 있으면 즉시·없으면 `didBecomeMainNotification`으로 바꿨다.
+- **알고 있는 가정**: SwiftUI가 자기 프레임 복원을 마친 *뒤에* 우리 `setFrame`이 실행된다고 보고 있다. 이 기계에서 이동→종료→재실행을 3번 돌려 확인했을 뿐, AppKit이 보장하는 순서는 아니다.
+- **테스트가 `.standard`를 만지면 안 된다**: 테스트 호스트는 진짜 앱과 defaults 도메인을 공유한다. 여기 쓰면 **개발자의 실제 창 위치를 덮어쓴다** — 실제로 한 번 그랬다. `UserDefaults(suiteName:)`로 격리하고 teardown에서 지운다.
+
 ### 선택은 색으로만 말한다
 
 클릭으로 상태가 바뀌는 행의 라벨은 **글꼴 두께를 고정한다**. 선택은 배경과 글자색이 말하고, 두께는 관여하지 않는다.
@@ -124,6 +136,9 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
   - **배지는 한 번에 계산한다**(`numberedBadges`). 행마다 묻는 함수는 **지웠다** — 있으면 매 행이 전체 번호매김을 다시 만들어 사이드바가 프로젝트 수의 제곱만큼 그룹핑을 돌았고, `@Published`가 바뀔 때마다(= 셸이 프롬프트마다 보내는 cwd 보고마다) 그랬다. 뷰는 바디당 한 번 `let`으로 잡는다 — 컴퓨티드 프로퍼티를 행마다 읽으면 같은 제곱이다.
   - **배지만 화면을 따라간다**: 자기 이름으로 번호를 받은 프로젝트 행은 언제나 자기 배지를 단다. 번호가 워크트리 행에 있는 프로젝트는 **펼치면 배지를 놓고**(그 행이 화면에 있으므로), **접히면 자기 안의 첫 번호를 대신 단다** — 접힌 상태에서 그 숫자가 가리킬 수 있는 유일한 행이 그것이다.
   - **숫자는 데려다 준다**: 선택 + 트리 **열기** + 워크트리 번호면 **그 워크트리에 서기**. 프로젝트 번호는 **떠났던 워크트리로 복귀**한다(`projectSelectedWorkspaces`를 `apply(detail:)`이 읽는다). 클릭은 겨냥한 행을 토글하지만 숫자는 "거기로 가 줘"라서, **접지는 않는다** — 두 번 누르면 트리가 펄럭이고, 숫자는 보지 않고 누르라고 있는 것이다.
+    - **가는 길에 딴 데를 들르지 않는다**(`selectProject(landingOn:)`). `apply(detail:)`은 프로젝트를 **떠났던 워크트리**로 여는 게 기본인데, 숫자는 이미 목적지를 알고 있다. 안 알려주면 떠났던 행이 먼저 켜지고 — 워크트리 refresh가 끝날 때까지 거기 앉아 있다가 — 그제야 부른 행으로 옮겨간다. 프로젝트를 오갈 때마다 눈에 보이는 2단계다(사용자 보고 + bbbb.mov, 2026-09-04).
+      - **끝난 뒤 상태로는 안 보인다** — 최종 선택은 내내 옳았다. 테스트는 `$activeWorkspacePath`를 구독해 **거쳐간 값 전부**를 모으고 떠났던 워크트리가 그 안에 없는지 본다.
+      - 캐시가 차갑거나(워크트리 목록을 아직 모름) 그 워크트리가 사라졌으면 여전히 프로젝트 경로로 떨어진다 — `landingOn`은 힌트지 명령이 아니다.
     - **사이드바도 따라 스크롤한다**(`sidebarScrollRequest` → `ScrollViewReader`): 숫자는 보지 않고 누르므로 내려선 행이 스크롤 밖일 수 있다 — 선택이 끝난 뒤 서 있는 행(워크트리 행이 화면에 있으면 그것, 아니면 프로젝트 행)을 데려온다. **클릭은 스크롤하지 않는다** — 이미 보이는 행을 겨냥한 것이고, 커서 밑에서 목록이 움직이면 안 된다. 같은 숫자를 다시 눌러도 다시 데려오도록 요청에 세대 번호가 붙는다(`onChange`는 같은 값에 침묵하므로).
     - **스크롤은 2단계다 — 워크트리 행 id 하나로는 안 된다**: 워크트리 행은 `LazyVStack` 아이템 안의 중첩 `ForEach`라, 멀리 스크롤돼 한 번도 만들어지지 않은 그룹의 행 id는 `scrollTo`가 **아무 말 없이 무시한다**(실측 — 요청은 갔는데 목록이 안 움직였다). 프로젝트 행은 최상위 id라 언제나 해석되므로, 먼저 프로젝트로 스크롤해 그룹을 만들게 하고 다음 런루프에 행으로 다듬는다. 그래서 `ScrollRequest`가 `projectID`를 같이 들고 다닌다.
   - 단축키 등록 규칙은 아래 "Keyboard Shortcuts" 참고.

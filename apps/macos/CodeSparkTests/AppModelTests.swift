@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import CodeSpark
 
@@ -90,8 +91,8 @@ final class AppModelTests: XCTestCase {
 
         let firstSelection = Task { await model.selectProject(id: "ws-release") }
         let secondSelection = Task { await model.selectProject(id: "ws-spark3") }
-        await firstSelection.value
-        await secondSelection.value
+        _ = await firstSelection.value
+        _ = await secondSelection.value
 
         XCTAssertEqual(model.selection.id, "ws-spark3")
         XCTAssertEqual(model.selection.detail?.id, "ws-spark3")
@@ -590,5 +591,88 @@ final class AppModelTests: XCTestCase {
             offenders.isEmpty,
             "삭제 다이얼로그 문구는 AppModel이 갖는다. 뷰에 다시 쓰면 테스트가 못 읽는다:\n"
                 + offenders.joined(separator: "\n"))
+    }
+}
+
+final class MainWindowFrameTests: XCTestCase {
+
+    /// Never `.standard`: the test host shares its defaults domain with the real
+    /// app, and a test that writes there overwrites the developer's own window
+    /// position — which one of these did, once.
+    private func isolatedDefaults() -> UserDefaults {
+        let name = "MainWindowFrameTests-\(UUID().uuidString)"
+        addTeardownBlock { UserDefaults.standard.removePersistentDomain(forName: name) }
+        return UserDefaults(suiteName: name)!
+    }
+
+    private func window(_ rect: NSRect) -> NSWindow {
+        NSWindow(contentRect: rect, styleMask: [.titled, .resizable],
+                 backing: .buffered, defer: false)
+    }
+
+    /// Somewhere every machine running this test has screen: the main screen's
+    /// own visible area, inset so nothing is clipped.
+    private var onScreen: NSRect { NSScreen.main!.visibleFrame.insetBy(dx: 80, dy: 80) }
+
+    @MainActor
+    func test_the_window_opens_where_it_was_left() {
+        let defaults = isolatedDefaults()
+        let left = window(onScreen)
+        MainWindowFrame(defaults: defaults).save(left)
+
+        let relaunched = window(NSRect(x: 0, y: 0, width: 600, height: 400))
+        MainWindowFrame(defaults: defaults).restore(relaunched)
+
+        XCTAssertEqual(relaunched.frame, left.frame,
+                       "the window did not come back to where it was left")
+    }
+
+    /// The half that was actually broken. AppKit was saving the frame under
+    /// SwiftUI's own autosave name — one that changes whenever the view
+    /// hierarchy does — so what got written was a key nothing would read again.
+    /// Moving the window has to reach *our* key.
+    @MainActor
+    func test_moving_the_window_is_what_gets_remembered() {
+        let defaults = isolatedDefaults()
+        let keeper = MainWindowFrame(defaults: defaults)
+        let live = window(NSRect(x: 0, y: 0, width: 600, height: 400))
+        keeper.keep(live)
+
+        let moved = onScreen
+        live.setFrame(moved, display: false)
+
+        let relaunched = window(NSRect(x: 0, y: 0, width: 600, height: 400))
+        MainWindowFrame(defaults: defaults).restore(relaunched)
+        XCTAssertEqual(relaunched.frame, live.frame,
+                       "moving the window did not reach the key that is read back")
+    }
+
+    /// Saved on a second display, reopened without it. Restoring blind puts the
+    /// window somewhere with no screen under it, and there is no dragging it
+    /// back from there.
+    @MainActor
+    func test_a_frame_with_no_screen_under_it_is_left_alone() {
+        let defaults = isolatedDefaults()
+        defaults.set(NSStringFromRect(NSRect(x: -9000, y: -9000, width: 900, height: 600)),
+                     forKey: MainWindowFrame.defaultsKey)
+
+        let fresh = window(NSRect(x: 0, y: 0, width: 600, height: 400))
+        let before = fresh.frame
+        MainWindowFrame(defaults: defaults).restore(fresh)
+
+        XCTAssertEqual(fresh.frame, before,
+                       "the window was restored onto a display that is not there")
+    }
+
+    /// `NSApp.windows` is not a list of one, and its order is not a promise.
+    @MainActor
+    func test_the_main_window_is_picked_rather_than_whatever_is_first() {
+        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200),
+                            styleMask: [.nonactivatingPanel], backing: .buffered, defer: false)
+        let real = window(NSRect(x: 0, y: 0, width: 600, height: 400))
+        real.orderFront(nil)
+        defer { real.orderOut(nil) }
+
+        XCTAssertEqual(MainWindowFrame.mainWindow(among: [panel, real]), real)
     }
 }
