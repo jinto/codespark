@@ -1655,6 +1655,65 @@ final class WorkspaceSelectionTests: XCTestCase {
         await press.value
     }
 
+    /// A digit pressed while the previous one is still on its git round trip
+    /// overtakes it — that is the whole point of pressing three in a row. The
+    /// overtaken navigation stops applying its detail (the task is cancelled and
+    /// every branch checks), but `selectWorktree` had one more statement after
+    /// the await, and nothing told it that the project it was aiming at is no
+    /// longer the one on screen. So it wrote its worktree path into the project
+    /// you had already landed in.
+    ///
+    /// Nothing matches that path there, so `visibleSessions` empties and
+    /// `activeWorkspacePath`'s observer drops the active tab: the row is
+    /// selected and badged with its tab count while the main area offers
+    /// "New Terminal". Standing elsewhere and coming back heals it, because
+    /// `apply(detail:)` sets the path again.
+    ///
+    /// The stale write has to land *after* the new project applies, which is
+    /// where it lands in the app — the overtaken lookup is parked in a round
+    /// trip that does not return early just because nobody wants it any more.
+    @MainActor
+    func test_an_overtaken_digit_does_not_empty_the_project_it_was_overtaken_by() async {
+        func summary(id: String, path: String) -> ProjectSummaryViewData {
+            ProjectSummaryViewData(id: id, name: id, path: path, transport: "local",
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: [])
+        }
+        let core = MockProjectCoreClient(
+            summaries: [summary(id: "p1", path: Self.mainWorktree),
+                        summary(id: "p2", path: Self.otherProject)],
+            details: [
+                ProjectDetailViewData(id: "p1", name: "p1", path: Self.mainWorktree,
+                                      transport: "local", liveSessions: []),
+                ProjectDetailViewData(id: "p2", name: "p2", path: Self.otherProject,
+                                      transport: "local", liveSessions: [])
+            ],
+            detailLatencyByID: ["p1": 400_000_000]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.featureWorktree, branch: "feature", isMainWorktree: false)
+        ], for: Self.mainWorktree)
+        await model.selectProject(id: "p2")
+
+        // The digit for p1's feature worktree, and then, before it lands, the
+        // digit for p2.
+        let overtaken = Task { await model.selectWorktree(projectID: "p1", path: Self.featureWorktree) }
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        await model.selectProject(id: "p2")
+        await model.newSession()
+        await overtaken.value
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.otherProject,
+                       "the overtaken digit moved the project you landed in to its own worktree")
+        XCTAssertFalse(model.visibleSessions.isEmpty,
+                       "the tab bar emptied while the tab it counts is running")
+        XCTAssertEqual(model.mainAreaContent, .terminals,
+                       "the main area offered New Terminal over a live tab")
+    }
+
     /// And the same window has one more thing in it. An ssh project with no
     /// tabs offers to reconnect, and `mainAreaContent` puts that offer ahead of
     /// everything — but it never asks *whose* offer it is, while its sibling

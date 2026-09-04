@@ -164,12 +164,16 @@ extension AppModel {
         // up as a second frame. Arriving already-open is one change; arriving
         // shut and then opening is a flicker.
         revealWorktrees(projectID: place.projectID)
-        switch place {
+        let landed = switch place {
         case .project(let id):
             await selectProject(id: id, promptForRecovery: true)
         case .worktree(let id, let path):
             await selectWorktree(projectID: id, path: path)
         }
+        // A digit pressed while this one was still on its round trip has already
+        // taken the user somewhere else. Scrolling to where this one was going
+        // would drag the sidebar off the row they are now standing in.
+        guard landed else { return }
         requestSidebarScroll(toProjectID: place.projectID)
     }
 
@@ -206,11 +210,19 @@ extension AppModel {
 
     /// A worktree row can belong to a project that is not the selected one, so
     /// picking it has to bring its project along.
-    func selectWorktree(projectID: String, path: String) async {
+    ///
+    /// The path is written only if this navigation is still the current one.
+    /// Selecting the project waits on git, and a digit pressed during that wait
+    /// lands somewhere else — writing this worktree's path afterwards would put
+    /// the project the user actually landed in on a worktree it does not have,
+    /// emptying its tab bar. Returns whether it held.
+    @discardableResult
+    func selectWorktree(projectID: String, path: String) async -> Bool {
         if selection.id != projectID {
-            await selectProject(id: projectID, promptForRecovery: true)
+            guard await selectProject(id: projectID, promptForRecovery: true) else { return false }
         }
         activeWorkspacePath = path
+        return true
     }
 
     /// Every project the sidebar can draw worktrees for. `refreshWorktrees`

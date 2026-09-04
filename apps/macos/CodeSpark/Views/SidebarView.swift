@@ -146,7 +146,7 @@ struct SidebarView: View {
                             }
                             .onTapGesture(count: 2) {
                                 Task {
-                                    await model.selectProject(id: project.id)
+                                    guard await model.selectProject(id: project.id) else { return }
                                     model.presentSessionChooser()
                                 }
                             }
@@ -159,7 +159,12 @@ struct SidebarView: View {
                                     path: project.path, transport: project.transport) {
                                     Button("New Worktree...") {
                                         Task {
-                                            await model.selectProject(id: project.id)
+                                            // The sheet creates the worktree in
+                                            // the *selected* project, so it must
+                                            // not open if getting here was
+                                            // overtaken and another one landed.
+                                            guard await model.selectProject(id: project.id)
+                                            else { return }
                                             model.showNewWorktreeSheet = true
                                         }
                                     }
@@ -235,10 +240,10 @@ struct SidebarView: View {
                                 }
                                 .onTapGesture(count: 2) {
                                     Task {
-                                        await model.selectWorktree(
+                                        guard await model.selectWorktree(
                                             projectID: project.id,
                                             path: workspace.path
-                                        )
+                                        ) else { return }
                                         model.presentSessionChooser()
                                     }
                                 }
@@ -369,8 +374,10 @@ struct SidebarView: View {
                 if let removal = pendingRemoveWorktree {
                     Task {
                         // The removal reads the selected project, and the row may
-                        // belong to another one.
-                        await model.selectWorktree(projectID: removal.projectID, path: removal.path)
+                        // belong to another one — so it must not run if getting
+                        // there was overtaken and some other project is selected.
+                        guard await model.selectWorktree(projectID: removal.projectID,
+                                                         path: removal.path) else { return }
                         await model.removeWorktree(path: removal.path)
                     }
                 }

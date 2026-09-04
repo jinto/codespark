@@ -155,6 +155,17 @@ final class AppModel: ObservableObject {
     private let terminalFactory: (SessionViewData) -> any TerminalHostProtocol
     private(set) var hosts: [String: any TerminalHostProtocol] = [:]
     private var detailTask: Task<Void, Never>?
+    /// Which navigation is the current one. Every `selectProject` takes the next
+    /// number, and anything a navigation does *after* its round trip has to ask
+    /// whether it still holds it.
+    ///
+    /// Cancelling the detail task covers the work inside the task — every branch
+    /// there checks. It does not cover the statement a caller left after its own
+    /// `await`, and `selectWorktree` had one: a digit overtaken by the next digit
+    /// went on to write its worktree path into whichever project had landed
+    /// meanwhile. Nothing there matches that path, so the tab bar empties and the
+    /// main area offers "New Terminal" over a running tab.
+    private var navigation = 0
     var idleTimer: AnyCancellable?
     var checkpointTimer: AnyCancellable?
     var activationObserver: AnyCancellable?
@@ -246,15 +257,21 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func selectProject(id: String?, promptForRecovery: Bool = false) async {
+    /// Returns whether this navigation was still the current one when it
+    /// finished — false once a later one overtook it, which is the answer a
+    /// caller needs before acting on the project it asked for.
+    @discardableResult
+    func selectProject(id: String?, promptForRecovery: Bool = false) async -> Bool {
         cancelInflightWork()
+        navigation += 1
+        let generation = navigation
         pendingWorkspaceRecoveryProjectID = nil
 
         guard let id else {
             selection = .none
             clearDetailState()
             loadErrorMessage = nil
-            return
+            return navigation == generation
         }
 
         // Picked now; its detail lands below. The project being left stays on
@@ -312,6 +329,7 @@ final class AppModel: ObservableObject {
         }
         detailTask = task
         await task.value
+        return navigation == generation
     }
 
     private func cancelInflightWork() {

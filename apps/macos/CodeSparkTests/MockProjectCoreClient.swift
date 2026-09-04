@@ -73,7 +73,11 @@ final class MockProjectCoreClient: ProjectCoreClientProtocol {
 
     func projectDetail(id: String) async throws -> ProjectDetailViewData {
         if let detailLatency = detailLatencyByID[id] {
-            try? await Task.sleep(nanoseconds: detailLatency)
+            // A round trip that is already out does not come back early because
+            // the caller lost interest — it lands when it lands. A plain
+            // `Task.sleep` here returns the instant the task is cancelled, which
+            // hides every fault that lives in the window *after* a supersede.
+            await Task.detached { try? await Task.sleep(nanoseconds: detailLatency) }.value
         }
 
         if let detailError = detailErrorsByID[id] {
