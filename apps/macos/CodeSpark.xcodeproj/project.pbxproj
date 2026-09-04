@@ -13,6 +13,7 @@
 		3D0FEFA3FAB6C31107E3A49C /* WorkspaceSelectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */; };
 		A1B2C3D40002E5F600001002 /* AppBundleMetadataTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40001E5F600001001 /* AppBundleMetadataTests.swift */; };
 		A1B2C3D40007E5F600001007 /* RestoredScreenReplayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40006E5F600001006 /* RestoredScreenReplayTests.swift */; };
+		A1B2C3D40013E5F600001011 /* TerminalFontSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40013E5F600001010 /* TerminalFontSettingsTests.swift */; };
 		D7E1A2B3C4D50011E5F600001011 /* SidebarTypographyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50010E5F600001010 /* SidebarTypographyTests.swift */; };
 		D7E1A2B3C4D50035E5F600001035 /* SidebarPresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50034E5F600001034 /* SidebarPresenterTests.swift */; };
 		D7E1A2B3C4D50041E5F600001041 /* LocalCwdReporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50040E5F600001040 /* LocalCwdReporterTests.swift */; };
@@ -140,6 +141,7 @@
 		1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceSelectionTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40001E5F600001001 /* AppBundleMetadataTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBundleMetadataTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40006E5F600001006 /* RestoredScreenReplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoredScreenReplayTests.swift; sourceTree = "<group>"; };
+		A1B2C3D40013E5F600001010 /* TerminalFontSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalFontSettingsTests.swift; sourceTree = "<group>"; };
 		D7E1A2B3C4D50010E5F600001010 /* SidebarTypographyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarTypographyTests.swift; sourceTree = "<group>"; };
 		D7E1A2B3C4D50034E5F600001034 /* SidebarPresenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarPresenterTests.swift; sourceTree = "<group>"; };
 		D7E1A2B3C4D50040E5F600001040 /* LocalCwdReporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCwdReporterTests.swift; sourceTree = "<group>"; };
@@ -253,6 +255,7 @@
 				1939CC7F1565F920FF0B4C7F /* WorkspaceSelectionTests.swift */,
 				A1B2C3D40001E5F600001001 /* AppBundleMetadataTests.swift */,
 				A1B2C3D40006E5F600001006 /* RestoredScreenReplayTests.swift */,
+				A1B2C3D40013E5F600001010 /* TerminalFontSettingsTests.swift */,
 				D7E1A2B3C4D50010E5F600001010 /* SidebarTypographyTests.swift */,
 				D7E1A2B3C4D50034E5F600001034 /* SidebarPresenterTests.swift */,
 				D7E1A2B3C4D50040E5F600001040 /* LocalCwdReporterTests.swift */,
@@ -557,6 +560,7 @@
 				3D0FEFA3FAB6C31107E3A49C /* WorkspaceSelectionTests.swift in Sources */,
 				A1B2C3D40002E5F600001002 /* AppBundleMetadataTests.swift in Sources */,
 				A1B2C3D40007E5F600001007 /* RestoredScreenReplayTests.swift in Sources */,
+				A1B2C3D40013E5F600001011 /* TerminalFontSettingsTests.swift in Sources */,
 				D7E1A2B3C4D50011E5F600001011 /* SidebarTypographyTests.swift in Sources */,
 				D7E1A2B3C4D50035E5F600001035 /* SidebarPresenterTests.swift in Sources */,
 				D7E1A2B3C4D50041E5F600001041 /* LocalCwdReporterTests.swift in Sources */,

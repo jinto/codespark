@@ -243,6 +243,18 @@ Process detection + screen parsing replaces the old hook system:
 - **cwd 추적**: Ghostty `GHOSTTY_ACTION_PWD`(OSC 7) → `AppModel.sessionDidReportCwd` → `last_cwd`. 값이 실제로 바뀔 때만 store에 쓴다.
   - OSC 7은 Ghostty **shell integration이 주입돼야** 나온다. 빌드 페이즈가 `vendor/ghostty/zig-out/share/ghostty/shell-integration`을 `Contents/Resources/ghostty/`로 복사하고, `GhosttyRuntime.initialize()`가 `ghostty_init` **전에** `GHOSTTY_RESOURCES_DIR`를 거기로 설정한다. 이게 빠지면 cwd 추적이 조용히 죽는다.
 
+### 한글 글꼴은 설정에 적는다 — 찾아낸 글꼴은 한 번 실패하면 영영 없다
+
+`TerminalFontSettings.buildConfigString()`이 `font-family`를 **두 줄** 낸다: 사용자의 글꼴 다음에 한글 글꼴(`Apple SD Gothic Neo`, 없으면 `AppleGothic`). Ghostty에서 `font-family`를 반복하면 교체가 아니라 **fallback 추가**이고, 첫 줄이 primary(메트릭·ASCII의 출처)다.
+
+- **왜**: 기본값 Menlo에는 한글 글리프가 **하나도 없다**. 컬렉션에 없는 코드포인트는 Ghostty가 CoreText로 찾아오는데, 그 탐색은 실패할 수 있고 **실패가 캐시된다** — `SharedGrid.getIndex`의 주석 그대로 "this even caches negative matches". 그리고 그 grid는 **앱의 모든 surface가 공유한다**. 한 번 놓치면 재실행 전까지 모든 탭에서 한글이 사라진다.
+- **증상이 데이터 손실처럼 보인다**: 못 찾은 글리프는 그려지지 않을 뿐 셀은 그대로 두 칸을 먹는다. 그래서 **배치는 멀쩡한 채 한글만 공백**이고, ASCII·박스문자(`─`는 Ghostty의 sprite font)·`▶`·`❯`(Menlo가 갖고 있다)는 멀쩡히 남는다. 스냅샷·스토어·재생 payload에는 한글이 그대로 들어 있다 — 바이트를 쫓으면 아무것도 안 나온다.
+- **복원이 이걸 드러내는 이유**: 이전 화면 재생이 앱이 뜨는 그 순간에 **한 화면치 한글을 한꺼번에** 들이민다. 사용자 보고도 "껐다 켜서 리스토어하면 가끔"이었다.
+- **설정에 적은 얼굴이 discovery보다 먼저다 — 실측**: 둘째 줄을 `Nanum Myeongjo`로 바꿔 복원시키니 재생된 한글이 **명조로** 그려졌다(탐색이 골랐다면 고딕이다). 이 한 장이 "우리가 적은 줄이 실제로 쓰인다"의 증거이자, **공백 있는 글꼴 이름이 따옴표 없이 파싱된다**는 증거다 — 실제로 싣는 이름(`Apple SD Gothic Neo`)이 세 단어인데, 그게 안 먹히면 조용히 옛 동작으로 돌아가고 게이트는 전부 초록이다. 고딕으로는 이 구분이 안 된다(탐색이 고르는 것과 같은 얼굴이라).
+- **한글만 답하는 게 아니다**: Apple SD Gothic Neo는 Menlo에 없는 かな·漢字·`①`·`「`도 갖고 있어, 이제 그것들도 **탐색이 고르던 얼굴 대신** 이 글꼴로 나온다. 무작위보다 결정적인 쪽을 택한 거래다. 일본어 로케일은 `resolvedFontFamily()`가 JP 글꼴을 primary로 잡으므로 영향이 없고, Menlo를 쓰면서 일본어를 읽는 사람만 얼굴이 바뀐다. `font-codepoint-map`으로 한글만 좁히는 길은 **없다** — 그 경로는 `getIndexCodepointOverride`가 다시 discovery를 타므로 지금 고치는 그 실패에 똑같이 노출된다.
+- **게이트**: `TerminalFontSettingsTests`가 config에 적힌 이름들 중 하나가 **실제로 `가` 글리프를 갖는지** `CTFontGetGlyphsForCharacters`로 확인한다. 이름만 비교하는 테스트는 macOS가 모르는 글꼴 이름을 적어도 통과한다.
+- **재현하지 못한 것**: 탐색이 *왜* 실패하는지는 못 밝혔다. 이 수정은 실패할 수 있는 탐색을 경로에서 **뺀** 것이지 고친 게 아니다. 같은 함정이 이모지·일본어·중국어에도 그대로 있다 — 그 글꼴들은 아직 안 적었다.
+
 ### terminfo도 번들에 넣는다 — TERM=xterm-ghostty의 해석본
 
 libghostty는 `resources_dir`이 있으면 **무조건** `TERM=xterm-ghostty`를 셸에 넣고, `TERMINFO`를 **`dirname(GHOSTTY_RESOURCES_DIR)/terminfo`**로 계산한다(`Exec.zig`) — 존재 확인 없이. 우리가 `GHOSTTY_RESOURCES_DIR`를 `Resources/ghostty`로 설정하므로 `TERMINFO = Resources/terminfo`다. **그 디렉터리가 번들에 없으면** ncurses/ZLE가 그 터미널 타입을 못 읽어 백스페이스·라인 편집이 화면에서 어긋난다(셸 버퍼는 멀쩡, 화면만 — 커서가 오른쪽으로 가고 지운 글자가 남는다). 그래서 빌드 페이즈가 `zig-out/share/terminfo`를 **`ghostty/`의 형제**로(안이 아니라) 복사한다 — Exec.zig가 형제로 가정하므로. (이슈 #2, 2026-09-02)

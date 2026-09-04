@@ -23,7 +23,36 @@ enum TerminalFontSettings {
         return 13
     }
 
-    static func buildConfigString() -> String {
-        "font-family = \(resolvedFontFamily())\nfont-size = \(Int(resolvedFontSize()))\n"
+    /// Ships with macOS, in this order of preference. Named in the config so
+    /// Hangul is answered by the font collection rather than by a search.
+    static let hangulFallbackFamilies = ["Apple SD Gothic Neo", "AppleGothic"]
+
+    /// The first Hangul-capable family this Mac has, or nil if it has none.
+    ///
+    /// Menlo — the default, and what most people leave the setting at — has no
+    /// Hangul at all, so every Korean glyph in the terminal is found by
+    /// Ghostty's runtime font discovery. That search is allowed to fail, and a
+    /// failure is permanent: `SharedGrid.getIndex` caches the miss ("this even
+    /// caches negative matches") for the life of the grid, and every surface in
+    /// the app shares one grid. One unlucky lookup and Korean is blank in every
+    /// tab — the cells still advance two columns, so the screen keeps its
+    /// layout and only the glyphs are gone — until the app is relaunched.
+    ///
+    /// Naming the font here puts the face in the collection, where
+    /// `CodepointResolver.getIndex` finds it before it ever reaches discovery.
+    static func hangulFallbackFamily() -> String? {
+        let installed = Set(NSFontManager.shared.availableFontFamilies)
+        return hangulFallbackFamilies.first { installed.contains($0) }
+    }
+
+    /// Repeating `font-family` appends a fallback rather than replacing the
+    /// primary — Ghostty searches them in order.
+    static func buildConfigString(primary: String = resolvedFontFamily()) -> String {
+        var lines = ["font-family = \(primary)"]
+        if let hangul = hangulFallbackFamily(), hangul != primary {
+            lines.append("font-family = \(hangul)")
+        }
+        lines.append("font-size = \(Int(resolvedFontSize()))")
+        return lines.joined(separator: "\n") + "\n"
     }
 }
