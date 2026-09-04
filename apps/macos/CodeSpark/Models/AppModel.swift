@@ -260,8 +260,17 @@ final class AppModel: ObservableObject {
     /// Returns whether this navigation was still the current one when it
     /// finished — false once a later one overtook it, which is the answer a
     /// caller needs before acting on the project it asked for.
+    ///
+    /// `landingOn` is the worktree the project should *open* in, for a caller
+    /// that already knows — a digit names one. Without it the project opens
+    /// where it was last left and the caller moves it afterwards, which is a
+    /// step you can watch happen.
     @discardableResult
-    func selectProject(id: String?, promptForRecovery: Bool = false) async -> Bool {
+    func selectProject(
+        id: String?,
+        promptForRecovery: Bool = false,
+        landingOn landingWorkspacePath: String? = nil
+    ) async -> Bool {
         cancelInflightWork()
         navigation += 1
         let generation = navigation
@@ -294,7 +303,7 @@ final class AppModel: ObservableObject {
             do {
                 let detail = try await core.projectDetail(id: id)
                 guard !Task.isCancelled else { return }
-                apply(detail: detail)
+                apply(detail: detail, landingOn: landingWorkspacePath)
                 await attachLiveSessions()
                 // SSH projects: show reconnect prompt if no live sessions
                 if detail.transport == "ssh" && liveSessions.isEmpty {
@@ -336,7 +345,7 @@ final class AppModel: ObservableObject {
         detailTask?.cancel()
     }
 
-    private func apply(detail: ProjectDetailViewData) {
+    private func apply(detail: ProjectDetailViewData, landingOn requested: String? = nil) {
         selection = .loaded(detail)
         liveSessions = detail.liveSessions
         // The selection still names the *previous* project's worktree. Let it go
@@ -348,8 +357,13 @@ final class AppModel: ObservableObject {
         // only the starting point, and the fallback when that worktree is gone.
         // The observer then picks that worktree's tab. Setting the tab first
         // would leave the selection outside the active worktree.
-        let remembered = projectSelectedWorkspaces[detail.id]
-        activeWorkspacePath = workspaces.contains { $0.path == remembered } ? remembered : detail.path
+        //
+        // Unless the caller named where it is going. `Cmd+4` means a worktree,
+        // not a project, and opening at the remembered one first is a step the
+        // user watches: the row they left highlights, sits there for the length
+        // of the worktree refresh, and only then does the one they asked for.
+        let landing = requested ?? projectSelectedWorkspaces[detail.id]
+        activeWorkspacePath = workspaces.contains { $0.path == landing } ? landing : detail.path
     }
 
     func recomputeWorkspaces() {

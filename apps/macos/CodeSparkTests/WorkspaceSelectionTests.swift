@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 @testable import CodeSpark
 
@@ -1653,6 +1654,36 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(model.numberedPlaces, before,
                        "the badges moved while the lookup ran")
         await press.value
+    }
+
+    /// `Cmd+2` names a worktree, not just a project — and coming back to a repo
+    /// you had left in another worktree, it visibly went to the wrong one first:
+    /// the remembered row highlighted, sat there for the whole worktree refresh,
+    /// and only then did the one the digit asked for.
+    ///
+    /// `apply(detail:)` opens a project where it was last left, which is right
+    /// when a click or a project digit brought you — and wrong when the caller
+    /// already knows the worktree. So it is told.
+    ///
+    /// Only the intermediate value is the fault; the end state was always
+    /// correct. The test records every value the selection takes.
+    @MainActor
+    func test_a_worktree_digit_opens_there_rather_than_by_way_of_the_last_one() async {
+        let model = await modelWithTwoProjects()
+        // Left in the feature worktree, so that is what the project remembers.
+        await model.selectWorktree(projectID: "p1", path: Self.featureWorktree)
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree, "precondition")
+        await model.selectProject(id: "p2")
+
+        var seen: [String?] = []
+        let watching = model.$activeWorkspacePath.sink { seen.append($0) }
+        // The digit for p1's *main* worktree.
+        await model.selectWorktree(projectID: "p1", path: Self.mainWorktree)
+        watching.cancel()
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree)
+        XCTAssertFalse(seen.contains(Self.featureWorktree),
+                       "the digit went by way of the worktree the project was last left in")
     }
 
     /// A digit pressed while the previous one is still on its git round trip

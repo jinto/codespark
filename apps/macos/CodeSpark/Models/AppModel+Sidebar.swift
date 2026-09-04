@@ -219,7 +219,8 @@ extension AppModel {
     @discardableResult
     func selectWorktree(projectID: String, path: String) async -> Bool {
         if selection.id != projectID {
-            guard await selectProject(id: projectID, promptForRecovery: true) else { return false }
+            guard await selectProject(id: projectID, promptForRecovery: true, landingOn: path)
+            else { return false }
         }
         activeWorkspacePath = path
         return true
