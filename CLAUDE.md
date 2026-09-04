@@ -209,6 +209,10 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
   - UI 테스트는 앱을 띄우고 포커스를 뺏어서 pre-commit이 아니라 **pre-push**에 있다.
   - `testmanagerd`가 오래 떠 있으면 "Timed out while enabling automation mode"로 러너가 안 뜬다. 내리면 launchd가 다시 만든다(SIP 때문에 `launchctl kickstart`는 막힌다). **`kill -9`여야 한다** — 그냥 `kill`은 아무 말 없이 실패하고 PID가 그대로 남아, 고친 줄 알고 다시 돌렸다가 같은 오류를 두 번 본다.
   - 화면이 **잠겨 있으면** 러너가 아예 초기화되지 않는다(`LocalAuthentication Code=-4 "System authentication is running."`). 잠금 화면의 인증 세션이 자동화를 막는 것이라 우회할 방법이 없다 — 풀고 돌려야 한다.
+  - **한글 자판이 켜져 있으면 글자 단축키 테스트가 통째로 실패한다.** `typeKey("n", .command)`는 *문자* `n`을 현재 레이아웃에서 그 문자를 내는 물리 키로 되짚어 누른다 — **세벌식 390**에서는 그게 다른 키라(혹은 없어서) 앱은 다른 조합을 받는다. 앱은 멀쩡하다: 같은 순간 `osascript`로 **`key code 45`(물리 N) + Cmd**를 보내면 New Project 시트가 정상적으로 열리고, `keystroke "n" using command down`은 안 열린다(실측, 2026-09-04).
+    - **증상이 앱 버그와 구분되지 않는다**: `test_cmd_ctrl_s_toggles_the_sidebar_with_a_terminal_open`이 "터미널이 chord를 삼켰다"고 말하는데, 그건 이 파일이 문서화한 **진짜** 회귀의 메시지와 같은 문장이다. 실제로 v1.2.4 검증 때 이걸 앱 회귀로 오판할 뻔했다.
+    - **가려내는 법**: 숫자 단축키(`Cmd+1/2`)와 `key code`는 레이아웃과 무관하게 통과한다. 글자 chord만 실패하면 자판을 의심할 것 — 라우터는 `Cmd+N`·`Cmd+Ctrl+S`·`Cmd+1`을 전부 `.delegateToSuper`로 똑같이 보내므로 라우터 탓일 수 없다.
+    - **돌리기 전에 입력 소스를 ABC로 바꾼다.** 세벌식에서 13개 중 4개가 실패하던 것이 ABC로 바꾸자 **13개 전부 통과(skip 0)** 했다 — 코드는 한 줄도 안 건드리고. 안 바꾸면 그 4개가 영구히 빨간불이고, 그게 진짜 회귀를 덮는다.
   - `osascript` 기반 `UIVerificationTests`(`TEST_RUNNER_UI_VERIFICATION=1`)는 이 macOS에서 `entire contents of window 1`이 **0을 돌려주어** 사실상 죽어 있다. `static texts of window 1`처럼 직접 지정하면 읽힌다. 눈으로 확인할 일이 있으면 `screencapture`(화면 기록 권한 필요) 쪽이 낫고, 진짜 게이트는 XCUITest다.
 
 ### 모디파이어 키는 누름/뗌을 가려 보낸다 (kitty keyboard protocol)
