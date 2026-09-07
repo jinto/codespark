@@ -112,7 +112,14 @@ final class GhosttyRuntime {
                 }
             },
             close_surface_cb: { userdata, processAlive in
-                guard let userdata else { return }
+                // Ghostty asks for a close exactly once per dead shell. If the
+                // pointer is missing the tab can never be reaped, and there is
+                // nothing on screen to say so — this line is what the diagnosis
+                // of the frozen ssh tab spent its time missing.
+                guard let userdata else {
+                    NSLog("[CodeSpark] close_surface_cb with no userdata — the tab cannot be reaped")
+                    return
+                }
                 let surfaceView = Unmanaged<GhosttyTerminalSurfaceView>.fromOpaque(userdata).takeUnretainedValue()
                 DispatchQueue.main.async {
                     GhosttyRuntime.shared.onSurfaceClose?(surfaceView, processAlive)

@@ -203,7 +203,7 @@ struct MainContentView: View {
                     .foregroundStyle(.tertiary)
             }
             Button("Connect") {
-                Task { await model.newSession(); model.focusActiveTerminal() }
+                Task { await model.newSession() }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -275,7 +275,7 @@ struct MainContentView: View {
                 .font(.headline)
                 .foregroundStyle(.secondary)
             Button("New Terminal") {
-                Task { await model.newSession(); model.focusActiveTerminal() }
+                Task { await model.newSession() }
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)

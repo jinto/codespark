@@ -462,14 +462,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func focusActiveTerminal() {
-        guard let id = activeSessionID,
-              let surfaceView = hosts[id]?.surfaceNSView else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            surfaceView.window?.makeFirstResponder(surfaceView)
-        }
-    }
-
     /// Returns the adjacent project ID (next preferred, then previous).
     private func adjacentProjectID(excluding id: String) -> String? {
         guard let index = projects.firstIndex(where: { $0.id == id }) else { return projects.first?.id }
@@ -1320,7 +1312,10 @@ final class AppModel: ObservableObject {
     func handleSurfaceClose(_ surfaceView: GhosttyTerminalSurfaceView, processAlive: Bool) {
         guard let (sessionID, host) = hosts.first(where: { _, host in
             host.surfaceNSView === surfaceView
-        }) else { return }
+        }) else {
+            NSLog("[CodeSpark] surface close for a view no tab owns — nothing reaped")
+            return
+        }
         guard !closingSessionIDs.contains(sessionID) else { return }
         let snapshot = host.extractSnapshot()
             ?? TerminalSnapshotViewData(cols: 0, rows: 0, lines: [])

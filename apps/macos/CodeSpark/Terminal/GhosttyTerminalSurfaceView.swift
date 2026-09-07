@@ -12,6 +12,9 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
     /// Set when this surface belongs to an SSH session — enables remote image paste via scp.
     var sshConnectionInfo: SSHConnectionInfo?
 
+    /// What libghostty was last told about our focus, so we only tell it changes.
+    private var surfaceFocused = false
+
     init(
         app: ghostty_app_t,
         workingDirectory: String?,
@@ -34,7 +37,7 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
 
     private static func createSurface(
         app: ghostty_app_t,
-        view: NSView,
+        view: GhosttyTerminalSurfaceView,
         workingDirectory: String?,
         command: String?,
         initialInput: String?,
@@ -45,6 +48,16 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         config.platform = ghostty_platform_u(
             macos: ghostty_platform_macos_s(nsview: Unmanaged.passUnretained(view).toOpaque())
         )
+        // The tab this surface belongs to, for `close_surface_cb`. The `nsview`
+        // above is not it — Ghostty draws into that and never hands it back; the
+        // only pointer a callback receives is whatever we put here. Left unset,
+        // the close callback got nil and returned at its first line, so a shell
+        // that exited — `exit`, or an ssh connection that dropped — printed
+        // "Process exited. Press any key to close the terminal." and then the
+        // tab sat there forever: the key press routes to the same close, and it
+        // was dropped too. Unretained on purpose, like `nsview`: the view owns
+        // the surface and frees it in `deinit`, so no callback outlives it.
+        config.userdata = Unmanaged.passUnretained(view).toOpaque()
         config.scale_factor = Double(NSScreen.main?.backingScaleFactor ?? 2.0)
         config.context = GHOSTTY_SURFACE_CONTEXT_WINDOW
 
@@ -107,14 +120,97 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         }
     }
 
+    // MARK: - Focus
+
+    /// Whether this surface is the tab the user is looking at. SwiftUI sets it;
+    /// the view is what acts on it.
+    var isActiveTab: Bool = false {
+        didSet {
+            guard isActiveTab != oldValue else { return }
+            claimFocus()
+        }
+    }
+
+    /// Take the keyboard, if we are the tab on screen and there is a window to
+    /// take it from.
+    ///
+    /// The view claims this for itself, at every moment it could succeed, rather
+    /// than SwiftUI firing one shot at it. `updateNSView` runs **before** SwiftUI
+    /// puts a newly inserted view in a window — measured, every time — so a
+    /// `makeFirstResponder` from there lands on a nil window and does nothing.
+    /// Nothing retried it: SwiftUI re-runs `updateNSView` only when the
+    /// representable's own inputs change, so no amount of unrelated state churn
+    /// (the 10s poll, cwd reports, git lookups) ever healed it. A tab that opened
+    /// unfocused stayed unfocused until it was clicked — which is the whole bug,
+    /// and why clicking inside it was the workaround.
+    ///
+    /// And it has to go somewhere: hiding the outgoing tab makes AppKit resign it,
+    /// and first responder falls back to the *window*, where keystrokes go nowhere
+    /// at all. That is why the symptom is "nothing types", not "it types into the
+    /// wrong tab".
+    ///
+    /// **The claim waits for the end of the commit, and re-asks every condition
+    /// when it runs.** Both halves are load-bearing, and both were measured:
+    ///
+    /// - Deferred, because a claim made *during* a SwiftUI commit can be undone
+    ///   before that commit ends. With a sheet up, switching tabs let the
+    ///   incoming view win first responder inside `viewDidUnhide` and then lose
+    ///   it again in the same pass, when the outgoing view's `updateNSView`
+    ///   hid it — leaving the window holding the keyboard, permanently. Plain
+    ///   AppKit does not do this to a sibling; it is SwiftUI's own bookkeeping.
+    /// - Re-asked, because by the time the block runs this may no longer be the
+    ///   tab on screen — and AppKit *accepts* a hidden view as first responder,
+    ///   so a stale claim would park the keyboard on an invisible surface.
+    ///
+    /// `isActiveTab` is not redundant with `!isHidden`: a surface that was never
+    /// mounted is not hidden either, and it must not take the keyboard.
+    func claimFocus() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            guard TerminalFocus.shouldClaim(
+                isActiveTab: self.isActiveTab,
+                isHidden: self.isHidden,
+                hasWindow: self.window != nil,
+                isAlreadyFirstResponder: self.window?.firstResponder === self
+            ) else { return }
+            self.window?.makeFirstResponder(self)
+        }
+    }
+
     override var acceptsFirstResponder: Bool { true }
+
     override func becomeFirstResponder() -> Bool {
+        let result = super.becomeFirstResponder()
         if let ic = inputContext { ic.deactivate(); ic.activate() }
-        return true
+        if result { surfaceFocusDidChange(true) }
+        return result
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let result = super.resignFirstResponder()
+        if result { surfaceFocusDidChange(false) }
+        return result
+    }
+
+    /// Tell libghostty whether it has the keyboard.
+    ///
+    /// Nobody was telling it. libghostty therefore believed every surface was
+    /// focused for the app's whole life, so an unfocused tab still drew a solid
+    /// cursor and still answered focus reports — a tab that could not be typed
+    /// into looked exactly like one that could. Official Ghostty drives this from
+    /// the same two responder callbacks (`SurfaceView_AppKit.swift`,
+    /// `focusDidChange`).
+    private func surfaceFocusDidChange(_ focused: Bool) {
+        guard let surface, surfaceFocused != focused else { return }
+        surfaceFocused = focused
+        ghostty_surface_set_focus(surface, focused)
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        // The window this view was waiting for. `updateNSView` could not claim
+        // focus before now, so this is where the claim actually lands.
+        claimFocus()
         guard let surface, window != nil else { return }
 
         let fbFrame = convertToBacking(frame)
@@ -122,6 +218,13 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         let yScale = fbFrame.size.height / frame.size.height
         ghostty_surface_set_content_scale(surface, xScale, yScale)
         syncSurfaceSize(frame.size)
+    }
+
+    override func viewDidUnhide() {
+        super.viewDidUnhide()
+        // Becoming the visible tab. AppKit fires this for an ancestor's change
+        // too, which is what a tab switch is.
+        claimFocus()
     }
 
     override func setFrameSize(_ newSize: NSSize) {

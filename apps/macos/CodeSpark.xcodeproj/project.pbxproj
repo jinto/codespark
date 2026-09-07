@@ -15,6 +15,7 @@
 		A1B2C3D40007E5F600001007 /* RestoredScreenReplayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40006E5F600001006 /* RestoredScreenReplayTests.swift */; };
 		A1B2C3D40013E5F600001011 /* TerminalFontSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D40013E5F600001010 /* TerminalFontSettingsTests.swift */; };
 		D7E1A2B3C4D50011E5F600001011 /* SidebarTypographyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50010E5F600001010 /* SidebarTypographyTests.swift */; };
+		D7E1A2B3C4D5FA11E5F60000FA11 /* SurfaceLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D5FA10E5F60000FA10 /* SurfaceLifecycleTests.swift */; };
 		D7E1A2B3C4D50035E5F600001035 /* SidebarPresenterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50034E5F600001034 /* SidebarPresenterTests.swift */; };
 		D7E1A2B3C4D50041E5F600001041 /* LocalCwdReporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50040E5F600001040 /* LocalCwdReporterTests.swift */; };
 		D7E1A2B3C4D50039E5F600001039 /* WorkspaceAddressTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D50038E5F600001038 /* WorkspaceAddressTests.swift */; };
@@ -23,6 +24,7 @@
 		9ED695B19FC93D927CBF1CBD /* KeyEventRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A29EEC940D85F6B560A49ED /* KeyEventRouterTests.swift */; };
 		B4F28A6E1D93C7520EAF6D91 /* UIVerificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A3E1D5BC82F49A0E61D8B3C /* UIVerificationTests.swift */; };
 		127138BC65ACF5F05A0DD540 /* TerminalSurfaceHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D401BB4E2423695AD5030BA7 /* TerminalSurfaceHostView.swift */; };
+		D7E1A2B3C4D5FA21E5F60000FA21 /* TerminalFocus.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E1A2B3C4D5FA20E5F60000FA20 /* TerminalFocus.swift */; };
 		17F6D4887541BEBCDD9EBD85 /* TerminalFontSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B68E2EC8E018B84C50C9AD2F /* TerminalFontSettings.swift */; };
 		296B053DAC2476A9C82A1570 /* AddWorktreeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 787ED7070EA378E8B9A0199D /* AddWorktreeSheet.swift */; };
 		2A53F0D0BC3764E0C66B0969 /* TerminalHostProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FDED25D7FAF92C05A934D97 /* TerminalHostProtocol.swift */; };
@@ -143,6 +145,7 @@
 		A1B2C3D40006E5F600001006 /* RestoredScreenReplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestoredScreenReplayTests.swift; sourceTree = "<group>"; };
 		A1B2C3D40013E5F600001010 /* TerminalFontSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalFontSettingsTests.swift; sourceTree = "<group>"; };
 		D7E1A2B3C4D50010E5F600001010 /* SidebarTypographyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarTypographyTests.swift; sourceTree = "<group>"; };
+		D7E1A2B3C4D5FA10E5F60000FA10 /* SurfaceLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurfaceLifecycleTests.swift; sourceTree = "<group>"; };
 		D7E1A2B3C4D50034E5F600001034 /* SidebarPresenterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarPresenterTests.swift; sourceTree = "<group>"; };
 		D7E1A2B3C4D50040E5F600001040 /* LocalCwdReporterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCwdReporterTests.swift; sourceTree = "<group>"; };
 		D7E1A2B3C4D50038E5F600001038 /* WorkspaceAddressTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceAddressTests.swift; sourceTree = "<group>"; };
@@ -157,6 +160,7 @@
 		CBE1DCBDAC0F1AD453524CED /* NoOpTerminalHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoOpTerminalHost.swift; sourceTree = "<group>"; };
 		CCF0F453E12289D6DA055C7A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		D401BB4E2423695AD5030BA7 /* TerminalSurfaceHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSurfaceHostView.swift; sourceTree = "<group>"; };
+		D7E1A2B3C4D5FA20E5F60000FA20 /* TerminalFocus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalFocus.swift; sourceTree = "<group>"; };
 		E11516437F9C0FF1FF85D2DE /* GhosttyKit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = GhosttyKit.xcframework; path = ../../vendor/ghostty/macos/GhosttyKit.xcframework; sourceTree = "<group>"; };
 		E2E88E37B7F37CF55D219D6B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		F3450FDDB010612C39DC6A6B /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
@@ -257,6 +261,7 @@
 				A1B2C3D40006E5F600001006 /* RestoredScreenReplayTests.swift */,
 				A1B2C3D40013E5F600001010 /* TerminalFontSettingsTests.swift */,
 				D7E1A2B3C4D50010E5F600001010 /* SidebarTypographyTests.swift */,
+				D7E1A2B3C4D5FA10E5F60000FA10 /* SurfaceLifecycleTests.swift */,
 				D7E1A2B3C4D50034E5F600001034 /* SidebarPresenterTests.swift */,
 				D7E1A2B3C4D50040E5F600001040 /* LocalCwdReporterTests.swift */,
 				D7E1A2B3C4D50038E5F600001038 /* WorkspaceAddressTests.swift */,
@@ -326,6 +331,7 @@
 				F69D17DDAD65ED1E5A929A50 /* TerminalHostFactory.swift */,
 				9FDED25D7FAF92C05A934D97 /* TerminalHostProtocol.swift */,
 				D401BB4E2423695AD5030BA7 /* TerminalSurfaceHostView.swift */,
+				D7E1A2B3C4D5FA20E5F60000FA20 /* TerminalFocus.swift */,
 			);
 			path = Terminal;
 			sourceTree = "<group>";
@@ -562,6 +568,7 @@
 				A1B2C3D40007E5F600001007 /* RestoredScreenReplayTests.swift in Sources */,
 				A1B2C3D40013E5F600001011 /* TerminalFontSettingsTests.swift in Sources */,
 				D7E1A2B3C4D50011E5F600001011 /* SidebarTypographyTests.swift in Sources */,
+				D7E1A2B3C4D5FA11E5F60000FA11 /* SurfaceLifecycleTests.swift in Sources */,
 				D7E1A2B3C4D50035E5F600001035 /* SidebarPresenterTests.swift in Sources */,
 				D7E1A2B3C4D50041E5F600001041 /* LocalCwdReporterTests.swift in Sources */,
 				D7E1A2B3C4D50039E5F600001039 /* WorkspaceAddressTests.swift in Sources */,
@@ -621,6 +628,7 @@
 				EB0697A4475BC8FC0158EA9D /* TerminalHostFactory.swift in Sources */,
 				2A53F0D0BC3764E0C66B0969 /* TerminalHostProtocol.swift in Sources */,
 				127138BC65ACF5F05A0DD540 /* TerminalSurfaceHostView.swift in Sources */,
+				D7E1A2B3C4D5FA21E5F60000FA21 /* TerminalFocus.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* TerminalStateDetector.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

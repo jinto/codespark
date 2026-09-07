@@ -26,11 +26,13 @@ When modifying terminal code, always check the official Ghostty source first:
 - **Scroll view**: `SurfaceScrollView.swift` (layout, synchronization)
 
 Key patterns:
-- `ghostty_surface_set_size` expects **physical pixels** (use `convertToBacking`)
+- `ghostty_surface_set_size` expects **physical pixels** (use `convertToBacking`), and **크기가 그대로면 아무것도 안 한다** — `updateSize`가 첫 줄에서 돌아가고, 이유로 SwiftUI를 명시한다(`embedded.zig`). 다시 보이게 된 탭을 재렌더시키려고 같은 크기로 부르던 코드가 여기 있었다: 렌더는 셸의 출력이나 크기 변화로만 걸리는데 idle 프롬프트에 두고 온 탭엔 둘 다 없어서, 낡은 프레임(빈 화면 + 커서 자국)을 그대로 입고 돌아왔다. 크기 델타 없이 그리게 하는 API는 따로 있다 — **`ghostty_surface_refresh`**(= `queueRender`). 오라클: 출력이 끝난 탭에서 다른 탭에 갔다 오면 화면이 비고 Ctrl-L로 살아나면 그 병이다.
 - Control characters (< 0x20) must be sent as original char + Ctrl modifier, not raw control code
 - Ghostty manages its own Metal layer — do NOT set `wantsLayer = true`
-- `close_surface_cb` receives **surface's NSView userdata** (not runtime userdata) + `processAlive` bool
+- `close_surface_cb` receives **`config.userdata`가 준 포인터**를 돌려준다 — `config.platform.macos.nsview`가 아니다. 둘은 같은 뷰를 가리켜도 서로 무관한 필드이고, `userdata`를 안 채우면 콜백은 nil을 받아 첫 줄에서 돌아간다. 초기 커밋부터 그 상태였다: `exit`한 로컬 탭도, 끊긴 ssh 탭도 "Process exited. Press any key to close the terminal."을 찍은 채 영영 남았고 — 그 키 입력도 같은 close로 가서 같이 버려지므로 — **어떤 키로도 못 닫혔다**. 스토어에 `close_reason = process_exited`가 1,250여 세션 중 **한 번도** 없던 것이 그 흔적이다.
 - One surface per session — host owns it, `TerminalSurfaceHostView` borrows via `surfaceNSView`
+- **`config.command`을 준 표면은 `wait-after-command`가 켜진다** — 우리가 안 켜도. `embedded.zig`가 명령을 세팅하면서 같이 켠다(`:533`). 그래서 셸이 끝났을 때 로컬 탭(명령 없음)은 **스스로 닫히고**, 명령 탭(ssh·claude·복원된 원격)은 "Press any key"에 서서 기다린다. 이건 버그가 아니라 명령이 왜 끝났는지 읽으라는 것이고, C API로 끌 방법도 없다(플래그는 true로만 간다). 대신 그 키가 실제로 닫아야 한다 — 위 `userdata` 항목.
+  - 그러므로 폴링으로 `ghostty_surface_process_exited`를 보고 탭을 걷어내면 **안 된다**: `child_exited`는 비정상 종료 분기 **앞에서** 켜지므로(`Surface.zig:1225`), 방금 뜬 `ssh: Could not resolve hostname`을 사용자가 읽기 전에 지운다.
 - `config.command`은 **`/bin/sh -c`로 실행된다** (`embedded.zig`의 `.{ .shell = cmd }`). 즉 명령 문자열은 만들 때가 아니라 **로컬 셸이 파싱한 뒤**의 argv가 진짜다. `&&`, `;`, `$VAR`를 따옴표 없이 넣으면 원격이 아니라 여기서 해석된다 — 명령 문자열만 비교하는 테스트로는 절대 안 보인다(`SSHConnectionInfoTests`의 stub `ssh` argv 테스트 참고)
 
 ## Architecture
@@ -214,6 +216,19 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
     - **가려내는 법**: 숫자 단축키(`Cmd+1/2`)와 `key code`는 레이아웃과 무관하게 통과한다. 글자 chord만 실패하면 자판을 의심할 것 — 라우터는 `Cmd+N`·`Cmd+Ctrl+S`·`Cmd+1`을 전부 `.delegateToSuper`로 똑같이 보내므로 라우터 탓일 수 없다.
     - **돌리기 전에 입력 소스를 ABC로 바꾼다.** 세벌식에서 13개 중 4개가 실패하던 것이 ABC로 바꾸자 **13개 전부 통과(skip 0)** 했다 — 코드는 한 줄도 안 건드리고. 안 바꾸면 그 4개가 영구히 빨간불이고, 그게 진짜 회귀를 덮는다.
   - `osascript` 기반 `UIVerificationTests`(`TEST_RUNNER_UI_VERIFICATION=1`)는 이 macOS에서 `entire contents of window 1`이 **0을 돌려주어** 사실상 죽어 있다. `static texts of window 1`처럼 직접 지정하면 읽힌다. 눈으로 확인할 일이 있으면 `screencapture`(화면 기록 권한 필요) 쪽이 낫고, 진짜 게이트는 XCUITest다.
+
+### 포커스는 표면이 스스로, 커밋이 끝난 뒤에 가져간다
+
+새 탭이 가끔 키보드를 못 받고, 안쪽을 클릭하면 살아나던 버그. 포커스를 주장하는 곳은 이제 `GhosttyTerminalSurfaceView.claimFocus()` **하나**이고(게이트: `test_only_the_surface_view_claims_the_keyboard`), 규칙은 `TerminalFocus.shouldClaim`에 값으로 있다.
+
+- **일회성이면 안 된다**: `updateNSView`는 새로 삽입된 뷰에 대해 **언제나 `window == nil`일 때** 돈다(실측). 거기서 부른 `makeFirstResponder`는 조용한 no-op이고, SwiftUI는 **representable 자기 입력이 바뀔 때만** `updateNSView`를 다시 부른다 — 무관한 `@Published`가 5번 바뀌어도 0번이었다(실측). 그래서 한 번 놓치면 10초 폴링도, cwd 보고도, git 조회도 낫게 하지 못하고 **클릭할 때까지 영구히** 먹통이다. 그래서 뷰가 `viewDidMoveToWindow`·`viewDidUnhide`에서 다시 주장한다.
+- **동기로 주장하면 안 된다**: 시트가 떠 있는 동안 탭을 바꾸면, `viewDidUnhide` 안에서 얻은 first responder를 **같은 SwiftUI 커밋이 되돌린다**(나가는 뷰의 `updateNSView`가 그걸 숨기는 순간 `resignFirstResponder`). 포커스는 창에 남고 회복되지 않는다 — 고치려던 증상 그대로다. 순수 AppKit은 형제에게 이러지 않으므로 SwiftUI의 장부다. 그래서 `DispatchQueue.main.async`로 커밋 밖에서 주장한다.
+- **조건은 실행 시점에 다시 묻는다**: 블록이 도는 사이 탭이 바뀌었을 수 있고, **AppKit은 숨겨진 뷰도 first responder로 받아준다**(실측 — 거절하지 않는다). 안 물으면 키보드가 보이지 않는 탭에 앉는다.
+- **`isActiveTab`은 `!isHidden`으로 대체되지 않는다**: 한 번도 마운트된 적 없는 표면은 숨겨져 있지도 않다. 둘은 다른 질문이다.
+- **나가는 탭은 키를 삼키지 않는다**: 숨기는 순간 AppKit이 회수하고 **창**이 받는다(실측). 그래서 증상이 "다른 탭에 찍힌다"가 아니라 "아무 데도 안 간다"였다.
+- **`AppModel.focusActiveTerminal()`은 지웠다**: `asyncAfter(0.15)` 타이머라 FIFO가 아니었고(150ms 안에 탭을 바꾸면 숨겨진 표면에 내려앉는다), 빈 화면의 버튼 두 곳에만 붙어 있어 정작 가장 흔한 경로인 `Cmd+T` → 세션 선택 → New Terminal은 보호하지 못했다.
+- **libghostty에게도 알린다**: `become/resignFirstResponder`가 `ghostty_surface_set_focus`를 부른다(공식 `SurfaceView_AppKit.swift`와 같은 자리). 아무도 안 알려주던 동안 libghostty는 모든 표면이 포커스를 가졌다고 믿었고, **타이핑이 안 되는 탭이 커서를 멀쩡히 그렸다** — 눈으로 구분할 수 없던 이유다.
+- **오라클**: 유닛 테스트로는 순서를 못 본다. `Cmd+T` → New Terminal 직후 바로 타이핑, 그리고 **선택 다이얼로그가 떠 있는 동안 탭을 바꿨다가 닫고** 타이핑 — 둘 다 그 탭에 글자가 들어가야 한다. 잠긴 화면에서는 검증이 성립하지 않는다(창이 key가 안 된다).
 
 ### 모디파이어 키는 누름/뗌을 가려 보낸다 (kitty keyboard protocol)
 
