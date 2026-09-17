@@ -180,7 +180,7 @@ struct SidebarView: View {
                                     }
                                 }
                                 Button("Close Project") {
-                                    Task { await model.closeProject(id: project.id) }
+                                    Task { await model.requestCloseProject(id: project.id) }
                                 }
                                 Divider()
                                 Button("Delete", role: .destructive) {

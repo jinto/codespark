@@ -112,7 +112,8 @@ struct MainContentView: View {
                 model.pendingCloseProjectID = nil
             }
         } message: {
-            Text("Sessions will be closed. You can reopen this project later.")
+            let count = model.pendingCloseProjectID.map { model.liveTabCount(forProject: $0) } ?? 0
+            Text("\(count) open terminal\(count == 1 ? "" : "s") will be closed. You can reopen this project later.")
         }
         .confirmationDialog(
             "Choose session",

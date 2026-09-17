@@ -490,6 +490,30 @@ final class AppModel: ObservableObject {
         return nextID
     }
 
+    /// The tabs closing this project would take with it, across every worktree —
+    /// read from the same places `teardownProject` closes.
+    func liveTabCount(forProject id: String) -> Int {
+        if selection.id == id { return liveSessions.count }
+        return projects.first(where: { $0.id == id })?.liveSessionDetails.count ?? 0
+    }
+
+    /// Close Project from the sidebar. Asks first only when there are tabs to lose.
+    func requestCloseProject(id: String) async {
+        if liveTabCount(forProject: id) > 0 {
+            pendingCloseProjectID = id
+        } else {
+            await closeProject(id: id)
+        }
+    }
+
+    /// Cmd+W closes a tab and nothing larger. With no tab on screen it used to
+    /// offer to close the whole project — every worktree's tabs one misplaced
+    /// keypress away.
+    func requestCloseFromShortcut() {
+        guard let id = activeSessionID else { return }
+        pendingCloseSessionID = id
+    }
+
     func closeProject(id: String) async {
         if let proj = projects.first(where: { $0.id == id }) {
             hiddenProjectNames[id] = proj.name

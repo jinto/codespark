@@ -449,6 +449,69 @@ final class AppModelTests: XCTestCase {
         XCTAssertTrue(model.hiddenProjectIDs.contains("ws-2"))
     }
 
+    /// Cmd+W on a worktree with no tab used to fall through to "Close project?" —
+    /// one stray keypress from losing every tab in every worktree. It closes tabs
+    /// and nothing larger.
+    @MainActor
+    func test_cmd_w_with_no_tab_open_does_not_offer_to_close_the_project() async {
+        let client = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "ws-1", name: "Project 1", path: "", transport: "local", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "ws-1", name: "Project 1", path: "", transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: client)
+        await model.load()
+        XCTAssertNil(model.activeSessionID)
+
+        model.requestCloseFromShortcut()
+
+        XCTAssertNil(model.pendingCloseProjectID)
+        XCTAssertNil(model.pendingCloseSessionID)
+    }
+
+    @MainActor
+    func test_cmd_w_with_a_tab_open_asks_to_close_that_tab() async throws {
+        let (model, _) = await modelWithLiveSession()
+        let active = try XCTUnwrap(model.activeSessionID)
+
+        model.requestCloseFromShortcut()
+
+        XCTAssertEqual(model.pendingCloseSessionID, active)
+        XCTAssertNil(model.pendingCloseProjectID)
+    }
+
+    /// The sidebar's Close Project closed at once, live tabs and all. With tabs it
+    /// asks first; the question is only worth asking when there is something to lose.
+    @MainActor
+    func test_closing_a_project_with_live_tabs_asks_first() async {
+        let (model, _) = await modelWithLiveSession()
+        XCTAssertEqual(model.liveTabCount(forProject: "ws-1"), 1)
+
+        await model.requestCloseProject(id: "ws-1")
+
+        XCTAssertEqual(model.pendingCloseProjectID, "ws-1")
+        XCTAssertFalse(model.hiddenProjectIDs.contains("ws-1"))
+    }
+
+    @MainActor
+    func test_closing_a_project_without_tabs_closes_it_at_once() async {
+        let client = MockProjectCoreClient(
+            summaries: [
+                ProjectSummaryViewData(id: "ws-1", name: "Project 1", path: "", transport: "local", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
+                ProjectSummaryViewData(id: "ws-2", name: "Project 2", path: "", transport: "local", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
+            ],
+            details: [ProjectDetailViewData(id: "ws-1", name: "Project 1", path: "", transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: client)
+        await model.load()
+
+        await model.requestCloseProject(id: "ws-2")
+
+        XCTAssertNil(model.pendingCloseProjectID)
+        XCTAssertTrue(model.hiddenProjectIDs.contains("ws-2"))
+    }
+
     @MainActor
     private func modelWithLiveSession() async -> (AppModel, MockProjectCoreClient) {
         let client = MockProjectCoreClient(

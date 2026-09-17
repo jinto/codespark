@@ -14,7 +14,7 @@ import SwiftUI
 enum AppShortcut: String, CaseIterable {
     case newProject
     case newSession
-    case closeSessionOrProject
+    case closeSession
     case toggleSidebar
     case nextTab
     case previousTab
@@ -28,7 +28,7 @@ enum AppShortcut: String, CaseIterable {
         switch self {
         case .newProject: "n"
         case .newSession: "t"
-        case .closeSessionOrProject: "w"
+        case .closeSession: "w"
         case .toggleSidebar: "s"
         case .nextTab, .nextWorktree: "]"
         case .previousTab, .previousWorktree: "["
@@ -39,7 +39,7 @@ enum AppShortcut: String, CaseIterable {
     /// AppKit flags are the source of truth because the router speaks AppKit.
     var flags: NSEvent.ModifierFlags {
         switch self {
-        case .newProject, .newSession, .closeSessionOrProject, .selectWorkspaceByIndex:
+        case .newProject, .newSession, .closeSession, .selectWorkspaceByIndex:
             [.command]
         case .nextTab, .previousTab:
             [.command, .shift]

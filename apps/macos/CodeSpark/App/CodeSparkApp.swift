@@ -100,15 +100,11 @@ struct CodeSparkApp: App {
                 }
             }
             CommandGroup(replacing: .saveItem) {
-                Button(model.activeSessionID != nil ? "Close Session" : "Close Project") {
-                    if model.activeSessionID != nil {
-                        model.pendingCloseSessionID = model.activeSessionID
-                    } else if let projID = model.selection.id {
-                        model.pendingCloseProjectID = projID
-                    }
+                Button("Close Session") {
+                    model.requestCloseFromShortcut()
                 }
-                .keyboardShortcut(.closeSessionOrProject)
-                .disabled(model.selection.id == nil)
+                .keyboardShortcut(.closeSession)
+                .disabled(model.activeSessionID == nil)
             }
             CommandGroup(replacing: .sidebar) {
                 Button("Toggle Sidebar") {
@@ -373,12 +369,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleCloseShortcut() {
-        guard let model else { return }
-        if model.activeSessionID != nil {
-            model.pendingCloseSessionID = model.activeSessionID
-        } else if let projID = model.selection.id {
-            model.pendingCloseProjectID = projID
-        }
+        model?.requestCloseFromShortcut()
     }
 
     private func removeSystemCloseMenuItem() {
