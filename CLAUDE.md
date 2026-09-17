@@ -228,6 +228,9 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - **나가는 탭은 키를 삼키지 않는다**: 숨기는 순간 AppKit이 회수하고 **창**이 받는다(실측). 그래서 증상이 "다른 탭에 찍힌다"가 아니라 "아무 데도 안 간다"였다.
 - **`AppModel.focusActiveTerminal()`은 지웠다**: `asyncAfter(0.15)` 타이머라 FIFO가 아니었고(150ms 안에 탭을 바꾸면 숨겨진 표면에 내려앉는다), 빈 화면의 버튼 두 곳에만 붙어 있어 정작 가장 흔한 경로인 `Cmd+T` → 세션 선택 → New Terminal은 보호하지 못했다.
 - **libghostty에게도 알린다**: `become/resignFirstResponder`가 `ghostty_surface_set_focus`를 부른다(공식 `SurfaceView_AppKit.swift`와 같은 자리). 아무도 안 알려주던 동안 libghostty는 모든 표면이 포커스를 가졌다고 믿었고, **타이핑이 안 되는 탭이 커서를 멀쩡히 그렸다** — 눈으로 구분할 수 없던 이유다.
+- **미러는 libghostty처럼 `true`로 태어난다**: 표면은 focused로 만들어지고(`renderer/Thread.zig`) `set_focus(false)`를 받아야만 display link를 멈춘다. 미러가 `false`로 시작하면 프로젝트를 열 때 한꺼번에 만들어지는 나머지 탭에는 그 호출이 **영영 안 가서**, 안 보는 탭마다 vsync로 그린다 — 사용자 기계에서 표면 14개 중 13개, 배터리 메뉴의 "Using Significant Energy". 그래서 생성 직후 `false`를 한 번 민다.
+  - **창의 key 알림도 듣는다**: 다른 앱으로 가도 창은 first responder를 놓지 않아(`AppKitResponderAssumptionTests`) `resignFirstResponder`가 안 울린다. 공식 Ghostty의 `syncFocusToSurfaceTree`와 같은 식(`isKeyWindow && firstResponder === self`)으로 다시 계산한다.
+  - **오라클은 스레드 수다**: `sample <pid> 2`의 `CVDisplayLink` 스레드 — 앞이면 1, 배경이면 0. sudo가 되면 `spindump`의 renderer 우선순위(46 = libghostty가 포커스로 믿음, 37 = 아님)가 표면별로 말해준다. 유닛 테스트 환경은 표면을 못 만들어 소스 게이트뿐이다. 진단 전체: `docs/2026-09-15-idle-tab-battery-drain.md`.
 - **오라클**: 유닛 테스트로는 순서를 못 본다. `Cmd+T` → New Terminal 직후 바로 타이핑, 그리고 **선택 다이얼로그가 떠 있는 동안 탭을 바꿨다가 닫고** 타이핑 — 둘 다 그 탭에 글자가 들어가야 한다. 잠긴 화면에서는 검증이 성립하지 않는다(창이 key가 안 된다).
 
 ### 모디파이어 키는 누름/뗌을 가려 보낸다 (kitty keyboard protocol)

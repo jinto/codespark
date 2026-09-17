@@ -40,6 +40,27 @@ final class SurfaceLifecycleTests: XCTestCase {
         )
     }
 
+    /// libghostty는 표면을 **포커스된 채로** 만들고(`renderer/Thread.zig`
+    /// `focused: bool = true`), `set_focus(false)`를 받아야만 display link를 멈춘다.
+    /// 우리 미러가 `false`로 시작하면 한 번도 포커스를 못 받은 탭 — 프로젝트를
+    /// 열 때 한꺼번에 만들어지는 나머지 탭들 — 에는 그 호출이 영영 안 간다.
+    /// 앱이 배경일 때도 마찬가지라 창의 key 변화도 들어야 한다.
+    ///
+    /// 실측 오라클: 탭이 2개 이상인 프로젝트를 열고 `sample <pid> 2`에서
+    /// `CVDisplayLink` 스레드 수를 센다. 앞에 있으면 1, 배경이면 0이어야 한다
+    /// (고치기 전: 탭 수만큼. 2026-09-15 사용자 기계에서 14개 중 13개).
+    func test_a_surface_starts_believing_what_libghostty_believes() throws {
+        let source = try source("GhosttyTerminalSurfaceView.swift")
+        XCTAssertTrue(
+            source.contains("private var surfaceFocused = true"),
+            "미러가 libghostty의 초기값(focused)과 다르면 안 본 탭에 set_focus(false)가 안 간다."
+        )
+        XCTAssertTrue(
+            source.contains("NSWindow.didResignKeyNotification"),
+            "창이 key를 잃어도 first responder는 그대로라, key 알림을 듣지 않으면 배경에서도 그린다."
+        )
+    }
+
     /// 다시 보이게 된 표면은 스스로 그리지 않는다. 렌더는 셸의 출력이나 크기
     /// 변화로만 걸리는데, idle 프롬프트에 두고 온 탭에는 둘 다 없다.
     /// 예전엔 같은 크기로 `set_size`를 불러 재렌더를 유도했지만, Ghostty의
@@ -238,5 +259,19 @@ final class AppKitResponderAssumptionTests: XCTestCase {
             window.makeFirstResponder(a),
             "AppKit이 숨겨진 뷰를 거절하기 시작했다면 `!isHidden` 조건은 이제 불필요하다.")
         XCTAssertTrue(window.firstResponder === a)
+    }
+
+    /// 표면이 창의 key 알림을 따로 듣는 이유. 다른 앱으로 가도 창은 first
+    /// responder를 **놓지 않으므로** `resignFirstResponder`가 안 울리고,
+    /// libghostty는 배경에서도 포커스를 가졌다고 믿어 display link를 계속 돌린다.
+    func test_a_window_losing_key_keeps_its_first_responder() {
+        let (window, a, _) = windowWithTwoViews()
+        XCTAssertTrue(window.makeFirstResponder(a))
+
+        window.resignKey()
+
+        XCTAssertTrue(
+            window.firstResponder === a,
+            "AppKit이 key를 잃을 때 first responder를 회수한다면 key 알림 구독은 필요 없다.")
     }
 }

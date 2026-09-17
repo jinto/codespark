@@ -13,7 +13,13 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
     var sshConnectionInfo: SSHConnectionInfo?
 
     /// What libghostty was last told about our focus, so we only tell it changes.
-    private var surfaceFocused = false
+    /// libghostty creates a surface focused (`renderer/Thread.zig`), so do we —
+    /// starting from `false` meant a tab that never had the keyboard never heard
+    /// `set_focus(false)`, and kept its display link running at the refresh rate.
+    private var surfaceFocused = true
+
+    /// Our window's key notifications, while we are in one.
+    private var windowKeyObservers: [NSObjectProtocol] = []
 
     init(
         app: ghostty_app_t,
@@ -33,6 +39,9 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
             initialInput: initialInput,
             environment: environment
         )
+        // A project opens all its tabs at once and only one gets the keyboard.
+        // The rest must hear they don't have it, or they draw every vsync.
+        surfaceFocusDidChange(false)
     }
 
     private static func createSurface(
@@ -115,6 +124,7 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
     }
 
     deinit {
+        stopFollowingWindowKey()
         if let surface {
             ghostty_surface_free(surface)
         }
@@ -206,8 +216,38 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         ghostty_surface_set_focus(surface, focused)
     }
 
+    /// The responder callbacks alone miss the app going to the background: the
+    /// window keeps us as first responder, so `resignFirstResponder` never runs
+    /// and the tab on screen draws every vsync behind another app. Official
+    /// Ghostty re-derives focus on the same two notifications
+    /// (`BaseTerminalController.syncFocusToSurfaceTree`).
+    private func followWindowKey() {
+        guard let window else { return }
+        windowKeyObservers = [
+            NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification,
+        ].map { name in
+            NotificationCenter.default.addObserver(
+                forName: name, object: window, queue: .main
+            ) { [weak self] _ in
+                guard let self, let window = self.window else { return }
+                self.surfaceFocusDidChange(window.isKeyWindow && window.firstResponder === self)
+            }
+        }
+    }
+
+    private func stopFollowingWindowKey() {
+        windowKeyObservers.forEach(NotificationCenter.default.removeObserver)
+        windowKeyObservers = []
+    }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        stopFollowingWindowKey()
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        followWindowKey()
         // The window this view was waiting for. `updateNSView` could not claim
         // focus before now, so this is where the claim actually lands.
         claimFocus()
