@@ -11,9 +11,11 @@ jobs:
   build:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Zig
+        # Still node20 as of v2.2.1 (the latest) — GitHub runs it on node24 with a
+        # deprecation warning. Move it when a node24 release exists.
         uses: mlugg/setup-zig@v2
         with:
           # The pinned ghostty tree declares 0.15.2 as its minimum; that is the
@@ -142,7 +144,7 @@ jobs:
             "$APP_PATH"
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: CodeSpark-*.dmg
           # Both halves matter. `create-dmg ... || true` swallowed a failed
