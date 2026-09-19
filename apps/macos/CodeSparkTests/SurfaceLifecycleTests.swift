@@ -177,6 +177,31 @@ final class SurfaceLifecycleTests: XCTestCase {
     }
 }
 
+/// 표면이 pty에 어떤 크기를 전하는가.
+///
+/// 메인 영역이 터미널을 내렸다 다시 올리면(탭 없는 워크트리·프로젝트를 거쳐
+/// 오면) SwiftUI는 떼어낸 표면들의 프레임을 **0×0**으로 만든다(실측 — 앱의 모든
+/// 표면이, 창이 없는 채로). 그걸 그대로 넘기면 Ghostty는 그리드를 1×1로 잡고
+/// pty에 SIGWINCH를 보낸 뒤, 몇 ms 뒤 원래 크기로 또 보낸다. 화면 전체를 다시
+/// 그리는 TUI(Claude Code)는 한 줄짜리 화면에 맞춰 그렸다가 돌아오므로 출력과
+/// 입력창 사이에 빈 칸이 남는다.
+///
+/// 오라클: 탭에서 `trap 'echo WINCH $(stty size) >> f' WINCH; while sleep 0.1;
+/// do :; done`을 돌리고 `Cmd` 숫자로 탭 없는 자리를 거쳐 온다. 고치기 전에는
+/// 크기가 안 변했는데도 WINCH가 찍혔다.
+final class SurfaceSizeRuleTests: XCTestCase {
+
+    func test_a_surface_with_room_reports_its_size() {
+        XCTAssertTrue(GhosttyTerminalSurfaceView.reportsSize(CGSize(width: 1784, height: 1090)))
+    }
+
+    func test_a_detached_surface_does_not_shrink_the_terminal_to_nothing() {
+        XCTAssertFalse(GhosttyTerminalSurfaceView.reportsSize(.zero))
+        XCTAssertFalse(GhosttyTerminalSurfaceView.reportsSize(CGSize(width: 1784, height: 0)))
+        XCTAssertFalse(GhosttyTerminalSurfaceView.reportsSize(CGSize(width: 0, height: 1090)))
+    }
+}
+
 /// 표면이 키보드를 언제 가져가는가.
 ///
 /// 증상이 "아무 키도 안 먹는다"라서, 이 규칙이 틀리면 앱을 띄워야만 보이고

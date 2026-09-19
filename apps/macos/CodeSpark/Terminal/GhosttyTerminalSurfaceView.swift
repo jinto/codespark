@@ -277,7 +277,21 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
     private func syncSurfaceSize(_ size: NSSize) {
         guard let surface else { return }
         let scaled = convertToBacking(size)
+        guard Self.reportsSize(scaled) else { return }
         ghostty_surface_set_size(surface, UInt32(scaled.width), UInt32(scaled.height))
+    }
+
+    /// A surface with no room has no size to report — it keeps the last one.
+    ///
+    /// When the main area takes the terminals down and puts them back (passing
+    /// through a place with no tabs), SwiftUI sets every detached surface's frame
+    /// to 0×0. Passed on, Ghostty clamps the grid to 1×1 and signals the pty, then
+    /// signals it again at the real size a moment later. A TUI that redraws the
+    /// whole screen (Claude Code) lays itself out for one row in between and comes
+    /// back with a blank gap above its prompt. Official Ghostty never sees this:
+    /// its size comes from a `GeometryReader`, not from whatever AppKit sets.
+    static func reportsSize(_ backing: CGSize) -> Bool {
+        backing.width > 0 && backing.height > 0
     }
 
     // MARK: - Keyboard Input
