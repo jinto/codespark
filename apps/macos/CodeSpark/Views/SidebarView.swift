@@ -179,9 +179,6 @@ struct SidebarView: View {
                                         changeFolderProjectID = project.id
                                     }
                                 }
-                                Button("Close Project") {
-                                    Task { await model.requestCloseProject(id: project.id) }
-                                }
                                 Divider()
                                 Button("Delete", role: .destructive) {
                                     pendingDeleteProjectID = project.id

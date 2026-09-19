@@ -4,7 +4,6 @@ struct MainContentView: View {
     @ObservedObject var model: AppModel
     var onToggleSidebar: (() -> Void)?
     @State private var showCloseSessionAlert = false
-    @State private var showCloseProjectAlert = false
 
     var body: some View {
         Group {
@@ -97,23 +96,6 @@ struct MainContentView: View {
             }
         } message: {
             Text("This will close the terminal process.")
-        }
-        .onChange(of: model.pendingCloseProjectID) { _, newValue in
-            showCloseProjectAlert = newValue != nil
-        }
-        .alert("Close project?", isPresented: $showCloseProjectAlert) {
-            Button("Close", role: .destructive) {
-                if let id = model.pendingCloseProjectID {
-                    Task { await model.closeProject(id: id) }
-                }
-                model.pendingCloseProjectID = nil
-            }
-            Button("Cancel", role: .cancel) {
-                model.pendingCloseProjectID = nil
-            }
-        } message: {
-            let count = model.pendingCloseProjectID.map { model.liveTabCount(forProject: $0) } ?? 0
-            Text("\(count) open terminal\(count == 1 ? "" : "s") will be closed. You can reopen this project later.")
         }
         .confirmationDialog(
             "Choose session",

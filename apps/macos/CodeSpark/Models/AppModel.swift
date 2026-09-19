@@ -35,9 +35,6 @@ final class AppModel: ObservableObject {
     @Published var sessionStates: [String: TerminalState] = [:]
     var debounceTasks: [String: Task<Void, Never>] = [:]
     @Published var pendingCloseSessionID: String?
-    @Published var pendingCloseProjectID: String?
-    @Published var hiddenProjectIDs: Set<String> = []
-    @Published var hiddenProjectNames: [String: String] = [:]
     @Published var gitBranches: [String: String] = [:]
     /// Project folders git has been asked about and disowned. Kept apart from
     /// "not asked yet": both have no branch, but only one of them knows it.
@@ -226,8 +223,7 @@ final class AppModel: ObservableObject {
                 try await core.reconcileInterruptedSessions()
                 hasReconciledOnLaunch = true
             }
-            let allProjects = try await core.listProjectSummaries()
-            let projects = allProjects.filter { !hiddenProjectIDs.contains($0.id) }
+            let projects = try await core.listProjectSummaries()
             self.projects = applySavedProjectOrder(to: projects)
             persistProjectOrder()
 
@@ -490,47 +486,12 @@ final class AppModel: ObservableObject {
         return nextID
     }
 
-    /// The tabs closing this project would take with it, across every worktree —
-    /// read from the same places `teardownProject` closes.
-    func liveTabCount(forProject id: String) -> Int {
-        if selection.id == id { return liveSessions.count }
-        return projects.first(where: { $0.id == id })?.liveSessionDetails.count ?? 0
-    }
-
-    /// Close Project from the sidebar. Asks first only when there are tabs to lose.
-    func requestCloseProject(id: String) async {
-        if liveTabCount(forProject: id) > 0 {
-            pendingCloseProjectID = id
-        } else {
-            await closeProject(id: id)
-        }
-    }
-
     /// Cmd+W closes a tab and nothing larger. With no tab on screen it used to
     /// offer to close the whole project — every worktree's tabs one misplaced
     /// keypress away.
     func requestCloseFromShortcut() {
         guard let id = activeSessionID else { return }
         pendingCloseSessionID = id
-    }
-
-    func closeProject(id: String) async {
-        if let proj = projects.first(where: { $0.id == id }) {
-            hiddenProjectNames[id] = proj.name
-        }
-        hiddenProjectIDs.insert(id)
-
-        let nextID = teardownProject(id: id)
-        if selection.id == id {
-            await selectProject(id: nextID)
-        }
-    }
-
-    func reopenProject(id: String) async {
-        hiddenProjectIDs.remove(id)
-        hiddenProjectNames.removeValue(forKey: id)
-        await load()
-        await selectProject(id: id)
     }
 
     func deleteProject(id: String) async {

@@ -20,7 +20,6 @@ struct CodeSparkApp: App {
         }
     )
     @AppStorage(StorageKeys.selectedProjectID) private var savedProjectID: String = ""
-    @AppStorage(StorageKeys.hiddenProjectIDs) private var savedHiddenIDs: String = ""
     @AppStorage(StorageKeys.hasCompletedOnboarding) private var hasCompletedOnboarding = false
     @AppStorage(StorageKeys.isSidebarVisible) private var isSidebarVisible = true
     @Environment(\.scenePhase) private var scenePhase
@@ -67,9 +66,6 @@ struct CodeSparkApp: App {
             .onChange(of: model.projects.count) { _, newCount in
                 if newCount > 0 { isSidebarVisible = true }
             }
-            .onChange(of: model.hiddenProjectIDs) { _, newValue in
-                savedHiddenIDs = newValue.joined(separator: ",")
-            }
         }
         .windowToolbarStyle(.unifiedCompact)
         .windowResizability(.contentMinSize)
@@ -87,17 +83,6 @@ struct CodeSparkApp: App {
                 }
                 .disabled(model.selection.id == nil)
                 .keyboardShortcut(.newSession)
-
-                if !model.hiddenProjectIDs.isEmpty {
-                    Divider()
-                    Menu("Open Recent Project") {
-                        ForEach(Array(model.hiddenProjectIDs), id: \.self) { id in
-                            Button(model.hiddenProjectNames[id] ?? id.prefix(8) + "...") {
-                                Task { await model.reopenProject(id: id) }
-                            }
-                        }
-                    }
-                }
             }
             CommandGroup(replacing: .saveItem) {
                 Button("Close Session") {
@@ -177,7 +162,6 @@ struct CodeSparkApp: App {
             for (old, new) in [
                 ("selectedWorkspaceID", StorageKeys.selectedProjectID),
                 ("expandedWorkspaceIDs", StorageKeys.expandedProjectIDs),
-                ("hiddenWorkspaceIDs", StorageKeys.hiddenProjectIDs),
             ] {
                 if let val = UserDefaults.standard.string(forKey: old), !val.isEmpty {
                     UserDefaults.standard.set(val, forKey: new)
@@ -215,9 +199,6 @@ struct CodeSparkApp: App {
             }
         }
 
-        if !savedHiddenIDs.isEmpty {
-            model.hiddenProjectIDs = Set(savedHiddenIDs.split(separator: ",").map(String.init))
-        }
         if !savedProjectID.isEmpty {
             // Named before anything is loaded — `load()` reads it to decide
             // which project to open. No detail exists yet, which is exactly
