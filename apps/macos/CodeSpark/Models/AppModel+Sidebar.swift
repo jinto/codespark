@@ -28,7 +28,8 @@ extension AppModel {
             nonGitProjectPaths: nonGitProjectPaths,
             expandedProjectIDs: expandedProjectIDs,
             projectsShowingEveryWorktree: projectsShowingEveryWorktree,
-            projectSelectedWorkspaces: projectSelectedWorkspaces
+            projectSelectedWorkspaces: projectSelectedWorkspaces,
+            projectGroups: projectGroups
         )
     }
 
@@ -37,6 +38,11 @@ extension AppModel {
     /// of every project's sessions, on every `@Published` change.
     var sidebarGroups: [SidebarProjectGroup] {
         SidebarPresenter.groups(sidebarSnapshot)
+    }
+
+    /// The same rows under their group headers — what the view draws.
+    var sidebarSections: [SidebarSection] {
+        SidebarPresenter.sections(sidebarSnapshot)
     }
 
     typealias NumberedPlace = SidebarPresenter.NumberedPlace

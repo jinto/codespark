@@ -34,6 +34,44 @@ struct SessionSummary: Identifiable, Equatable {
 enum ProjectDropTarget: Equatable {
     case before(String)
     case end
+    /// Onto a group's header: into that group, last.
+    case group(String)
+}
+
+/// The user's groups of projects. A project filed in none of them is in the
+/// default group, which is not stored — it is whatever is left — and draws no
+/// header, so a sidebar nobody has grouped looks the way it always has.
+///
+/// Order inside a group is the one drag order (`projectOrder`); this only says
+/// which group a project is in.
+struct ProjectGroups: Codable, Equatable {
+    struct Group: Codable, Equatable, Identifiable {
+        let id: String
+        var name: String
+        var isCollapsed = false
+    }
+
+    var groups: [Group] = []
+    /// Project id → group id. Absent means the default group.
+    var membership: [String: String] = [:]
+
+    /// nil for the default group — including a project still filed under a
+    /// group that has since been deleted.
+    func groupID(of projectID: String) -> String? {
+        guard let id = membership[projectID], groups.contains(where: { $0.id == id })
+        else { return nil }
+        return id
+    }
+
+    mutating func file(_ projectID: String, in groupID: String?) {
+        membership[projectID] = groupID
+    }
+
+    /// Deleting a group deletes a label: its projects fall back to the default group.
+    mutating func delete(_ groupID: String) {
+        groups.removeAll { $0.id == groupID }
+        membership = membership.filter { $0.value != groupID }
+    }
 }
 
 /// A tab in flight between the tab bar and a sidebar row. Carried as JSON,

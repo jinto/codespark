@@ -31,6 +31,21 @@ struct SidebarView: View {
         NSPasteboard(name: .drag).types?.contains { $0.rawValue == "public.json" } == true
     }
     @State private var pendingRemoveWorktree: WorktreeRemoval?
+    @State private var groupNaming: GroupNaming?
+    @State private var groupName = ""
+
+    /// A group name being asked for: a new group for a project, or a rename.
+    private enum GroupNaming: Identifiable {
+        case create(projectID: String)
+        case rename(groupID: String)
+
+        var id: String {
+            switch self {
+            case .create(let projectID): "create:" + projectID
+            case .rename(let groupID): "rename:" + groupID
+            }
+        }
+    }
 
     /// A worktree the user asked to remove, held until they confirm. Carries its
     /// project because the row may belong to one that is not selected.
@@ -75,197 +90,21 @@ struct SidebarView: View {
                     // computed property read again per row per field, which is
                     // what made drawing N projects regroup every project's
                     // sessions N times over, on every `@Published` change.
-                    let groups = model.sidebarGroups
+                    let sections = model.sidebarSections
                     // Bound once with the groups, same rule: eligibility is per
                     // drag source (the on-screen project), not per row.
                     let sessionDropEligible = model.sessionDropEligibleProjectIDs
-                    ForEach(groups) { group in
-                        let project = group.project
-                        VStack(alignment: .leading, spacing: 3) {
-                            ProjectSidebarRow(
-                                project: project,
-                                isSelected: group.isSelected,
-                                status: group.status,
-                                infoLine: group.infoLine,
-                                hotkeyIndex: showHotkeys ? group.hotkeyIndex : nil,
-                                sessionCount: group.sessionCount
-                            )
-                            .contentShape(Rectangle())
-                            .help(group.hoverPath)
-                            .overlay(alignment: .top) {
-                                DropInsertionLine(isShowing: dropTarget == .before(project.id))
-                            }
-                            .draggable(project.id)
-                            .dropDestination(for: ProjectRowDrop.self) { drops, _ in
-                                dropTarget = nil
-                                sessionDropRowID = nil
-                                switch drops.first {
-                                case .projectRow(let draggedID):
-                                    model.moveProject(id: draggedID, to: .before(project.id))
-                                    return true
-                                case .tab(let sessionID):
-                                    // No worktree named: the project row means main.
-                                    guard sessionDropEligible.contains(project.id) else { return false }
-                                    Task {
-                                        await model.dropSession(
-                                            sessionID: sessionID,
-                                            onProjectID: project.id,
-                                            workspacePath: nil
-                                        )
-                                    }
-                                    return true
-                                case nil:
-                                    return false
-                                }
-                            } isTargeted: { targeted in
-                                // Nothing else can clear these: the row that loses
-                                // the pointer is the one that reports leaving.
-                                if targeted {
-                                    if dragIsTab {
-                                        if sessionDropEligible.contains(project.id) {
-                                            sessionDropRowID = project.id
-                                        }
-                                    } else {
-                                        dropTarget = .before(project.id)
-                                    }
-                                } else {
-                                    if dropTarget == .before(project.id) { dropTarget = nil }
-                                    if sessionDropRowID == project.id { sessionDropRowID = nil }
-                                }
-                            }
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .strokeBorder(AppTheme.accent, lineWidth: 1.5)
-                                    .opacity(sessionDropRowID == project.id ? 1 : 0)
-                                    // Invisible is not intangible — same reason
-                                    // as `DropInsertionLine`.
-                                    .allowsHitTesting(false)
-                            )
-                            .onTapGesture {
-                                Task { await model.selectProjectAndToggleWorktrees(id: project.id) }
-                            }
-                            .onTapGesture(count: 2) {
-                                Task {
-                                    guard await model.selectProject(id: project.id) else { return }
-                                    model.presentSessionChooser()
-                                }
-                            }
-                            .contextMenu {
-                                Button("Rename") {
-                                    editProjectName = project.name
-                                    editingProjectID = project.id
-                                }
-                                if AppModel.canCreateIssueWorktree(
-                                    path: project.path, transport: project.transport) {
-                                    Button("New Worktree...") {
-                                        Task {
-                                            // The sheet creates the worktree in
-                                            // the *selected* project, so it must
-                                            // not open if getting here was
-                                            // overtaken and another one landed.
-                                            guard await model.selectProject(id: project.id)
-                                            else { return }
-                                            model.showNewWorktreeSheet = true
-                                        }
-                                    }
-                                }
-                                if project.transport == "ssh" {
-                                    Button("Change Remote Folder...") {
-                                        if let info = SSHConnectionInfo(uri: project.path) {
-                                            changeFolderPath = info.remotePath ?? ""
-                                        } else {
-                                            changeFolderPath = ""
-                                        }
-                                        changeFolderProjectID = project.id
-                                    }
-                                }
-                                Divider()
-                                Button("Delete", role: .destructive) {
-                                    pendingDeleteProjectID = project.id
-                                    showDeleteConfirmation = true
-                                }
-                            }
-
-                            // Drawn while the project is expanded, selected or
-                            // not: switching projects must not fold someone's
-                            // tree. Empty unless it is.
-                            ForEach(group.worktrees) { row in
-                                let workspace = row.workspace
-                                WorktreeSidebarRow(
-                                    workspace: workspace,
-                                    isSelected: row.isSelected,
-                                    status: row.status,
-                                    hotkeyIndex: showHotkeys ? row.hotkeyIndex : nil
-                                )
-                                .contentShape(Rectangle())
-                                .help(row.hoverPath)
-                                .dropDestination(for: SessionDragPayload.self) { payloads, _ in
-                                    sessionDropRowID = nil
-                                    guard sessionDropEligible.contains(project.id),
-                                          let payload = payloads.first else { return false }
-                                    Task {
-                                        await model.dropSession(
-                                            sessionID: payload.sessionID,
-                                            onProjectID: project.id,
-                                            workspacePath: workspace.path
-                                        )
-                                    }
-                                    return true
-                                } isTargeted: { targeted in
-                                    if targeted {
-                                        if sessionDropEligible.contains(project.id) {
-                                            sessionDropRowID = workspace.path
-                                        }
-                                    } else if sessionDropRowID == workspace.path {
-                                        sessionDropRowID = nil
-                                    }
-                                }
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .strokeBorder(AppTheme.accent, lineWidth: 1.5)
-                                        .opacity(sessionDropRowID == workspace.path ? 1 : 0)
-                                        .padding(.leading, 12)
-                                        .allowsHitTesting(false)
-                                )
-                                .onTapGesture {
-                                    Task {
-                                        await model.selectWorktree(
-                                            projectID: project.id,
-                                            path: workspace.path
-                                        )
-                                    }
-                                }
-                                .onTapGesture(count: 2) {
-                                    Task {
-                                        guard await model.selectWorktree(
-                                            projectID: project.id,
-                                            path: workspace.path
-                                        ) else { return }
-                                        model.presentSessionChooser()
-                                    }
-                                }
-                                .contextMenu {
-                                    // Main is the repository itself — removing
-                                    // it is not a worktree operation.
-                                    if !workspace.isMainWorktree {
-                                        Button("Remove Worktree...", role: .destructive) {
-                                            pendingRemoveWorktree = WorktreeRemoval(
-                                                projectID: project.id,
-                                                path: workspace.path,
-                                                branch: workspace.branch
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            if group.foldedCount > 0 {
-                                FoldedWorktreesRow(count: group.foldedCount)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        model.revealFoldedWorktrees(projectID: project.id)
-                                    }
-                            }
+                    // Headers and project rows side by side at the top level:
+                    // `scrollTo` resolves a project id only while its row is a
+                    // top-level item — nested under a header, a digit would
+                    // land on a row it can no longer bring into view.
+                    ForEach(SidebarItem.items(sections)) { item in
+                        switch item {
+                        case .header(let group, let count):
+                            groupHeader(group, projectCount: count,
+                                        isFirst: group.id == sections.first?.group?.id)
+                        case .project(let group):
+                            projectRows(group, sessionDropEligible: sessionDropEligible)
                         }
                     }
 
@@ -421,6 +260,26 @@ struct SidebarView: View {
                 onCancel: { editingProjectID = nil }
             )
         }
+        .sheet(item: $groupNaming) { naming in
+            let isNew = if case .create = naming { true } else { false }
+            RenameProjectSheet(
+                name: $groupName,
+                title: isNew ? "New Group" : "Rename Group",
+                placeholder: "Group name",
+                actionLabel: isNew ? "Create" : "Rename",
+                onRename: {
+                    let name = groupName.trimmingCharacters(in: .whitespaces)
+                    if !name.isEmpty {
+                        switch naming {
+                        case .create(let projectID): model.createGroup(named: name, with: projectID)
+                        case .rename(let groupID): model.renameGroup(id: groupID, to: name)
+                        }
+                    }
+                    groupNaming = nil
+                },
+                onCancel: { groupNaming = nil }
+            )
+        }
         .sheet(isPresented: .init(
             get: { changeFolderProjectID != nil },
             set: { if !$0 { changeFolderProjectID = nil } }
@@ -477,6 +336,260 @@ struct SidebarView: View {
                 }
             )
         }
+    }
+
+    /// A project row and whatever worktree rows it has open under it.
+    @ViewBuilder
+    private func projectRows(_ group: SidebarProjectGroup,
+                             sessionDropEligible: Set<String>) -> some View {
+        let project = group.project
+        let groupID = model.projectGroups.groupID(of: project.id)
+        VStack(alignment: .leading, spacing: 3) {
+            ProjectSidebarRow(
+                project: project,
+                isSelected: group.isSelected,
+                status: group.status,
+                infoLine: group.infoLine,
+                hotkeyIndex: showHotkeys ? group.hotkeyIndex : nil,
+                sessionCount: group.sessionCount
+            )
+            .contentShape(Rectangle())
+            .help(group.hoverPath)
+            .overlay(alignment: .top) {
+                DropInsertionLine(isShowing: dropTarget == .before(project.id))
+            }
+            .draggable(project.id)
+            .dropDestination(for: ProjectRowDrop.self) { drops, _ in
+                dropTarget = nil
+                sessionDropRowID = nil
+                switch drops.first {
+                case .projectRow(let draggedID):
+                    model.moveProject(id: draggedID, to: .before(project.id))
+                    return true
+                case .tab(let sessionID):
+                    // No worktree named: the project row means main.
+                    guard sessionDropEligible.contains(project.id) else { return false }
+                    Task {
+                        await model.dropSession(
+                            sessionID: sessionID,
+                            onProjectID: project.id,
+                            workspacePath: nil
+                        )
+                    }
+                    return true
+                case nil:
+                    return false
+                }
+            } isTargeted: { targeted in
+                // Nothing else can clear these: the row that loses
+                // the pointer is the one that reports leaving.
+                if targeted {
+                    if dragIsTab {
+                        if sessionDropEligible.contains(project.id) {
+                            sessionDropRowID = project.id
+                        }
+                    } else {
+                        dropTarget = .before(project.id)
+                    }
+                } else {
+                    if dropTarget == .before(project.id) { dropTarget = nil }
+                    if sessionDropRowID == project.id { sessionDropRowID = nil }
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(AppTheme.accent, lineWidth: 1.5)
+                    .opacity(sessionDropRowID == project.id ? 1 : 0)
+                    // Invisible is not intangible — same reason
+                    // as `DropInsertionLine`.
+                    .allowsHitTesting(false)
+            )
+            .onTapGesture {
+                Task { await model.selectProjectAndToggleWorktrees(id: project.id) }
+            }
+            .onTapGesture(count: 2) {
+                Task {
+                    guard await model.selectProject(id: project.id) else { return }
+                    model.presentSessionChooser()
+                }
+            }
+            .contextMenu {
+                Button("Rename") {
+                    editProjectName = project.name
+                    editingProjectID = project.id
+                }
+                if AppModel.canCreateIssueWorktree(
+                    path: project.path, transport: project.transport) {
+                    Button("New Worktree...") {
+                        Task {
+                            // The sheet creates the worktree in
+                            // the *selected* project, so it must
+                            // not open if getting here was
+                            // overtaken and another one landed.
+                            guard await model.selectProject(id: project.id)
+                            else { return }
+                            model.showNewWorktreeSheet = true
+                        }
+                    }
+                }
+                if project.transport == "ssh" {
+                    Button("Change Remote Folder...") {
+                        if let info = SSHConnectionInfo(uri: project.path) {
+                            changeFolderPath = info.remotePath ?? ""
+                        } else {
+                            changeFolderPath = ""
+                        }
+                        changeFolderProjectID = project.id
+                    }
+                }
+                Menu("Move to Group") {
+                    ForEach(model.projectGroups.groups) { target in
+                        Button(target.name) {
+                            model.moveProject(id: project.id, to: .group(target.id))
+                        }
+                        .disabled(target.id == groupID)
+                    }
+                    if !model.projectGroups.groups.isEmpty { Divider() }
+                    Button("New Group...") {
+                        groupName = ""
+                        groupNaming = .create(projectID: project.id)
+                    }
+                    if groupID != nil {
+                        // The default group is the space under the list.
+                        Button("Remove from Group") { model.moveProject(id: project.id, to: .end) }
+                    }
+                }
+                Divider()
+                Button("Delete", role: .destructive) {
+                    pendingDeleteProjectID = project.id
+                    showDeleteConfirmation = true
+                }
+            }
+
+            // Drawn while the project is expanded, selected or
+            // not: switching projects must not fold someone's
+            // tree. Empty unless it is.
+            ForEach(group.worktrees) { row in
+                let workspace = row.workspace
+                WorktreeSidebarRow(
+                    workspace: workspace,
+                    isSelected: row.isSelected,
+                    status: row.status,
+                    hotkeyIndex: showHotkeys ? row.hotkeyIndex : nil
+                )
+                .contentShape(Rectangle())
+                .help(row.hoverPath)
+                .dropDestination(for: SessionDragPayload.self) { payloads, _ in
+                    sessionDropRowID = nil
+                    guard sessionDropEligible.contains(project.id),
+                          let payload = payloads.first else { return false }
+                    Task {
+                        await model.dropSession(
+                            sessionID: payload.sessionID,
+                            onProjectID: project.id,
+                            workspacePath: workspace.path
+                        )
+                    }
+                    return true
+                } isTargeted: { targeted in
+                    if targeted {
+                        if sessionDropEligible.contains(project.id) {
+                            sessionDropRowID = workspace.path
+                        }
+                    } else if sessionDropRowID == workspace.path {
+                        sessionDropRowID = nil
+                    }
+                }
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .strokeBorder(AppTheme.accent, lineWidth: 1.5)
+                        .opacity(sessionDropRowID == workspace.path ? 1 : 0)
+                        .padding(.leading, 12)
+                        .allowsHitTesting(false)
+                )
+                .onTapGesture {
+                    Task {
+                        await model.selectWorktree(
+                            projectID: project.id,
+                            path: workspace.path
+                        )
+                    }
+                }
+                .onTapGesture(count: 2) {
+                    Task {
+                        guard await model.selectWorktree(
+                            projectID: project.id,
+                            path: workspace.path
+                        ) else { return }
+                        model.presentSessionChooser()
+                    }
+                }
+                .contextMenu {
+                    // Main is the repository itself — removing
+                    // it is not a worktree operation.
+                    if !workspace.isMainWorktree {
+                        Button("Remove Worktree...", role: .destructive) {
+                            pendingRemoveWorktree = WorktreeRemoval(
+                                projectID: project.id,
+                                path: workspace.path,
+                                branch: workspace.branch
+                            )
+                        }
+                    }
+                }
+            }
+
+            if group.foldedCount > 0 {
+                FoldedWorktreesRow(count: group.foldedCount)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        model.revealFoldedWorktrees(projectID: project.id)
+                    }
+            }
+        }
+    }
+
+    /// A named group's header. Clicking folds it; a project dropped on it goes in.
+    private func groupHeader(_ group: ProjectGroups.Group, projectCount: Int,
+                             isFirst: Bool) -> some View {
+        let groups = model.projectGroups.groups
+        return GroupSidebarHeader(name: group.name, isCollapsed: group.isCollapsed,
+                                  projectCount: projectCount)
+            .contentShape(Rectangle())
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(AppTheme.accent, lineWidth: 1.5)
+                    .opacity(dropTarget == .group(group.id) ? 1 : 0)
+                    .allowsHitTesting(false)
+            )
+            .dropDestination(for: ProjectRowDrop.self) { drops, _ in
+                dropTarget = nil
+                guard case .projectRow(let draggedID) = drops.first else { return false }
+                model.moveProject(id: draggedID, to: .group(group.id))
+                return true
+            } isTargeted: { targeted in
+                if targeted, !dragIsTab {
+                    dropTarget = .group(group.id)
+                } else if dropTarget == .group(group.id) {
+                    dropTarget = nil
+                }
+            }
+            .onTapGesture { model.toggleGroupCollapsed(id: group.id) }
+            .contextMenu {
+                Button("Rename Group...") {
+                    groupName = group.name
+                    groupNaming = .rename(groupID: group.id)
+                }
+                Button("Move Up") { model.moveGroup(id: group.id, by: -1) }
+                    .disabled(groups.first?.id == group.id)
+                Button("Move Down") { model.moveGroup(id: group.id, by: 1) }
+                    .disabled(groups.last?.id == group.id)
+                Divider()
+                // Not destructive: its projects return to the default group.
+                Button("Delete Group") { model.deleteGroup(id: group.id) }
+            }
+            // Space above, outside the target: a group reads as starting here.
+            .padding(.top, isFirst ? 0 : 6)
     }
 }
 
@@ -560,6 +673,62 @@ struct ProjectSidebarRow: View {
                     .padding(.trailing, 6)
             }
         }
+    }
+}
+
+/// One top-level item of the sidebar list: a named group's header, or a
+/// project row. The default group contributes rows and no header.
+private enum SidebarItem: Identifiable {
+    case header(ProjectGroups.Group, projectCount: Int)
+    case project(SidebarProjectGroup)
+
+    /// A project's id bare — it is what `scrollTo` is asked for.
+    var id: String {
+        switch self {
+        case .header(let group, _): "group:" + group.id
+        case .project(let row): row.id
+        }
+    }
+
+    static func items(_ sections: [SidebarSection]) -> [SidebarItem] {
+        sections.flatMap { section in
+            (section.group.map { [SidebarItem.header($0, projectCount: section.projectCount)] } ?? [])
+                + section.projects.map(SidebarItem.project)
+        }
+    }
+}
+
+/// A named group's header: its name, and how many projects it hides while collapsed.
+struct GroupSidebarHeader: View {
+    let name: String
+    let isCollapsed: Bool
+    let projectCount: Int
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 8, weight: .semibold))
+                .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                .foregroundStyle(.white.opacity(0.4))
+                .frame(width: 7)
+
+            Text(name)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.55))
+                .lineLimit(1)
+                .accessibilityIdentifier("groupName")
+
+            Spacer()
+
+            if isCollapsed {
+                Text("\(projectCount)")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .fixedSize()
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
     }
 }
 
@@ -685,15 +854,18 @@ struct WorktreeSidebarRow: View {
 
 private struct RenameProjectSheet: View {
     @Binding var name: String
+    var title = "Rename Project"
+    var placeholder = "Project name"
+    var actionLabel = "Rename"
     let onRename: () -> Void
     let onCancel: () -> Void
     @FocusState private var isFocused: Bool
 
     var body: some View {
         VStack(spacing: 16) {
-            Text("Rename Project")
+            Text(title)
                 .font(.headline)
-            TextField("Project name", text: $name)
+            TextField(placeholder, text: $name)
                 .textFieldStyle(.roundedBorder)
                 .focused($isFocused)
                 .onSubmit(onRename)
@@ -701,7 +873,7 @@ private struct RenameProjectSheet: View {
                 Button("Cancel", action: onCancel)
                     .keyboardShortcut(.cancelAction)
                 Spacer()
-                Button("Rename", action: onRename)
+                Button(actionLabel, action: onRename)
                     .keyboardShortcut(.defaultAction)
                     .disabled(name.isEmpty)
             }

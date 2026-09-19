@@ -43,6 +43,18 @@ struct SidebarSnapshot: Equatable {
     var expandedProjectIDs: Set<String> = []
     var projectsShowingEveryWorktree: Set<String> = []
     var projectSelectedWorkspaces: [String: String] = [:]
+    var projectGroups = ProjectGroups()
+}
+
+/// One group of projects as the sidebar draws it: a header, then its rows.
+struct SidebarSection: Identifiable, Equatable {
+    /// nil for the default group, which draws no header.
+    let group: ProjectGroups.Group?
+    let projectCount: Int
+    /// Empty while the group is collapsed.
+    let projects: [SidebarProjectGroup]
+
+    var id: String { "group:" + (group?.id ?? "") }
 }
 
 /// One project's rows: the project itself, whatever worktrees are drawn under
@@ -97,14 +109,61 @@ enum SidebarPresenter {
     /// in particular used to rebuild the entire numbering per row, which made
     /// drawing N projects cost N² groupings; they are now just an index into a
     /// list this pass has already built.
-    static func groups(_ snapshot: SidebarSnapshot) -> [SidebarProjectGroup] {
-        let grouped = snapshot.projects.map { project in
-            (project: project, workspaces: worktreeRows(of: project, in: snapshot))
-        }
+    static func sections(_ snapshot: SidebarSnapshot) -> [SidebarSection] {
+        let sectioned = sectionedProjects(snapshot)
+        let grouped = onScreen(sectioned, in: snapshot)
         let places = numberedPlaces(grouped)
         let badges = badges(places, grouped: grouped, in: snapshot)
+        let rows = Dictionary(uniqueKeysWithValues: rows(grouped, badges: badges, in: snapshot)
+            .map { ($0.id, $0) })
 
-        return grouped.map { project, all in
+        return sectioned.map { group, projects in
+            SidebarSection(
+                group: group,
+                projectCount: projects.count,
+                projects: projects.compactMap { rows[$0.id] }
+            )
+        }
+    }
+
+    /// The project rows alone, in sidebar order — collapsed groups' left out.
+    static func groups(_ snapshot: SidebarSnapshot) -> [SidebarProjectGroup] {
+        sections(snapshot).flatMap(\.projects)
+    }
+
+    /// Projects in the order the sidebar draws them: each named group in turn,
+    /// then the default group. Inside a group, the one drag order. The default
+    /// group is left out when nothing is in it — it has no header to show.
+    private static func sectionedProjects(
+        _ snapshot: SidebarSnapshot
+    ) -> [(group: ProjectGroups.Group?, projects: [ProjectSummaryViewData])] {
+        let groups = snapshot.projectGroups
+        let named = groups.groups.map { group in
+            (group: Optional(group),
+             projects: snapshot.projects.filter { groups.groupID(of: $0.id) == group.id })
+        }
+        let ungrouped = snapshot.projects.filter { groups.groupID(of: $0.id) == nil }
+        return ungrouped.isEmpty ? named : named + [(group: nil, projects: ungrouped)]
+    }
+
+    /// The projects a collapsed group is not hiding, each with its worktrees.
+    private static func onScreen(
+        _ sectioned: [(group: ProjectGroups.Group?, projects: [ProjectSummaryViewData])],
+        in snapshot: SidebarSnapshot
+    ) -> [(project: ProjectSummaryViewData, workspaces: [WorkspaceViewData])] {
+        sectioned.filter { !($0.group?.isCollapsed ?? false) }
+            .flatMap(\.projects)
+            .map { project in
+                (project: project, workspaces: worktreeRows(of: project, in: snapshot))
+            }
+    }
+
+    private static func rows(
+        _ grouped: [(project: ProjectSummaryViewData, workspaces: [WorkspaceViewData])],
+        badges: NumberedBadges,
+        in snapshot: SidebarSnapshot
+    ) -> [SidebarProjectGroup] {
+        grouped.map { project, all in
             let folded = fold(all, of: project, in: snapshot)
             let showsRows = snapshot.expandedProjectIDs.contains(project.id) && !all.isEmpty
             return SidebarProjectGroup(
@@ -378,10 +437,11 @@ enum SidebarPresenter {
     /// Blind to whether a tree is expanded: folding must not shuffle the digits
     /// out from under the user's fingers, and neither may walking between
     /// worktrees. Only the badge follows what is on screen.
+    ///
+    /// A collapsed *group* is the exception, by choice: its projects are off
+    /// screen, and the nine digits go further spent on what is on it.
     static func numberedPlaces(_ snapshot: SidebarSnapshot) -> [NumberedPlace] {
-        numberedPlaces(snapshot.projects.map { project in
-            (project: project, workspaces: worktreeRows(of: project, in: snapshot))
-        })
+        numberedPlaces(onScreen(sectionedProjects(snapshot), in: snapshot))
     }
 
     private static func numberedPlaces(

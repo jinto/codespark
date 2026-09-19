@@ -10,4 +10,5 @@ enum StorageKeys {
     static let migratedToProjectNaming = "migratedToProjectNaming"
     static let isSidebarVisible = "isSidebarVisible"
     static let projectOrder = "projectOrder"
+    static let projectGroups = "projectGroups"
 }

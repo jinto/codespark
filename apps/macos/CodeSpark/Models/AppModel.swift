@@ -41,6 +41,12 @@ final class AppModel: ObservableObject {
     @Published var nonGitProjectPaths: Set<String> = []
     @Published var workspaces: [WorkspaceViewData] = []
     @Published private(set) var expandedProjectIDs: Set<String> = AppModel.savedExpandedProjectIDs()
+    @Published private(set) var projectGroups = ProjectGroups() {
+        didSet {
+            guard projectGroups != oldValue else { return }
+            defaults.set(try? JSONEncoder().encode(projectGroups), forKey: StorageKeys.projectGroups)
+        }
+    }
     /// Set by the `Cmd` digits only. A click aims at a row already on screen;
     /// a digit is pressed blind, and the row it lands in may be scrolled away.
     @Published private(set) var sidebarScrollRequest: SidebarPresenter.ScrollRequest?
@@ -170,12 +176,22 @@ final class AppModel: ObservableObject {
     let gitBranchService = GitBranchService()
     let gitWorktreeService = GitWorktreeService()
 
+    /// Where the project order and groups are kept. Injected because the test
+    /// host shares `.standard` with the real app.
+    private let defaults: UserDefaults
+
     init(
         core: ProjectCoreClientProtocol,
-        terminalFactory: @escaping (SessionViewData) -> any TerminalHostProtocol = { _ in NoOpTerminalHost() }
+        terminalFactory: @escaping (SessionViewData) -> any TerminalHostProtocol = { _ in NoOpTerminalHost() },
+        defaults: UserDefaults = .standard
     ) {
         self.core = core
         self.terminalFactory = terminalFactory
+        self.defaults = defaults
+        if let data = defaults.data(forKey: StorageKeys.projectGroups),
+           let saved = try? JSONDecoder().decode(ProjectGroups.self, from: data) {
+            projectGroups = saved
+        }
         startMonitorTimers()
     }
 
@@ -497,6 +513,7 @@ final class AppModel: ObservableObject {
     func deleteProject(id: String) async {
         let nextID = teardownProject(id: id)
         removeProjectFromSavedOrder(id: id)
+        projectGroups.file(id, in: nil)
 
         var deleteError: String?
         do {
@@ -546,6 +563,9 @@ final class AppModel: ObservableObject {
         projects
     }
 
+    /// A drop says where, and where says which group: above a row is that row's
+    /// group, a header is its group, and the space under the list belongs to
+    /// the default group, which draws last.
     func moveProject(id: String, to target: ProjectDropTarget) {
         guard let sourceIndex = projects.firstIndex(where: { $0.id == id }) else { return }
 
@@ -556,13 +576,51 @@ final class AppModel: ObservableObject {
                   let targetIndex = projects.firstIndex(where: { $0.id == targetID }) else { return }
             // The row it lands above shifts up once the dragged one is lifted out.
             insertionIndex = targetIndex > sourceIndex ? targetIndex - 1 : targetIndex
+            projectGroups.file(id, in: projectGroups.groupID(of: targetID))
         case .end:
             insertionIndex = projects.count - 1
+            projectGroups.file(id, in: nil)
+        case .group(let groupID):
+            // Last in the one order is last in its group.
+            insertionIndex = projects.count - 1
+            projectGroups.file(id, in: groupID)
         }
 
         let project = projects.remove(at: sourceIndex)
         projects.insert(project, at: insertionIndex)
         persistProjectOrder()
+    }
+
+    // MARK: - Project groups
+
+    @discardableResult
+    func createGroup(named name: String, with projectID: String) -> String {
+        let id = UUID().uuidString
+        projectGroups.groups.append(ProjectGroups.Group(id: id, name: name))
+        moveProject(id: projectID, to: .group(id))
+        return id
+    }
+
+    func renameGroup(id: String, to name: String) {
+        guard let index = projectGroups.groups.firstIndex(where: { $0.id == id }) else { return }
+        projectGroups.groups[index].name = name
+    }
+
+    func deleteGroup(id: String) {
+        projectGroups.delete(id)
+    }
+
+    func toggleGroupCollapsed(id: String) {
+        guard let index = projectGroups.groups.firstIndex(where: { $0.id == id }) else { return }
+        projectGroups.groups[index].isCollapsed.toggle()
+    }
+
+    /// Up (-1) or down (+1) among the named groups; the default group stays last.
+    func moveGroup(id: String, by offset: Int) {
+        guard let index = projectGroups.groups.firstIndex(where: { $0.id == id }) else { return }
+        let destination = index + offset
+        guard projectGroups.groups.indices.contains(destination) else { return }
+        projectGroups.groups.swapAt(index, destination)
     }
 
     private func applySavedProjectOrder(to loadedProjects: [ProjectSummaryViewData]) -> [ProjectSummaryViewData] {
@@ -577,7 +635,7 @@ final class AppModel: ObservableObject {
     }
 
     private func savedProjectOrder() -> [String] {
-        UserDefaults.standard.string(forKey: StorageKeys.projectOrder)?
+        defaults.string(forKey: StorageKeys.projectOrder)?
             .split(separator: ",")
             .map(String.init) ?? []
     }
@@ -587,12 +645,12 @@ final class AppModel: ObservableObject {
         let savedIDs = savedProjectOrder()
         let currentIDSet = Set(currentIDs)
         let preservedIDs = savedIDs.filter { !currentIDSet.contains($0) }
-        UserDefaults.standard.set((currentIDs + preservedIDs).joined(separator: ","), forKey: StorageKeys.projectOrder)
+        defaults.set((currentIDs + preservedIDs).joined(separator: ","), forKey: StorageKeys.projectOrder)
     }
 
     private func removeProjectFromSavedOrder(id: String) {
         let remaining = savedProjectOrder().filter { $0 != id }
-        UserDefaults.standard.set(remaining.joined(separator: ","), forKey: StorageKeys.projectOrder)
+        defaults.set(remaining.joined(separator: ","), forKey: StorageKeys.projectOrder)
     }
 
     @discardableResult

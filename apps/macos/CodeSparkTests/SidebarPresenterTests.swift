@@ -302,7 +302,98 @@ final class SidebarPresenterTests: XCTestCase {
     /// visible in a rendered view or a value read back from the model, which is
     /// why the gate reads the source — the same kind as the ban on inline
     /// `keyboardShortcut("…")` and on labels that reweight themselves.
-    func test_no_view_asks_the_model_about_one_row_at_a_time() throws {
+    // MARK: - Groups
+
+    private func folder(_ id: String, collapsed: Bool = false) -> ProjectGroups.Group {
+        ProjectGroups.Group(id: id, name: id, isCollapsed: collapsed)
+    }
+
+    /// Every project starts in the default group, and the default group has no
+    /// header — a sidebar nobody has filed anything in looks the way it always did.
+    func test_with_no_groups_the_sidebar_draws_no_header() {
+        let snapshot = SidebarSnapshot(projects: [project("a", path: "/tmp/a"),
+                                                  project("b", path: "/tmp/b")])
+
+        let sections = SidebarPresenter.sections(snapshot)
+
+        XCTAssertEqual(sections.count, 1)
+        XCTAssertNil(sections[0].group, "the default group wears no header")
+        XCTAssertEqual(sections[0].projects.map(\.id), ["a", "b"])
+    }
+
+    /// Named groups first, in their own order; whatever is filed nowhere trails
+    /// them, headerless. Inside a group the drag order still holds.
+    func test_named_groups_come_first_and_the_default_group_trails_them() {
+        var groups = ProjectGroups(groups: [folder("work"), folder("side")])
+        groups.membership = ["d": "work", "b": "work", "c": "side"]
+        let snapshot = SidebarSnapshot(
+            projects: ["a", "b", "c", "d"].map { project($0, path: "/tmp/\($0)") },
+            projectGroups: groups
+        )
+
+        let sections = SidebarPresenter.sections(snapshot)
+
+        XCTAssertEqual(sections.map(\.group?.id), ["work", "side", nil])
+        XCTAssertEqual(sections.map { $0.projects.map(\.id) }, [["b", "d"], ["c"], ["a"]])
+    }
+
+    /// An empty group still has its header — it is what a project is dropped on
+    /// to go in.
+    func test_an_empty_group_still_draws_its_header() {
+        let snapshot = SidebarSnapshot(
+            projects: [project("a", path: "/tmp/a")],
+            projectGroups: ProjectGroups(groups: [folder("empty")])
+        )
+
+        let sections = SidebarPresenter.sections(snapshot)
+
+        XCTAssertEqual(sections.map(\.group?.id), ["empty", nil])
+        XCTAssertEqual(sections[0].projectCount, 0)
+    }
+
+    func test_a_collapsed_group_hides_its_projects_and_says_how_many() {
+        var groups = ProjectGroups(groups: [folder("archive", collapsed: true)])
+        groups.membership = ["a": "archive", "b": "archive"]
+        let snapshot = SidebarSnapshot(
+            projects: ["a", "b", "c"].map { project($0, path: "/tmp/\($0)") },
+            projectGroups: groups
+        )
+
+        let sections = SidebarPresenter.sections(snapshot)
+
+        XCTAssertEqual(sections[0].projects, [], "collapsed draws the header alone")
+        XCTAssertEqual(sections[0].projectCount, 2)
+        XCTAssertEqual(SidebarPresenter.groups(snapshot).map(\.id), ["c"])
+    }
+
+    /// The digits follow the sidebar: grouped projects first. A collapsed group's
+    /// projects are off screen, so they hand their digits to what is on it —
+    /// chosen over keeping numbers steady (unlike the worktree fold, where
+    /// folding never renumbers).
+    func test_digits_follow_group_order_and_skip_collapsed_groups() {
+        var groups = ProjectGroups(groups: [folder("work"), folder("archive", collapsed: true)])
+        groups.membership = ["c": "work", "a": "archive"]
+        let snapshot = SidebarSnapshot(
+            projects: ["a", "b", "c"].map { project($0, path: "/tmp/\($0)") },
+            projectGroups: groups
+        )
+
+        XCTAssertEqual(SidebarPresenter.numberedPlaces(snapshot), [.project("c"), .project("b")])
+        XCTAssertEqual(SidebarPresenter.groups(snapshot).map(\.hotkeyIndex), [1, 2])
+    }
+
+    /// A membership left pointing at a group that no longer exists is no group
+    /// at all — the project lands back in the default group, not nowhere.
+    func test_a_project_filed_in_a_missing_group_is_in_the_default_group() {
+        var groups = ProjectGroups()
+        groups.membership = ["a": "gone"]
+        let snapshot = SidebarSnapshot(projects: [project("a", path: "/tmp/a")],
+                                       projectGroups: groups)
+
+        XCTAssertEqual(SidebarPresenter.sections(snapshot).map { $0.projects.map(\.id) }, [["a"]])
+    }
+
+        func test_no_view_asks_the_model_about_one_row_at_a_time() throws {
         let perRow = [
             "projectStatus(for:", "workspaceStatus(for:", "projectInfoLine(for:",
             "worktreeCount(for:", "showsWorktreeRows(for:", "sidebarWorktreeRows(for:",
