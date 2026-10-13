@@ -2076,6 +2076,91 @@ final class WorkspaceSelectionTests: XCTestCase {
                        "and land somewhere the tabs are actually visible")
     }
 
+    /// A worktree deleted from inside its own tab (`git worktree remove .`)
+    /// regroups that tab under main. Landing on main used to pick main's
+    /// remembered tab, hiding the one being typed in — the keyboard went with it.
+    @MainActor
+    func test_a_tab_whose_worktree_is_deleted_stays_the_active_tab() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let mainTab = model.liveSessions.first { $0.workspacePath == Self.mainWorktree }!
+        let featureTab = model.liveSessions.first { $0.workspacePath == Self.featureWorktree }!
+        model.activeSessionID = mainTab.id
+        model.activeSessionID = featureTab.id
+
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true)
+        ], for: Self.mainWorktree)
+        model.recomputeWorkspaces()
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree)
+        XCTAssertEqual(model.activeSessionID, featureTab.id, "the tab being typed in stays in front")
+        XCTAssertEqual(model.worktreeRemovedNotice,
+                       .init(projectID: "p1", branch: "feature", movedTabs: 1, into: "main"))
+    }
+
+    /// A project added from a linked worktree has a home that is not git's
+    /// main — but orphans land in main. The selection follows the tab there
+    /// rather than going home, where another tab would take the front.
+    @MainActor
+    func test_the_selection_follows_the_tab_into_the_workspace_that_took_it() async {
+        let home = "/tmp/proj-home"
+        let core = MockProjectCoreClient(
+            summaries: [ProjectSummaryViewData(id: "p1", name: "Proj", path: home, transport: "local",
+                                               liveSessions: 0, recentlyClosedSessions: 0,
+                                               hasInterruptedSessions: false, liveSessionDetails: [])],
+            details: [ProjectDetailViewData(id: "p1", name: "Proj", path: home, transport: "local", liveSessions: [])]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.featureWorktree, branch: "feature", isMainWorktree: false),
+            GitWorktree(path: home, branch: "home", isMainWorktree: false)
+        ], for: home)
+        model.recomputeWorkspaces()
+        await model.newSession(inWorkspacePath: home)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let homeTab = model.liveSessions.first { $0.workspacePath == home }!
+        let featureTab = model.liveSessions.first { $0.workspacePath == Self.featureWorktree }!
+        model.activeSessionID = homeTab.id
+        model.activeSessionID = featureTab.id
+
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: home, branch: "home", isMainWorktree: false)
+        ], for: home)
+        model.recomputeWorkspaces()
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree)
+        XCTAssertEqual(model.activeSessionID, featureTab.id)
+        XCTAssertEqual(model.worktreeRemovedNotice?.into, "main")
+    }
+
+    /// The app's own Remove closes the tabs first. A tab on its way out is not
+    /// one to keep in front, nor one that "moved" — only the survivor is.
+    @MainActor
+    func test_a_closing_tab_is_neither_kept_nor_counted() async {
+        let (model, _) = await modelWithTwoWorktrees()
+        await model.newSession(inWorkspacePath: Self.mainWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        await model.newSession(inWorkspacePath: Self.featureWorktree)
+        let mainTab = model.liveSessions.first { $0.workspacePath == Self.mainWorktree }!
+        let featureTabs = model.liveSessions.filter { $0.workspacePath == Self.featureWorktree }
+        model.activeSessionID = mainTab.id
+        model.activeSessionID = featureTabs[1].id
+        model.closeSession(id: featureTabs[0].id)
+
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true)
+        ], for: Self.mainWorktree)
+        model.recomputeWorkspaces()
+
+        XCTAssertEqual(model.activeSessionID, featureTabs[1].id)
+        XCTAssertEqual(model.worktreeRemovedNotice?.movedTabs, 1)
+    }
+
     // MARK: - A tab belongs to its worktree, wherever it wandered
 
     /// Removal closed tabs by where they were standing, not by where they

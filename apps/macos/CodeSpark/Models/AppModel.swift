@@ -121,6 +121,24 @@ final class AppModel: ObservableObject {
     }
     @Published private(set) var restoreProgress: RestoreProgress?
 
+    /// The worktree you stood on was deleted behind the app's back, and its tabs
+    /// were taken in elsewhere. Said once, until dismissed.
+    struct WorktreeRemovedNotice: Equatable {
+        var projectID: String
+        var branch: String
+        var movedTabs: Int
+        var into: String
+    }
+    @Published private(set) var worktreeRemovedNotice: WorktreeRemovedNotice?
+
+    /// The notice belongs to the project it happened in, like a restore's count.
+    var worktreeRemovedNoticeOnScreen: WorktreeRemovedNotice? {
+        guard let worktreeRemovedNotice, worktreeRemovedNotice.projectID == selection.id else { return nil }
+        return worktreeRemovedNotice
+    }
+
+    func dismissWorktreeRemovedNotice() { worktreeRemovedNotice = nil }
+
     /// The restore the project on screen is waiting for, if it is waiting for one.
     private var progressForSelectedProject: RestoreProgress? {
         guard let restoreProgress, restoreProgress.projectID == selection.id else { return nil }
@@ -362,6 +380,8 @@ final class AppModel: ObservableObject {
     private func apply(detail: ProjectDetailViewData, landingOn requested: String? = nil) {
         selection = .loaded(detail)
         liveSessions = detail.liveSessions
+        // Said once, where it happened: coming back later is not news.
+        if worktreeRemovedNotice?.projectID != detail.id { worktreeRemovedNotice = nil }
         // The selection still names the *previous* project's worktree. Let it go
         // before recomputing, or the missing-worktree guard below reads it as a
         // worktree that vanished and overwrites what this project remembers.
@@ -392,6 +412,7 @@ final class AppModel: ObservableObject {
             SessionSummary(id: s.id, title: s.title, targetLabel: s.targetLabel, lastCwd: s.lastCwd, workspacePath: s.workspacePath)
         }
         let worktrees = gitWorktreeService.worktrees(for: project.path)
+        let previous = workspaces
         workspaces = WorkspaceViewData.groupSessions(sessions, into: worktrees, projectPath: project.path)
 
         // A worktree can go out from under the selection — removed here, or
@@ -405,7 +426,24 @@ final class AppModel: ObservableObject {
         if worktrees?.isEmpty == false, let active = activeWorkspacePath.map(WorkspaceAddress.init),
            !workspaces.contains(where: { WorkspaceAddress($0.path) == active }) {
             let home = WorkspaceAddress(project.path)
-            activeWorkspacePath = workspaces.first { WorkspaceAddress($0.path) == home }?.path
+            // Deleted from inside its own tab (`git worktree remove .`), the
+            // worktree's tabs are regrouped elsewhere. Land where the tab being
+            // typed in went, and keep it in front: landing on that workspace's
+            // remembered tab instead hides this one and the keyboard with it.
+            var kept: WorkspaceViewData?
+            if let id = activeSessionID, !closingSessionIDs.contains(id),
+               let holder = workspaces.first(where: { $0.sessions.contains { $0.id == id } }) {
+                kept = holder
+                workspaceSelectedSessions[holder.path] = id
+                if let gone = previous.first(where: { WorkspaceAddress($0.path) == active }) {
+                    worktreeRemovedNotice = WorktreeRemovedNotice(
+                        projectID: project.id, branch: gone.branch,
+                        movedTabs: gone.sessions.filter { !closingSessionIDs.contains($0.id) }.count,
+                        into: holder.branch)
+                }
+            }
+            activeWorkspacePath = kept?.path
+                ?? workspaces.first { WorkspaceAddress($0.path) == home }?.path
                 ?? workspaces[0].path
         }
     }
@@ -1454,6 +1492,7 @@ final class AppModel: ObservableObject {
         liveSessions = []
         workspaces = []
         pendingWorkspaceRecoveryProjectID = nil
+        worktreeRemovedNotice = nil
     }
 
 }

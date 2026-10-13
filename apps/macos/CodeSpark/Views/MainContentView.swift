@@ -30,6 +30,11 @@ struct MainContentView: View {
                     Divider().background(AppTheme.divider)
                 }
 
+                if let notice = model.worktreeRemovedNoticeOnScreen {
+                    worktreeRemovedBanner(notice)
+                    Divider().background(AppTheme.divider)
+                }
+
                 HStack(spacing: 0) {
                     VStack(spacing: 0) {
                         switch model.mainAreaContent {
@@ -250,6 +255,29 @@ struct MainContentView: View {
                 .accessibilityIdentifier("restoreBannerCount")
             progressBar(progress.fraction, width: 120, height: 4)
             Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(AppTheme.surfaceBackground)
+    }
+
+    /// Said where the eye already is: the tab is in front, but in a new place.
+    private func worktreeRemovedBanner(_ notice: AppModel.WorktreeRemovedNotice) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.turn.down.right")
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+            Text("Worktree \u{2018}\(notice.branch)\u{2019} was removed \u{2014} \(notice.movedTabs == 1 ? "its tab" : "\(notice.movedTabs) tabs") moved to \(notice.into)")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("worktreeRemovedBanner")
+            Spacer(minLength: 0)
+            Button { model.dismissWorktreeRemovedNotice() } label: {
+                Image(systemName: "xmark").font(.system(size: 9, weight: .medium))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("Dismiss")
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
