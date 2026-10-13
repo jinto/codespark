@@ -32,6 +32,8 @@ final class AppModel: ObservableObject {
     /// All sessions across all projects — keeps Ghostty surfaces alive during project switches
     @Published private(set) var allSessions: [SessionViewData] = []
     @Published var loadErrorMessage: String?
+    /// The existing project a create was refused for — the folder is already open.
+    @Published var duplicateProjectName: String?
     @Published var sessionStates: [String: TerminalState] = [:]
     var debounceTasks: [String: Task<Void, Never>] = [:]
     @Published var pendingCloseSessionID: String?
@@ -425,6 +427,7 @@ final class AppModel: ObservableObject {
     }
 
     func createProject(name: String, path: String = "", transport: String = "local") async {
+        if refusesDuplicate(path) { return }
         do {
             let newID = try await core.createProject(name: name, path: path, transport: transport)
             let newProject = ProjectSummaryViewData(
@@ -460,7 +463,20 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// One folder, one project: a second row would split its tabs between two
+    /// projects. Compared as addresses, so `/tmp/x` and `/private/tmp/x` agree.
+    /// Remote spellings are compared as written — `~/x` and `/home/me/x` are
+    /// the same folder only the remote host can tell.
+    private func refusesDuplicate(_ path: String, excluding id: String? = nil) -> Bool {
+        guard !path.isEmpty, let existing = projects.first(where: {
+            $0.id != id && !$0.path.isEmpty && WorkspaceAddress($0.path) == WorkspaceAddress(path)
+        }) else { return false }
+        duplicateProjectName = existing.name
+        return true
+    }
+
     func updateProjectPath(id: String, newPath: String) async {
+        if refusesDuplicate(newPath, excluding: id) { return }
         if let index = projects.firstIndex(where: { $0.id == id }) {
             projects[index].path = newPath
         }

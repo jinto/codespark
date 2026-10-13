@@ -203,6 +203,14 @@ struct SSHConnectionInfo: Equatable, Hashable {
         if let user { return "\(user)@\(host)" }
         return host
     }
+
+    /// A new project's name: the folder it opens, like a local project's —
+    /// the host alone names every project on that box the same. A connection
+    /// with no folder (or only the home directory) has nothing else to go by.
+    var projectName: String {
+        let folder = remotePath.map { ($0 as NSString).lastPathComponent } ?? ""
+        return ["", "/", "~"].contains(folder) ? displayLabel : folder
+    }
 }
 
 /// Teaches a remote shell to report its working directory the way a local one

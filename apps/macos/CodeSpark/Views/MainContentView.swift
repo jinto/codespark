@@ -84,6 +84,13 @@ struct MainContentView: View {
         .onChange(of: model.pendingCloseSessionID) { _, newValue in
             showCloseSessionAlert = newValue != nil
         }
+        .alert("Project already exists",
+               isPresented: Binding(get: { model.duplicateProjectName != nil },
+                                    set: { if !$0 { model.duplicateProjectName = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("This location is already the project \u{201C}\(model.duplicateProjectName ?? "")\u{201D}.")
+        }
         .alert("Close session?", isPresented: $showCloseSessionAlert) {
             Button("Close", role: .destructive) {
                 if let id = model.pendingCloseSessionID {

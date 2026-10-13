@@ -328,7 +328,7 @@ struct SidebarView: View {
                     model.showNewProjectSheet = false
                     Task {
                         await model.createProject(
-                            name: info.displayLabel,
+                            name: info.projectName,
                             path: info.uri,
                             transport: "ssh"
                         )

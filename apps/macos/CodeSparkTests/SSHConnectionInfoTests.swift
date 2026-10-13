@@ -611,6 +611,14 @@ final class SSHConnectionInfoTests: XCTestCase {
                            "\(file.lastPathComponent) prints the whole remote command — use previewCommand")
         }
     }
+
+    func test_a_remote_project_is_named_after_its_folder() {
+        XCTAssertEqual(SSHConnectionInfo(host: "box", user: "me", remotePath: "/srv/app/").projectName, "app")
+        XCTAssertEqual(SSHConnectionInfo(host: "box", remotePath: "~/work/api").projectName, "api")
+        // No folder to name it after: the host is all there is.
+        XCTAssertEqual(SSHConnectionInfo(host: "box", user: "me").projectName, "me@box")
+        XCTAssertEqual(SSHConnectionInfo(host: "box", remotePath: "~").projectName, "box")
+    }
 }
 
 /// A remote shell gets `TERM=xterm-ghostty` (ssh propagates our local TERM over

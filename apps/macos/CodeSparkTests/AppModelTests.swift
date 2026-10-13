@@ -190,6 +190,33 @@ final class AppModelTests: XCTestCase {
     }
 
     @MainActor
+    func test_a_folder_that_is_already_a_project_is_not_added_twice() async {
+        let client = MockProjectCoreClient(summaries: [
+            ProjectSummaryViewData(id: "ws-1", name: "proj", path: "/tmp/proj", transport: "local", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: []),
+            ProjectSummaryViewData(id: "ws-2", name: "app", path: "ssh://box/srv/app", transport: "ssh", liveSessions: 0, recentlyClosedSessions: 0, hasInterruptedSessions: false, liveSessionDetails: [])
+        ])
+        let model = AppModel(core: client)
+        await model.load()
+
+        // `/private/tmp/proj` is `/tmp/proj` spelled the way the file system resolves it.
+        await model.createProject(name: "proj", path: "/private/tmp/proj")
+        XCTAssertEqual(model.duplicateProjectName, "proj")
+        await model.createProject(name: "app", path: "ssh://box/srv/app/", transport: "ssh")
+        XCTAssertEqual(model.duplicateProjectName, "app")
+        XCTAssertEqual(model.projects.map(\.id), ["ws-1", "ws-2"])
+
+        // Change Folder is the other way two projects end up on one folder.
+        model.duplicateProjectName = nil
+        await model.updateProjectPath(id: "ws-2", newPath: "/tmp/proj")
+        XCTAssertEqual(model.projects[1].path, "ssh://box/srv/app")
+        XCTAssertEqual(model.duplicateProjectName, "proj")
+        // Re-saving a project's own folder is not a duplicate of itself.
+        model.duplicateProjectName = nil
+        await model.updateProjectPath(id: "ws-1", newPath: "/tmp/proj/")
+        XCTAssertNil(model.duplicateProjectName)
+    }
+
+    @MainActor
     func test_create_project_opens_initial_terminal() async {
         let client = MockProjectCoreClient(
             summaries: [],
