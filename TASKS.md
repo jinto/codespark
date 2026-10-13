@@ -151,3 +151,17 @@ Plan: `.claude/plans/terminal-state-detection.md`
 - [ ] **에이전트 타입 감지** — 터미널에서 실행 중인 AI CLI 종류 자동 감지 (Claude Code, Codex, Gemini CLI 등)
 - [ ] **에이전트별 상태 표시** — 각 에이전트의 실행 상태를 사이드바에 아이콘으로 구분
 - [ ] **에이전트 대시보드** — 모든 에이전트의 상태를 한 화면에서 모니터링
+
+## M18: 사이드바 정리 + 입력 대기 감지 (2026-10-13 요청)
+
+- [ ] **그룹: 회사일·취미·연구 등으로 구분** — 그룹 기능 자체는 `93a7b86`에 이미 있다
+      (CLAUDE.md "Project Groups"). 남은 일: 실제 사용에서 모자란 점 확인(그룹 만들기 동선, 이름 바꾸기 등).
+- [ ] **아카이브(이름 미정) — 프로젝트 우클릭 메뉴** — 자주 안 쓰는 프로젝트를 **자기 그룹의 맨 아래**로
+      모은다. 이름 후보: Shelve/Shelved(선반), Park/Parked, Dormant, Later.
+      정할 것: 접힘 여부, `Cmd` 숫자를 받는지(접힌 그룹은 안 받는 규칙과 맞출지), 저장 위치(`projectGroups`와 같은 키?).
+- [ ] **사이드바 폭 한계 늘리기** — 지금 `CodeSparkApp.swift:44`의
+      `.navigationSplitViewColumnWidth(min: 100, ideal: 120, max: 180)`. max 180이 너무 작다.
+- [ ] **연구: 탭이 사용자 입력을 기다리는지 알기** — 지금은 `TerminalStateDetector`의 화면 패턴
+      (`>` + `?` = needsInput)뿐이다. 조사할 것: Claude Code/Codex의 hook·알림(OSC 9/777, BEL),
+      Ghostty `GHOSTTY_ACTION_DESKTOP_NOTIFICATION`·bell 액션, 자식 프로세스가 tty read에서 블록됐는지(`proc_pidinfo`),
+      원격(ssh)에서도 되는 방법인지.
