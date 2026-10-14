@@ -637,6 +637,13 @@ final class AppModel: ObservableObject {
             // The row it lands above shifts up once the dragged one is lifted out.
             insertionIndex = targetIndex > sourceIndex ? targetIndex - 1 : targetIndex
             projectGroups.file(id, in: projectGroups.groupID(of: targetID))
+            // Shelves are drawn apart from the rows, so a project keeping its
+            // own shelving would land somewhere other than where it was dropped.
+            if projectGroups.shelved.contains(targetID) {
+                projectGroups.shelved.insert(id)
+            } else {
+                projectGroups.shelved.remove(id)
+            }
         case .end:
             insertionIndex = projects.count - 1
             projectGroups.file(id, in: nil)

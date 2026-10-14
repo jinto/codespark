@@ -138,6 +138,21 @@ final class ProjectFlowTests: XCTestCase {
         XCTAssertEqual(model.orderedProjects.map(\.id), ["b", "c", "a"])
     }
 
+    /// A row lands where it was dropped: shelves and rows are drawn apart, so
+    /// dropping beside one takes on its shelving, or it would jump away.
+    @MainActor
+    func test_a_dropped_project_takes_the_shelving_of_the_row_it_lands_before() async {
+        let model = await modelWithProjects(["a", "b", "c"])
+        model.toggleShelved(projectID: "a")
+
+        model.moveProject(id: "a", to: .before("b"))
+        XCTAssertFalse(model.projectGroups.shelved.contains("a"), "dropped among rows, it leaves the shelf")
+
+        model.toggleShelved(projectID: "c")
+        model.moveProject(id: "b", to: .before("c"))
+        XCTAssertTrue(model.projectGroups.shelved.contains("b"), "dropped on the shelf, it is shelved")
+    }
+
     @MainActor
     func test_dropping_a_project_on_itself_changes_nothing() async {
         let model = await modelWithProjects(["a", "b", "c"])

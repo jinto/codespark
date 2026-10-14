@@ -156,9 +156,8 @@ Plan: `.claude/plans/terminal-state-detection.md`
 
 - [ ] **그룹: 회사일·취미·연구 등으로 구분** — 그룹 기능 자체는 `93a7b86`에 이미 있다
       (CLAUDE.md "Project Groups"). 남은 일: 실제 사용에서 모자란 점 확인(그룹 만들기 동선, 이름 바꾸기 등).
-- [ ] **아카이브(이름 미정) — 프로젝트 우클릭 메뉴** — 자주 안 쓰는 프로젝트를 **자기 그룹의 맨 아래**로
-      모은다. 이름 후보: Shelve/Shelved(선반), Park/Parked, Dormant, Later.
-      정할 것: 접힘 여부, `Cmd` 숫자를 받는지(접힌 그룹은 안 받는 규칙과 맞출지), 저장 위치(`projectGroups`와 같은 키?).
+- [x] **Shelve — 프로젝트 우클릭 메뉴** (`d3a5def`) — 자주 안 쓰는 프로젝트를 자기 그룹 맨 아래 선반으로.
+      기본 접힘(실행마다), 작은 글씨, `Cmd` 숫자 없음. 접혀도 선택된 프로젝트는 보인다. `projectGroups.shelved`에 저장.
 - [ ] **사이드바 폭 한계 늘리기** — 지금 `CodeSparkApp.swift:44`의
       `.navigationSplitViewColumnWidth(min: 100, ideal: 120, max: 180)`. max 180이 너무 작다.
 - [ ] **연구: 탭이 사용자 입력을 기다리는지 알기** — 지금은 `TerminalStateDetector`의 화면 패턴
