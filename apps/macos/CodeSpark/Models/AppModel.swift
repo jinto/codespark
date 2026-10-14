@@ -51,6 +51,9 @@ final class AppModel: ObservableObject {
             defaults.set(try? JSONEncoder().encode(projectGroups), forKey: StorageKeys.projectGroups)
         }
     }
+    /// Groups whose shelf is open (`""` = the default group). In memory only, so
+    /// every launch starts with the shelves shut.
+    @Published private(set) var openShelves: Set<String> = []
     /// Set by the `Cmd` digits only. A click aims at a row already on screen;
     /// a digit is pressed blind, and the row it lands in may be scrolled away.
     @Published private(set) var sidebarScrollRequest: SidebarPresenter.ScrollRequest?
@@ -570,6 +573,7 @@ final class AppModel: ObservableObject {
         let nextID = teardownProject(id: id)
         removeProjectFromSavedOrder(id: id)
         projectGroups.file(id, in: nil)
+        projectGroups.shelved.remove(id)
 
         var deleteError: String?
         do {
@@ -664,6 +668,16 @@ final class AppModel: ObservableObject {
 
     func deleteGroup(id: String) {
         projectGroups.delete(id)
+    }
+
+    func toggleShelved(projectID: String) {
+        if projectGroups.shelved.remove(projectID) == nil {
+            projectGroups.shelved.insert(projectID)
+        }
+    }
+
+    func toggleShelf(id: String) {
+        if openShelves.remove(id) == nil { openShelves.insert(id) }
     }
 
     func toggleGroupCollapsed(id: String) {

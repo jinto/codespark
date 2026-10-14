@@ -29,7 +29,8 @@ extension AppModel {
             expandedProjectIDs: expandedProjectIDs,
             projectsShowingEveryWorktree: projectsShowingEveryWorktree,
             projectSelectedWorkspaces: projectSelectedWorkspaces,
-            projectGroups: projectGroups
+            projectGroups: projectGroups,
+            openShelves: openShelves
         )
     }
 

@@ -105,6 +105,11 @@ struct SidebarView: View {
                                         isFirst: group.id == sections.first?.group?.id)
                         case .project(let group):
                             projectRows(group, sessionDropEligible: sessionDropEligible)
+                        case .shelf(let section):
+                            ShelfSidebarHeader(count: section.shelvedCount,
+                                               isOpen: section.isShelfOpen)
+                                .contentShape(Rectangle())
+                                .onTapGesture { model.toggleShelf(id: section.shelfID) }
                         }
                     }
 
@@ -351,7 +356,8 @@ struct SidebarView: View {
                 status: group.status,
                 infoLine: group.infoLine,
                 hotkeyIndex: showHotkeys ? group.hotkeyIndex : nil,
-                sessionCount: group.sessionCount
+                sessionCount: group.sessionCount,
+                isShelved: group.isShelved
             )
             .contentShape(Rectangle())
             .help(group.hoverPath)
@@ -441,6 +447,11 @@ struct SidebarView: View {
                         }
                         changeFolderProjectID = project.id
                     }
+                }
+                // Shelved rows still drag and drop like any other: moved, a
+                // project stays shelved, on its new group's shelf.
+                Button(group.isShelved ? "Unshelve" : "Shelve") {
+                    model.toggleShelved(projectID: project.id)
                 }
                 Menu("Move to Group") {
                     ForEach(model.projectGroups.groups) { target in
@@ -602,6 +613,8 @@ struct ProjectSidebarRow: View {
     /// nil while the worktree rows below carry their own counts — the total is
     /// said in one place only (`SidebarProjectGroup.sessionCount`).
     var sessionCount: Int? = nil
+    /// Drawn smaller: a shelf holds what you rarely reach for.
+    var isShelved = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -617,7 +630,7 @@ struct ProjectSidebarRow: View {
                     .frame(width: 7, height: 7)
 
                 Text(project.name)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: isShelved ? 11 : 12, weight: .medium))
                     .foregroundStyle(isSelected ? .white : .primary)
                     .lineLimit(1)
                     .accessibilityIdentifier("projectName")
@@ -644,7 +657,7 @@ struct ProjectSidebarRow: View {
                 // hide, and a line hidden while its children were all folded
                 // away was just an unexplained gap under the name.
                 Text(info)
-                    .font(.system(size: 10))
+                    .font(.system(size: isShelved ? 9 : 10))
                     .foregroundStyle(
                         status == .needsInput
                             ? status.color
@@ -681,19 +694,25 @@ struct ProjectSidebarRow: View {
 private enum SidebarItem: Identifiable {
     case header(ProjectGroups.Group, projectCount: Int)
     case project(SidebarProjectGroup)
+    /// The shelf at the bottom of a group, then its shelved rows as `.project`.
+    case shelf(SidebarSection)
 
     /// A project's id bare — it is what `scrollTo` is asked for.
     var id: String {
         switch self {
         case .header(let group, _): "group:" + group.id
         case .project(let row): row.id
+        case .shelf(let section): "shelf:" + section.shelfID
         }
     }
 
     static func items(_ sections: [SidebarSection]) -> [SidebarItem] {
         sections.flatMap { section in
-            (section.group.map { [SidebarItem.header($0, projectCount: section.projectCount)] } ?? [])
-                + section.projects.map(SidebarItem.project)
+            let shelf = section.shelvedCount > 0 && !(section.group?.isCollapsed ?? false)
+                ? [SidebarItem.shelf(section)] + section.shelved.map(SidebarItem.project)
+                : []
+            return (section.group.map { [SidebarItem.header($0, projectCount: section.projectCount)] } ?? [])
+                + section.projects.map(SidebarItem.project) + shelf
         }
     }
 }
@@ -729,6 +748,30 @@ struct GroupSidebarHeader: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
+    }
+}
+
+/// A group's shelf: shut by default, a count of what is on it.
+struct ShelfSidebarHeader: View {
+    let count: Int
+    let isOpen: Bool
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 7, weight: .semibold))
+                .rotationEffect(.degrees(isOpen ? 90 : 0))
+                .frame(width: 7)
+            Text("Shelved")
+                .font(.system(size: 10))
+                .accessibilityIdentifier("shelfHeader")
+            Text("\(count)")
+                .font(.system(size: 10))
+            Spacer()
+        }
+        .foregroundStyle(.white.opacity(0.35))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
     }
 }
 

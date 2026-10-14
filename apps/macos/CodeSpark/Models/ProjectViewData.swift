@@ -54,6 +54,9 @@ struct ProjectGroups: Codable, Equatable {
     var groups: [Group] = []
     /// Project id → group id. Absent means the default group.
     var membership: [String: String] = [:]
+    /// Projects kept out of the way: still in their group, drawn on a shelf at
+    /// its bottom, and given no `Cmd` digit.
+    var shelved: Set<String> = []
 
     /// nil for the default group — including a project still filed under a
     /// group that has since been deleted.
@@ -71,6 +74,19 @@ struct ProjectGroups: Codable, Equatable {
     mutating func delete(_ groupID: String) {
         groups.removeAll { $0.id == groupID }
         membership = membership.filter { $0.value != groupID }
+    }
+}
+
+extension ProjectGroups {
+    enum CodingKeys: String, CodingKey { case groups, membership, shelved }
+
+    /// Here, not in the struct, so `ProjectGroups()` survives. Groups saved
+    /// before the shelf have no `shelved` key, and must still load.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        groups = try container.decode([Group].self, forKey: .groups)
+        membership = try container.decode([String: String].self, forKey: .membership)
+        shelved = try container.decodeIfPresent(Set<String>.self, forKey: .shelved) ?? []
     }
 }
 

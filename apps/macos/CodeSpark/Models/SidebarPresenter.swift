@@ -44,6 +44,9 @@ struct SidebarSnapshot: Equatable {
     var projectsShowingEveryWorktree: Set<String> = []
     var projectSelectedWorkspaces: [String: String] = [:]
     var projectGroups = ProjectGroups()
+    /// The groups whose shelf is open — `""` for the default group. Not
+    /// remembered across launches: a shelf is shut unless you just opened it.
+    var openShelves: Set<String> = []
 }
 
 /// One group of projects as the sidebar draws it: a header, then its rows.
@@ -53,8 +56,16 @@ struct SidebarSection: Identifiable, Equatable {
     let projectCount: Int
     /// Empty while the group is collapsed.
     let projects: [SidebarProjectGroup]
+    /// How many of the group's projects are shelved, drawn or not.
+    var shelvedCount = 0
+    var isShelfOpen = false
+    /// The shelved rows on screen: all of them while the shelf is open, else
+    /// only the selected one — the row you stand on is never folded away.
+    var shelved: [SidebarProjectGroup] = []
 
     var id: String { "group:" + (group?.id ?? "") }
+    /// The key `openShelves` knows this group's shelf by.
+    var shelfID: String { group?.id ?? "" }
 }
 
 /// One project's rows: the project itself, whatever worktrees are drawn under
@@ -75,6 +86,7 @@ struct SidebarProjectGroup: Identifiable, Equatable {
     let foldedCount: Int
     /// The project's directory, for hover — a path takes no row space anywhere.
     let hoverPath: String
+    var isShelved = false
 
     var id: String { project.id }
 }
@@ -114,45 +126,74 @@ enum SidebarPresenter {
         let grouped = onScreen(sectioned, in: snapshot)
         let places = numberedPlaces(grouped)
         let badges = badges(places, grouped: grouped, in: snapshot)
-        let rows = Dictionary(uniqueKeysWithValues: rows(grouped, badges: badges, in: snapshot)
+        // Rows exist only for what is drawn, so a hidden project simply has none.
+        let drawn = grouped + shelvesOnScreen(sectioned, in: snapshot)
+        let rows = Dictionary(uniqueKeysWithValues: rows(drawn, badges: badges, in: snapshot)
             .map { ($0.id, $0) })
 
-        return sectioned.map { group, projects in
+        return sectioned.map { section in
             SidebarSection(
-                group: group,
-                projectCount: projects.count,
-                projects: projects.compactMap { rows[$0.id] }
+                group: section.group,
+                projectCount: section.projects.count + section.shelved.count,
+                projects: section.projects.compactMap { rows[$0.id] },
+                shelvedCount: section.shelved.count,
+                isShelfOpen: snapshot.openShelves.contains(section.group?.id ?? ""),
+                shelved: section.shelved.compactMap { rows[$0.id] }
             )
         }
     }
 
     /// The project rows alone, in sidebar order — collapsed groups' left out.
     static func groups(_ snapshot: SidebarSnapshot) -> [SidebarProjectGroup] {
-        sections(snapshot).flatMap(\.projects)
+        sections(snapshot).flatMap { $0.projects + $0.shelved }
     }
 
+    private typealias Sectioned = (
+        group: ProjectGroups.Group?, projects: [ProjectSummaryViewData], shelved: [ProjectSummaryViewData]
+    )
+
     /// Projects in the order the sidebar draws them: each named group in turn,
-    /// then the default group. Inside a group, the one drag order. The default
-    /// group is left out when nothing is in it — it has no header to show.
-    private static func sectionedProjects(
-        _ snapshot: SidebarSnapshot
-    ) -> [(group: ProjectGroups.Group?, projects: [ProjectSummaryViewData])] {
+    /// then the default group. Inside a group, the one drag order, with its
+    /// shelved projects split off for the shelf. The default group is left out
+    /// when nothing is in it — it has no header to show.
+    private static func sectionedProjects(_ snapshot: SidebarSnapshot) -> [Sectioned] {
         let groups = snapshot.projectGroups
-        let named = groups.groups.map { group in
-            (group: Optional(group),
-             projects: snapshot.projects.filter { groups.groupID(of: $0.id) == group.id })
+        func section(_ group: ProjectGroups.Group?) -> Sectioned {
+            let members = snapshot.projects.filter { groups.groupID(of: $0.id) == group?.id }
+            return (group: group,
+                    projects: members.filter { !groups.shelved.contains($0.id) },
+                    shelved: members.filter { groups.shelved.contains($0.id) })
         }
-        let ungrouped = snapshot.projects.filter { groups.groupID(of: $0.id) == nil }
-        return ungrouped.isEmpty ? named : named + [(group: nil, projects: ungrouped)]
+        let ungrouped = section(nil)
+        let named = groups.groups.map { section($0) }
+        return ungrouped.projects.isEmpty && ungrouped.shelved.isEmpty ? named : named + [ungrouped]
     }
 
     /// The projects a collapsed group is not hiding, each with its worktrees.
+    /// Shelved ones are not among them: they take no digit, open shelf or not.
     private static func onScreen(
-        _ sectioned: [(group: ProjectGroups.Group?, projects: [ProjectSummaryViewData])],
+        _ sectioned: [Sectioned],
         in snapshot: SidebarSnapshot
     ) -> [(project: ProjectSummaryViewData, workspaces: [WorkspaceViewData])] {
         sectioned.filter { !($0.group?.isCollapsed ?? false) }
             .flatMap(\.projects)
+            .map { project in
+                (project: project, workspaces: worktreeRows(of: project, in: snapshot))
+            }
+    }
+
+    /// The shelved projects drawn: an open shelf's all, a shut one's selected
+    /// project only, a collapsed group's none.
+    private static func shelvesOnScreen(
+        _ sectioned: [Sectioned],
+        in snapshot: SidebarSnapshot
+    ) -> [(project: ProjectSummaryViewData, workspaces: [WorkspaceViewData])] {
+        sectioned.filter { !($0.group?.isCollapsed ?? false) }
+            .flatMap { section in
+                snapshot.openShelves.contains(section.group?.id ?? "")
+                    ? section.shelved
+                    : section.shelved.filter { $0.id == snapshot.selectedProjectID }
+            }
             .map { project in
                 (project: project, workspaces: worktreeRows(of: project, in: snapshot))
             }
@@ -187,7 +228,8 @@ enum SidebarPresenter {
                     )
                 } : [],
                 foldedCount: showsRows ? folded.foldedCount : 0,
-                hoverPath: displayPath(for: project.path)
+                hoverPath: displayPath(for: project.path),
+                isShelved: snapshot.projectGroups.shelved.contains(project.id)
             )
         }
     }

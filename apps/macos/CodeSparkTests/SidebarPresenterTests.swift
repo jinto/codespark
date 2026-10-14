@@ -393,6 +393,114 @@ final class SidebarPresenterTests: XCTestCase {
         XCTAssertEqual(SidebarPresenter.sections(snapshot).map { $0.projects.map(\.id) }, [["a"]])
     }
 
+    // MARK: - Shelf
+
+    /// Shelved projects leave their group's rows for a shelf at its bottom,
+    /// shut by default — the group's count still owns them.
+    func test_shelved_projects_sink_into_a_shut_shelf_at_the_bottom_of_their_group() {
+        var groups = ProjectGroups(groups: [folder("work")])
+        groups.membership = ["a": "work", "b": "work"]
+        groups.shelved = ["a"]
+        let snapshot = SidebarSnapshot(
+            projects: ["a", "b", "c"].map { project($0, path: "/tmp/\($0)") },
+            projectGroups: groups
+        )
+
+        let sections = SidebarPresenter.sections(snapshot)
+
+        XCTAssertEqual(sections.map { $0.projects.map(\.id) }, [["b"], ["c"]])
+        XCTAssertEqual(sections[0].shelvedCount, 1)
+        XCTAssertEqual(sections[0].projectCount, 2)
+        XCTAssertFalse(sections[0].isShelfOpen)
+        XCTAssertEqual(sections[0].shelved.map(\.id), [], "a shelf starts shut")
+    }
+
+    func test_an_open_shelf_shows_its_projects_marked_as_shelved() {
+        var groups = ProjectGroups()
+        groups.shelved = ["a"]
+        let snapshot = SidebarSnapshot(
+            projects: ["a", "b"].map { project($0, path: "/tmp/\($0)") },
+            projectGroups: groups,
+            openShelves: [""]
+        )
+
+        let section = SidebarPresenter.sections(snapshot)[0]
+
+        XCTAssertEqual(section.shelved.map(\.id), ["a"])
+        XCTAssertTrue(section.shelved[0].isShelved)
+        XCTAssertFalse(section.projects[0].isShelved)
+    }
+
+    /// The row you are standing on is never folded away — the worktree rule.
+    func test_a_shut_shelf_still_shows_the_selected_project() {
+        var groups = ProjectGroups()
+        groups.shelved = ["a", "b"]
+        let snapshot = SidebarSnapshot(
+            projects: ["a", "b"].map { project($0, path: "/tmp/\($0)") },
+            selectedProjectID: "b",
+            projectGroups: groups
+        )
+
+        let section = SidebarPresenter.sections(snapshot)[0]
+
+        XCTAssertEqual(section.shelved.map(\.id), ["b"])
+        XCTAssertEqual(section.shelvedCount, 2)
+    }
+
+    /// A shelf is for what you rarely reach for: no digit, even when open.
+    func test_shelved_projects_take_no_digit() {
+        var groups = ProjectGroups()
+        groups.shelved = ["a"]
+        let snapshot = SidebarSnapshot(
+            projects: ["a", "b"].map { project($0, path: "/tmp/\($0)") },
+            projectGroups: groups,
+            openShelves: [""]
+        )
+
+        XCTAssertEqual(SidebarPresenter.numberedPlaces(snapshot), [.project("b")])
+        XCTAssertNil(SidebarPresenter.sections(snapshot)[0].shelved[0].hotkeyIndex)
+    }
+
+    func test_a_collapsed_group_hides_its_shelf_too() {
+        var groups = ProjectGroups(groups: [folder("work", collapsed: true)])
+        groups.membership = ["a": "work"]
+        groups.shelved = ["a"]
+        let snapshot = SidebarSnapshot(
+            projects: [project("a", path: "/tmp/a")],
+            selectedProjectID: "a",
+            projectGroups: groups,
+            openShelves: ["work"]
+        )
+
+        XCTAssertEqual(SidebarPresenter.sections(snapshot)[0].shelved.map(\.id), [])
+    }
+
+    /// Everything ungrouped shelved still leaves the default group a shelf to draw.
+    func test_a_default_group_of_only_shelved_projects_is_still_drawn() {
+        var groups = ProjectGroups()
+        groups.shelved = ["a"]
+        let snapshot = SidebarSnapshot(projects: [project("a", path: "/tmp/a")],
+                                       projectGroups: groups)
+
+        let sections = SidebarPresenter.sections(snapshot)
+
+        XCTAssertEqual(sections.count, 1)
+        XCTAssertEqual(sections[0].shelvedCount, 1)
+    }
+
+    /// Groups saved before shelving existed have no `shelved` key — they must
+    /// still load, or upgrading would silently drop every group.
+    func test_groups_saved_before_the_shelf_still_load() throws {
+        let old = #"{"groups":[{"id":"w","name":"work","isCollapsed":false}],"membership":{"a":"w"}}"#
+        let groups = try JSONDecoder().decode(ProjectGroups.self, from: Data(old.utf8))
+
+        XCTAssertEqual(groups.groupID(of: "a"), "w")
+        XCTAssertEqual(groups.shelved, [])
+        let roundTrip = try JSONDecoder().decode(
+            ProjectGroups.self, from: JSONEncoder().encode(ProjectGroups(shelved: ["a"])))
+        XCTAssertEqual(roundTrip.shelved, ["a"])
+    }
+
         func test_no_view_asks_the_model_about_one_row_at_a_time() throws {
         let perRow = [
             "projectStatus(for:", "workspaceStatus(for:", "projectInfoLine(for:",
