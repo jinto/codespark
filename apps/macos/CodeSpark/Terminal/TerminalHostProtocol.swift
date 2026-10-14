@@ -14,4 +14,14 @@ protocol TerminalHostProtocol: AnyObject {
     func attach(sessionID: String, command: String?, initialInput: String?)
     func close(sessionID: String)
     func extractSnapshot() -> TerminalSnapshotViewData?
+    /// What restore replays: the screen plus recent scrollback, so a restored
+    /// tab can be scrolled back through, not just the last screenful.
+    /// Ghostty can't read a slice of scrollback, so this reads all of it and
+    /// trims — ~20ms a full tab, under the renderer lock. Checkpoints only
+    /// call it for tabs whose live screen changed.
+    func extractRestoreSnapshot() -> TerminalSnapshotViewData?
+}
+
+extension TerminalHostProtocol {
+    func extractRestoreSnapshot() -> TerminalSnapshotViewData? { extractSnapshot() }
 }

@@ -45,6 +45,37 @@ final class WorkspaceSelectionTests: XCTestCase {
     }
 
     @MainActor
+    func test_a_checkpoint_reads_scrollback_only_from_tabs_whose_screen_changed() async {
+        // Reading a tab's scrollback costs ~20ms under the renderer lock, every
+        // 30s, for every tab. A screen that hasn't moved has nothing new to save.
+        var hosts: [MockTerminalHost] = []
+        let model = AppModel(
+            core: MockProjectCoreClient.projectWithInterruptedSession(),
+            terminalFactory: { _ in
+                let host = MockTerminalHost()
+                hosts.append(host)
+                return host
+            }
+        )
+        await model.load()
+        let host = hosts[0]
+
+        let session = model.liveSessions[0].id
+        host.viewport = .fixture(lines: ["$ make"])
+        model.captureCheckpoints()
+        XCTAssertEqual(host.restoreReads, 1)
+        // Remembered only once the store write lands.
+        while model.checkpointedScreens[session] == nil { await Task.yield() }
+
+        model.captureCheckpoints()
+        XCTAssertEqual(host.restoreReads, 1, "an unchanged screen must not be re-read")
+
+        host.viewport = .fixture(lines: ["$ make", "ok"])
+        model.captureCheckpoints()
+        XCTAssertEqual(host.restoreReads, 2)
+    }
+
+    @MainActor
     func test_interrupted_project_with_live_tabs_does_not_prompt_for_restore() async {
         let client = MockProjectCoreClient(
             summaries: [

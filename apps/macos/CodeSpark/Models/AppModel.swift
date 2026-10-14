@@ -36,6 +36,8 @@ final class AppModel: ObservableObject {
     @Published var duplicateProjectName: String?
     @Published var sessionStates: [String: TerminalState] = [:]
     var debounceTasks: [String: Task<Void, Never>] = [:]
+    /// The screen each tab's last stored checkpoint saw, so an unchanged tab isn't re-read.
+    var checkpointedScreens: [String: [String]] = [:]
     @Published var pendingCloseSessionID: String?
     @Published var gitBranches: [String: String] = [:]
     /// Project folders git has been asked about and disowned. Kept apart from
@@ -1380,7 +1382,7 @@ final class AppModel: ObservableObject {
     /// whether the close landed at all depended on termination timing.
     func saveAllSessionsForRestore() {
         for (sessionID, host) in hosts {
-            guard let snapshot = host.extractSnapshot() else { continue }
+            guard let snapshot = host.extractRestoreSnapshot() else { continue }
             do {
                 try core.saveSnapshotForRestore(sessionID: sessionID, snapshot: snapshot)
             } catch {
@@ -1506,6 +1508,7 @@ extension AppModel: TerminalHostDelegate {
         debounceTasks[sessionID]?.cancel()
         debounceTasks.removeValue(forKey: sessionID)
         sessionStates.removeValue(forKey: sessionID)
+        checkpointedScreens.removeValue(forKey: sessionID)
 
         // Update current project's live sessions if applicable
         if liveSessions.contains(where: { $0.id == sessionID }) {

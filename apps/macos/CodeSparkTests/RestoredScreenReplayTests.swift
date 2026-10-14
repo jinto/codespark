@@ -88,6 +88,18 @@ final class RestoredScreenReplayTests: XCTestCase {
         XCTAssertFalse(command.contains(NSTemporaryDirectory()))
     }
 
+    func test_inline_command_keeps_the_newest_lines_within_what_one_argument_can_carry() throws {
+        // A restored tab carries pages of scrollback, and Linux refuses any
+        // single argument over 128KB — the whole ssh tab would fail to open.
+        let lines = (0..<5000).map { "line \($0) " + String(repeating: "가", count: 30) }
+        let command = try XCTUnwrap(RestoredScreenReplay.inlineCommand(for: .fixture(lines: lines)))
+
+        XCTAssertLessThan(command.utf8.count, 100 * 1024)
+        let output = try shellOutput(of: command)
+        XCTAssertTrue(output.contains("line 4999 "))
+        XCTAssertFalse(output.contains("line 0 "))
+    }
+
     func test_inline_command_returns_nil_for_an_empty_screen() {
         XCTAssertNil(RestoredScreenReplay.inlineCommand(for: .fixture(lines: [])))
     }

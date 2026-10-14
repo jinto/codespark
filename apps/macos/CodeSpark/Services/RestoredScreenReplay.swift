@@ -38,8 +38,20 @@ enum RestoredScreenReplay {
     /// at the pty, so the far side would be asked to read a file that only
     /// exists on this machine; instead the payload rides along inside the ssh
     /// command as a `printf` argument the remote shell prints for us.
-    static func inlineCommand(for snapshot: TerminalSnapshotViewData) -> String? {
-        let text = payload(for: snapshot)
+    ///
+    /// The far side receives it inside one argument, and Linux caps a single
+    /// argument at 128KB — over that the whole tab fails to open. So only the
+    /// newest lines that fit in `budget` escaped bytes ride along.
+    static func inlineCommand(for snapshot: TerminalSnapshotViewData, budget: Int = 64 * 1024) -> String? {
+        var used = 0
+        var start = snapshot.lines.endIndex
+        for index in snapshot.lines.indices.reversed() {
+            used += printfEscaped(snapshot.lines[index]).utf8.count + 32 // dim/reset codes
+            guard used <= budget else { break }
+            start = index
+        }
+        let text = payload(for: TerminalSnapshotViewData(
+            cols: snapshot.cols, rows: snapshot.rows, lines: Array(snapshot.lines[start...])))
         guard !text.isEmpty else { return nil }
         return "printf '%b' \(RemoteShell.quoted(printfEscaped(text)))"
     }

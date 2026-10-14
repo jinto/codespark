@@ -184,10 +184,16 @@ extension AppModel {
     func captureCheckpoints() {
         guard !hosts.isEmpty else { return }
         for (sessionID, host) in hosts where !closingSessionIDs.contains(sessionID) {
-            guard let snapshot = host.extractSnapshot() else { continue }
+            // The scrollback read is ~20ms under the renderer lock; the live
+            // screen is free. A screen that hasn't moved has nothing new.
+            guard let screen = host.extractSnapshot()?.lines,
+                  screen != checkpointedScreens[sessionID],
+                  let snapshot = host.extractRestoreSnapshot() else { continue }
             Task { [weak self] in
                 do {
                     try await self?.core.recordCheckpointSnapshot(sessionID: sessionID, snapshot: snapshot)
+                    // Only once it's stored — a failed write must be retried.
+                    self?.checkpointedScreens[sessionID] = screen
                 } catch {
                     NSLog("[CodeSpark] checkpoint snapshot failed for session \(sessionID): \(error)")
                 }

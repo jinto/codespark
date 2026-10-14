@@ -98,6 +98,10 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
         surfaceView?.extractSnapshot()
     }
 
+    func extractRestoreSnapshot() -> TerminalSnapshotViewData? {
+        surfaceView?.extractSnapshot(includingScrollbackPages: 10)
+    }
+
     @MainActor
     func close(sessionID: String) {
         let snapshot = extractSnapshot()

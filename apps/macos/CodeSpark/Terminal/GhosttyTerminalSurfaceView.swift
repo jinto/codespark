@@ -540,16 +540,20 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
 
     // MARK: - Snapshot
 
-    func extractSnapshot() -> TerminalSnapshotViewData {
+    /// The live screen by default — the bottom rows the shell writes to, even
+    /// while the user has scrolled up. With `includingScrollbackPages`, the
+    /// whole screen from the top of scrollback, trimmed to the screenful plus
+    /// that many pages above it.
+    func extractSnapshot(includingScrollbackPages pages: Int? = nil) -> TerminalSnapshotViewData {
         guard let surface else {
             return TerminalSnapshotViewData(cols: 0, rows: 0, lines: [])
         }
         let size = ghostty_surface_size(surface)
+        // TOP_LEFT/BOTTOM_RIGHT ignore x/y (`embedded.zig` Point.pin).
+        let tag = pages == nil ? GHOSTTY_POINT_ACTIVE : GHOSTTY_POINT_SCREEN
         let selection = ghostty_selection_s(
-            top_left: ghostty_point_s(tag: GHOSTTY_POINT_VIEWPORT, coord: GHOSTTY_POINT_COORD_TOP_LEFT, x: 0, y: 0),
-            bottom_right: ghostty_point_s(tag: GHOSTTY_POINT_VIEWPORT, coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT,
-                                          x: UInt32(size.columns > 0 ? size.columns - 1 : 0),
-                                          y: UInt32(size.rows > 0 ? size.rows - 1 : 0)),
+            top_left: ghostty_point_s(tag: tag, coord: GHOSTTY_POINT_COORD_TOP_LEFT, x: 0, y: 0),
+            bottom_right: ghostty_point_s(tag: tag, coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT, x: 0, y: 0),
             rectangle: false
         )
         var text = ghostty_text_s()
@@ -559,7 +563,9 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         }
         let content = String(cString: cStr)
         ghostty_surface_free_text(surface, &text)
-        return TerminalSnapshotViewData(cols: Int(size.columns), rows: Int(size.rows), lines: content.components(separatedBy: "\n"))
+        var lines = content.components(separatedBy: "\n")
+        if let pages { lines = Array(lines.suffix(Int(size.rows) * (pages + 1))) }
+        return TerminalSnapshotViewData(cols: Int(size.columns), rows: Int(size.rows), lines: lines)
     }
 
     // MARK: - Helpers

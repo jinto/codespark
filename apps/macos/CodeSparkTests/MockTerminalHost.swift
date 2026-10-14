@@ -14,7 +14,14 @@ final class MockTerminalHost: TerminalHostProtocol {
         commands.append(command)
     }
     func close(sessionID: String) {}
-    func extractSnapshot() -> TerminalSnapshotViewData? { nil }
+    var viewport: TerminalSnapshotViewData?
+    private(set) var restoreReads = 0
+
+    func extractSnapshot() -> TerminalSnapshotViewData? { viewport }
+    func extractRestoreSnapshot() -> TerminalSnapshotViewData? {
+        restoreReads += 1
+        return viewport
+    }
 
     @MainActor
     func finishClose(sessionID: String, snapshot: TerminalSnapshotViewData, closeReason: CloseReasonViewData) {
