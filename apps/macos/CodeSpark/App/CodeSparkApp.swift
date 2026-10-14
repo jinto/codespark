@@ -155,6 +155,11 @@ struct CodeSparkApp: App {
 
     @MainActor
     private func initializeAndLoad() async {
+        // The unit-test host is this app. Loading here opened the developer's
+        // real store, marked a running dev app's tabs interrupted and restored
+        // them as new ones — a tab more after every test run. Tests build
+        // their own models.
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
 
         // Migrate AppStorage keys from workspace→project naming (one-time)
