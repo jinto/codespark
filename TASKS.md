@@ -158,8 +158,7 @@ Plan: `.claude/plans/terminal-state-detection.md`
       (CLAUDE.md "Project Groups"). 남은 일: 실제 사용에서 모자란 점 확인(그룹 만들기 동선, 이름 바꾸기 등).
 - [x] **Shelve — 프로젝트 우클릭 메뉴** (`d3a5def`) — 자주 안 쓰는 프로젝트를 자기 그룹 맨 아래 선반으로.
       기본 접힘(실행마다), 작은 글씨, `Cmd` 숫자 없음. 접혀도 선택된 프로젝트는 보인다. `projectGroups.shelved`에 저장.
-- [ ] **사이드바 폭 한계 늘리기** — 지금 `CodeSparkApp.swift:44`의
-      `.navigationSplitViewColumnWidth(min: 100, ideal: 120, max: 180)`. max 180이 너무 작다.
+- [x] **사이드바 폭 한계 늘리기** — `CodeSparkApp.swift:44`의 max 180 → 400.
 - [ ] **연구: 탭이 사용자 입력을 기다리는지 알기** — 지금은 `TerminalStateDetector`의 화면 패턴
       (`>` + `?` = needsInput)뿐이다. 조사할 것: Claude Code/Codex의 hook·알림(OSC 9/777, BEL),
       Ghostty `GHOSTTY_ACTION_DESKTOP_NOTIFICATION`·bell 액션, 자식 프로세스가 tty read에서 블록됐는지(`proc_pidinfo`),

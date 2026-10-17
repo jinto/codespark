@@ -41,7 +41,7 @@ struct CodeSparkApp: App {
                                 sidebarToolbarItems
                             }
                         }
-                        .navigationSplitViewColumnWidth(min: 100, ideal: 120, max: 180)
+                        .navigationSplitViewColumnWidth(min: 100, ideal: 120, max: 400)
                     } detail: {
                         MainContentView(model: model, onToggleSidebar: {
                             withAnimation { isSidebarVisible.toggle() }
