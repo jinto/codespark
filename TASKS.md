@@ -159,7 +159,9 @@ Plan: `.claude/plans/terminal-state-detection.md`
 - [x] **Shelve — 프로젝트 우클릭 메뉴** (`d3a5def`) — 자주 안 쓰는 프로젝트를 자기 그룹 맨 아래 선반으로.
       기본 접힘(실행마다), 작은 글씨, `Cmd` 숫자 없음. 접혀도 선택된 프로젝트는 보인다. `projectGroups.shelved`에 저장.
 - [x] **사이드바 폭 한계 늘리기** — `CodeSparkApp.swift:44`의 max 180 → 400.
-- [ ] **연구: 탭이 사용자 입력을 기다리는지 알기** — 지금은 `TerminalStateDetector`의 화면 패턴
-      (`>` + `?` = needsInput)뿐이다. 조사할 것: Claude Code/Codex의 hook·알림(OSC 9/777, BEL),
-      Ghostty `GHOSTTY_ACTION_DESKTOP_NOTIFICATION`·bell 액션, 자식 프로세스가 tty read에서 블록됐는지(`proc_pidinfo`),
-      원격(ssh)에서도 되는 방법인지.
+- [x] **연구: 탭이 사용자 입력을 기다리는지 알기** — `docs/2026-10-18-input-wait-detection.md`.
+      지금 `needsInput`은 에이전트 탭에서 안 켜진다(자식 프로세스 = 무조건 running). Claude Code는 권한 프롬프트에
+      OSC 777을 보내는데 우리 `action_cb`가 버린다. Codex는 아무 신호도 안 보낸다.
+- [ ] **`GHOSTTY_ACTION_DESKTOP_NOTIFICATION` → 그 탭 `needsInput`** — 해제는 사용자 키 입력/셸 복귀. 연구 문서 권고 1.
+- [ ] **Codex 승인 프롬프트 화면 파싱** — 자식 프로세스가 있어도 승인 문구가 보이면 `needsInput`. 권고 2.
+- [ ] **원격 탭도 알림을 내게** — ssh preamble에 `TERM_PROGRAM=ghostty`. 권고 3.
