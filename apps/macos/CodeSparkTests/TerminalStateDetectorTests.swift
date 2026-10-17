@@ -135,4 +135,41 @@ final class TerminalStateDetectorTests: XCTestCase {
         let working = TerminalSnapshotViewData.fixture(lines: ["• Working (3s • esc to interrupt)"])
         XCTAssertEqual(TerminalStateDetector.detect(shellPID: me) { working }, .running)
     }
+
+    // MARK: - Which process is the shell
+
+    /// Ghostty starts tabs through `login(1)`; login always has a child (the
+    /// shell), so asking login "anything running?" always said yes.
+    func test_a_tab_started_through_login_is_watched_at_its_shell() throws {
+        let me = ProcessInfo.processInfo.processIdentifier
+        XCTAssertEqual(GhosttyTerminalHost.shell(startedBy: me), me, "anything but login is the shell itself")
+
+        let pgrep = Process()
+        pgrep.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        pgrep.arguments = ["-x", "login"]
+        let out = Pipe()
+        pgrep.standardOutput = out
+        try pgrep.run()
+        pgrep.waitUntilExit()
+        let logins = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            .split(separator: "\n").compactMap { pid_t($0) }
+        guard let login = logins.first(where: { !TerminalStateDetector.childPIDs(of: $0).isEmpty }) else {
+            throw XCTSkip("no login(1) with a child on this machine")
+        }
+        XCTAssertEqual(GhosttyTerminalHost.shell(startedBy: login),
+                       TerminalStateDetector.childPIDs(of: login).first)
+    }
+
+    func test_a_child_is_seen_and_a_leaf_has_none() throws {
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        child.arguments = ["5"]
+        try child.run()
+        defer { child.terminate() }
+
+        let me = ProcessInfo.processInfo.processIdentifier
+        XCTAssertTrue(TerminalStateDetector.childPIDs(of: me).contains(child.processIdentifier))
+        XCTAssertFalse(TerminalStateDetector.hasChildProcesses(shellPID: child.processIdentifier),
+                       "sleep has no children — a leaf must not read as busy")
+    }
 }

@@ -12,7 +12,22 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
         guard let pid = _shellPID,
               let surface = surfaceView?.surface,
               !ghostty_surface_process_exited(surface) else { return nil }
-        return pid
+        return Self.shell(startedBy: pid)
+    }
+
+    /// Ghostty starts every tab through `login(1)`, which waits on what it
+    /// started — so the PID we catch is login's, and it always has a child.
+    /// Read as the shell, every local tab looked busy forever: never idle,
+    /// and the screen never got read.
+    static func shell(startedBy pid: pid_t) -> pid_t {
+        // `proc_name` can't read login: it runs as root. The process table can.
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0,
+              withUnsafeBytes(of: info.kp_proc.p_comm, { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }) == "login"
+        else { return pid }
+        return TerminalStateDetector.childPIDs(of: pid).first ?? pid
     }
     private(set) var surfaceView: GhosttyTerminalSurfaceView?
     var surfaceNSView: NSView? { surfaceView }
@@ -27,7 +42,7 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
     }
 
     func attach(sessionID: String, command: String? = nil, initialInput: String? = nil) {
-        let beforePIDs = Set(Self.childPIDs(of: getpid()))
+        let beforePIDs = Set(TerminalStateDetector.childPIDs(of: getpid()))
         let sv = GhosttyTerminalSurfaceView(
             app: app,
             workingDirectory: session.lastCwd,
@@ -35,7 +50,7 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
             initialInput: initialInput,
             environment: Self.terminalEnvironment()
         )
-        let afterPIDs = Set(Self.childPIDs(of: getpid()))
+        let afterPIDs = Set(TerminalStateDetector.childPIDs(of: getpid()))
         _shellPID = afterPIDs.subtracting(beforePIDs).first
         sv.sshConnectionInfo = sshConnectionInfo
         sv.onKeyDown = { [weak self] in
@@ -87,16 +102,6 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
     }
 
     /// List direct child PIDs of the given process.
-    private static func childPIDs(of parent: pid_t) -> [pid_t] {
-        let estSize = proc_listchildpids(parent, nil, 0)
-        guard estSize > 0 else { return [] }
-        let count = Int(estSize) / MemoryLayout<pid_t>.size
-        var pids = [pid_t](repeating: 0, count: count)
-        let actualSize = proc_listchildpids(parent, &pids, estSize)
-        guard actualSize > 0 else { return [] }
-        return Array(pids.prefix(Int(actualSize) / MemoryLayout<pid_t>.size))
-    }
-
     func extractSnapshot() -> TerminalSnapshotViewData? {
         surfaceView?.extractSnapshot()
     }

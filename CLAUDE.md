@@ -260,6 +260,8 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 
 Process detection + screen parsing replaces the old hook system:
 - **Level 1**: `proc_listchildpids(shellPID)` — child process = running
+  - **Read its return value the way libproc means it.** With no buffer it answers a buffer *size* (1025 for any pid); with a buffer it answers a *count* of pids, not bytes. The code read it the other way round both times, so `hasChildProcesses` was always true and `childPIDs` was always empty. `_shellPID` was never captured, Level 1 never ran, and no local tab could say `running` because of a child (found 2026-10-18). `TerminalStateDetector.childPIDs` is the only reader now.
+  - **The PID we catch is `login(1)`'s**, not the shell's: Ghostty starts every tab through it, and login always has a child. `GhosttyTerminalHost.shell(startedBy:)` steps down to the shell. It reads the name from the `sysctl` process table, because `proc_name` can't read root-owned login.
 - **Level 2**: `extractSnapshot()` screen pattern matching — shell prompt = idle, `>` + `?` = needsInput
 - 5s debounce on active session output, 10s polling for inactive sessions
 - `TerminalStateDetector` is a pure-function enum for testability

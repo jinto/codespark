@@ -13,7 +13,16 @@ enum TerminalStateDetector {
 
     /// Returns true if the given PID has at least one child process.
     static func hasChildProcesses(shellPID: pid_t) -> Bool {
-        proc_listchildpids(shellPID, nil, 0) > 0
+        !childPIDs(of: shellPID).isEmpty
+    }
+
+    /// With no buffer `proc_listchildpids` answers a buffer *size* — 1025 for
+    /// any pid, children or not; with one it answers a *count* of pids, not
+    /// bytes. Read either way round, every tab was busy, or none had a shell.
+    static func childPIDs(of parent: pid_t) -> [pid_t] {
+        var pids = [pid_t](repeating: 0, count: 256)
+        let count = proc_listchildpids(parent, &pids, Int32(pids.count * MemoryLayout<pid_t>.size))
+        return Array(pids.prefix(max(0, Int(count))))
     }
 
     // MARK: - Level 2: Screen-based detection
