@@ -3,6 +3,8 @@ import AppKit
 @MainActor
 protocol TerminalHostDelegate: AnyObject {
     func terminalHostDidClose(sessionID: String, snapshot: TerminalSnapshotViewData, closeReason: CloseReasonViewData)
+    /// Someone typed into the tab — the answer to whatever it was asking.
+    func terminalHostDidReceiveKey(sessionID: String)
 }
 
 protocol TerminalHostProtocol: AnyObject {

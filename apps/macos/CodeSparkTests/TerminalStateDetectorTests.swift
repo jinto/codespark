@@ -108,4 +108,31 @@ final class TerminalStateDetectorTests: XCTestCase {
         let state = TerminalStateDetector.detect(shellPID: nil) { nil }
         XCTAssertEqual(state, .idle)
     }
+
+    // MARK: - A prompt asked from inside a running program
+
+    /// Codex waiting on an approval is still a child of the shell, and it sends
+    /// nothing when it asks (no OSC 9/777, no BEL — measured). Its footer is the
+    /// only tell, and it has to win over "a child is running".
+    func test_a_codex_approval_prompt_needs_input_while_codex_runs() throws {
+        let child = Process()
+        child.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        child.arguments = ["5"]
+        try child.run()
+        defer { child.terminate() }
+        let me = ProcessInfo.processInfo.processIdentifier
+
+        let asking = TerminalSnapshotViewData.fixture(lines: [
+            "  Would you like to run the following command?",
+            "  $ touch /tmp/probe",
+            "› 1. Yes, proceed (y)",
+            "  3. No, and tell Codex what to do differently (esc)",
+            "  Press enter to confirm or esc to cancel",
+            "",
+        ])
+        XCTAssertEqual(TerminalStateDetector.detect(shellPID: me) { asking }, .needsInput)
+
+        let working = TerminalSnapshotViewData.fixture(lines: ["• Working (3s • esc to interrupt)"])
+        XCTAssertEqual(TerminalStateDetector.detect(shellPID: me) { working }, .running)
+    }
 }

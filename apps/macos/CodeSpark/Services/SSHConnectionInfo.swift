@@ -159,14 +159,18 @@ struct SSHConnectionInfo: Equatable, Hashable {
         if let terminfoBase64, !terminfoBase64.isEmpty {
             lines.append(RemoteCwdReporter.terminfoInstaller(base64Source: terminfoBase64))
         }
-        if let run, !run.isEmpty {
+        let run = run.flatMap { $0.isEmpty ? nil : $0 }
+        guard !lines.isEmpty || run != nil else { return nil }
+        // ssh doesn't carry TERM_PROGRAM, and Claude Code picks how to announce
+        // a waiting prompt from it — without it the far side says nothing.
+        lines.append("export TERM_PROGRAM=ghostty")
+        if let run {
             // The command owns the tty from here — no shell, so no cwd reporter:
             // there is never a prompt to fire it. Login *and* interactive, for
             // the PATH that lives in `.zshrc` (`-lc` never reads it).
             lines.append("exec \"$SHELL\" -lic \(RemoteShell.quoted(run))")
             return lines.joined(separator: "\n")
         }
-        guard !lines.isEmpty else { return nil }
         lines.append(RemoteCwdReporter.launcher)
         return lines.joined(separator: "\n")
     }

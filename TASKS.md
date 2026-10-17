@@ -162,6 +162,6 @@ Plan: `.claude/plans/terminal-state-detection.md`
 - [x] **연구: 탭이 사용자 입력을 기다리는지 알기** — `docs/2026-10-18-input-wait-detection.md`.
       지금 `needsInput`은 에이전트 탭에서 안 켜진다(자식 프로세스 = 무조건 running). Claude Code는 권한 프롬프트에
       OSC 777을 보내는데 우리 `action_cb`가 버린다. Codex는 아무 신호도 안 보낸다.
-- [ ] **`GHOSTTY_ACTION_DESKTOP_NOTIFICATION` → 그 탭 `needsInput`** — 해제는 사용자 키 입력/셸 복귀. 연구 문서 권고 1.
-- [ ] **Codex 승인 프롬프트 화면 파싱** — 자식 프로세스가 있어도 승인 문구가 보이면 `needsInput`. 권고 2.
-- [ ] **원격 탭도 알림을 내게** — ssh preamble에 `TERM_PROGRAM=ghostty`. 권고 3.
+- [x] **`GHOSTTY_ACTION_DESKTOP_NOTIFICATION` → 그 탭 `needsInput`** — 해제는 사용자 키 입력/셸 복귀. 연구 문서 권고 1.
+- [x] **Codex 승인 프롬프트 화면 파싱** — 자식 프로세스가 있어도 승인 문구가 보이면 `needsInput`. 권고 2.
+- [x] **원격 탭도 알림을 내게** — ssh preamble에 `TERM_PROGRAM=ghostty`. 권고 3.

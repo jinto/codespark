@@ -263,6 +263,11 @@ Process detection + screen parsing replaces the old hook system:
 - **Level 2**: `extractSnapshot()` screen pattern matching — shell prompt = idle, `>` + `?` = needsInput
 - 5s debounce on active session output, 10s polling for inactive sessions
 - `TerminalStateDetector` is a pure-function enum for testability
+- **Asked prompts outrank Level 1** (`docs/2026-10-18-input-wait-detection.md`). An agent waiting on an answer is still a running child, so Level 1 alone never said `needsInput` for one.
+  - **Claude Code posts OSC 777** (`GHOSTTY_ACTION_DESKTOP_NOTIFICATION`, mapped by raw surface pointer like OSC 7) → `sessionsAwaitingAnswer`. It holds until a key reaches that tab or the screen reads as a shell prompt again (asker killed without an answer).
+  - **Codex sends nothing** (measured: no OSC 9/777, no BEL, even with `tui.notifications`). A child plus its footer `Press enter to confirm or esc to cancel` in the last 10 lines = `needsInput`.
+  - **Remote**: ssh doesn't carry `TERM_PROGRAM`, and Claude Code's `auto` channel goes silent without it, so `remoteCommand` exports `TERM_PROGRAM=ghostty`.
+  - **Known limit**: Ghostty rate-limits notifications app-wide (1/s, identical text 5s). Two tabs asking together lose the second one, and that tab reads `running`, as it did before.
 
 ## Session Restore
 

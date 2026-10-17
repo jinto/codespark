@@ -187,6 +187,9 @@ struct CodeSparkApp: App {
         GhosttyRuntime.shared.onSurfacePwd = { [weak model] surface, cwd in
             model?.handleSurfacePwd(surface, cwd: cwd)
         }
+        GhosttyRuntime.shared.onSurfaceNotification = { [weak model] surface in
+            model?.handleSurfaceNotification(surface)
+        }
         #endif
         appDelegate.model = model
 

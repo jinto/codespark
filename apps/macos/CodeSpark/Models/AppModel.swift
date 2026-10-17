@@ -38,6 +38,8 @@ final class AppModel: ObservableObject {
     var debounceTasks: [String: Task<Void, Never>] = [:]
     /// The screen each tab's last stored checkpoint saw, so an unchanged tab isn't re-read.
     var checkpointedScreens: [String: [String]] = [:]
+    /// Tabs whose program asked for an answer (OSC 9/777) nobody has typed yet.
+    var sessionsAwaitingAnswer: Set<String> = []
     @Published var pendingCloseSessionID: String?
     @Published var gitBranches: [String: String] = [:]
     /// Project folders git has been asked about and disowned. Kept apart from
@@ -1429,6 +1431,13 @@ final class AppModel: ObservableObject {
         sessionDidReportCwd(sessionID: sessionID, cwd: cwd)
     }
 
+    func handleSurfaceNotification(_ surface: UnsafeMutableRawPointer) {
+        guard let (sessionID, _) = hosts.first(where: { _, host in
+            (host.surfaceNSView as? GhosttyTerminalSurfaceView)?.surface == surface
+        }) else { return }
+        sessionDidAskForInput(sessionID: sessionID)
+    }
+
     func handleSurfaceClose(_ surfaceView: GhosttyTerminalSurfaceView, processAlive: Bool) {
         guard let (sessionID, host) = hosts.first(where: { _, host in
             host.surfaceNSView === surfaceView
@@ -1530,6 +1539,7 @@ extension AppModel: TerminalHostDelegate {
         debounceTasks.removeValue(forKey: sessionID)
         sessionStates.removeValue(forKey: sessionID)
         checkpointedScreens.removeValue(forKey: sessionID)
+        sessionsAwaitingAnswer.remove(sessionID)
 
         // Update current project's live sessions if applicable
         if liveSessions.contains(where: { $0.id == sessionID }) {

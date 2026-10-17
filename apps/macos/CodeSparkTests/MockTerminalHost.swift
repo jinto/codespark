@@ -9,7 +9,10 @@ final class MockTerminalHost: TerminalHostProtocol {
     private(set) var initialInputs: [String?] = []
     private(set) var commands: [String?] = []
 
+    private(set) var attachedSessionID: String?
+
     func attach(sessionID: String, command: String? = nil, initialInput: String? = nil) {
+        attachedSessionID = sessionID
         initialInputs.append(initialInput)
         commands.append(command)
     }
@@ -21,6 +24,12 @@ final class MockTerminalHost: TerminalHostProtocol {
     func extractRestoreSnapshot() -> TerminalSnapshotViewData? {
         restoreReads += 1
         return viewport
+    }
+
+    @MainActor
+    func typeKey() {
+        guard let id = attachedSessionID else { return }
+        delegate?.terminalHostDidReceiveKey(sessionID: id)
     }
 
     @MainActor

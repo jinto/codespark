@@ -38,6 +38,9 @@ final class GhosttyTerminalHost: TerminalHostProtocol {
         let afterPIDs = Set(Self.childPIDs(of: getpid()))
         _shellPID = afterPIDs.subtracting(beforePIDs).first
         sv.sshConnectionInfo = sshConnectionInfo
+        sv.onKeyDown = { [weak self] in
+            MainActor.assumeIsolated { self?.delegate?.terminalHostDidReceiveKey(sessionID: sessionID) }
+        }
         surfaceView = sv
     }
 

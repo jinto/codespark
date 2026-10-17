@@ -18,6 +18,9 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
     /// `set_focus(false)`, and kept its display link running at the refresh rate.
     private var surfaceFocused = true
 
+    /// Called on every key press that reaches this terminal.
+    var onKeyDown: (() -> Void)?
+
     /// Our window's key notifications, while we are in one.
     private var windowKeyObservers: [NSObjectProtocol] = []
 
@@ -316,6 +319,7 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
 
     override func keyDown(with event: NSEvent) {
         guard let surface else { return }
+        onKeyDown?()
 
         // Cmd+V: paste from system clipboard (keyCode 9 = V, IME-independent)
         if event.modifierFlags.contains(.command), event.keyCode == 9 {

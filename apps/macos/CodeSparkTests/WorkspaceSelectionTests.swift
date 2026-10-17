@@ -75,6 +75,61 @@ final class WorkspaceSelectionTests: XCTestCase {
         XCTAssertEqual(host.restoreReads, 2)
     }
 
+    /// A program that asks through the terminal (Claude Code's OSC 777) is still
+    /// a running child, so the poll alone would call it running. The ask holds
+    /// until the person answers — by typing into that tab.
+    @MainActor
+    func test_a_tab_that_asked_for_input_waits_until_someone_types_into_it() async {
+        var hosts: [MockTerminalHost] = []
+        let model = AppModel(
+            core: MockProjectCoreClient.projectWithInterruptedSession(),
+            terminalFactory: { _ in
+                let host = MockTerminalHost()
+                hosts.append(host)
+                return host
+            }
+        )
+        await model.load()
+        let session = model.liveSessions[0].id
+        hosts[0].viewport = .fixture(lines: ["⏺ Bash(echo probe)", "Do you want to proceed?"])
+
+        model.sessionDidAskForInput(sessionID: session)
+        XCTAssertEqual(model.sessionStates[session], .needsInput)
+
+        model.detectState(sessionID: session)
+        XCTAssertEqual(model.sessionStates[session], .needsInput, "the poll must not talk over the ask")
+
+        hosts[0].typeKey()
+        XCTAssertEqual(model.sessionStates[session], .running, "answered, it says so at once")
+    }
+
+    /// Killed, crashed, or answered from elsewhere: once the shell is back,
+    /// nobody is asking any more, whether or not a key was pressed.
+    @MainActor
+    func test_an_ask_ends_when_the_shell_comes_back() async {
+        var hosts: [MockTerminalHost] = []
+        let model = AppModel(
+            core: MockProjectCoreClient.projectWithInterruptedSession(),
+            terminalFactory: { _ in
+                let host = MockTerminalHost()
+                hosts.append(host)
+                return host
+            }
+        )
+        await model.load()
+        let session = model.liveSessions[0].id
+        hosts[0].viewport = .fixture(lines: ["Do you want to proceed?"])
+        model.sessionDidAskForInput(sessionID: session)
+
+        hosts[0].viewport = .fixture(lines: ["user@host:~$ "])
+        model.detectState(sessionID: session)
+        XCTAssertEqual(model.sessionStates[session], .idle)
+
+        hosts[0].viewport = .fixture(lines: ["$ make", "compiling"])
+        model.detectState(sessionID: session)
+        XCTAssertEqual(model.sessionStates[session], .running, "the old ask must not come back")
+    }
+
     @MainActor
     func test_interrupted_project_with_live_tabs_does_not_prompt_for_restore() async {
         let client = MockProjectCoreClient(

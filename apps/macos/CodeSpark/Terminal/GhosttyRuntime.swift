@@ -21,6 +21,10 @@ final class GhosttyRuntime {
     /// comes back nil for embedded surfaces, so the NSView is not reachable here.
     var onSurfacePwd: ((UnsafeMutableRawPointer, String) -> Void)?
 
+    /// Called on main thread when a program in a tab posts a notification
+    /// (OSC 9 / OSC 777) — Claude Code's way of saying it is waiting on an answer.
+    var onSurfaceNotification: ((UnsafeMutableRawPointer) -> Void)?
+
     /// Coalesces wakeup signals: skip dispatch if a tick is already queued.
     /// Uses os_unfair_lock for thread-safe access from Ghostty's C runtime thread.
     private let tickLock = OSAllocatedUnfairLock(initialState: false)
@@ -88,6 +92,14 @@ final class GhosttyRuntime {
                 }
             },
             action_cb: { _, target, action in
+                if action.tag == GHOSTTY_ACTION_DESKTOP_NOTIFICATION,
+                   target.tag == GHOSTTY_TARGET_SURFACE,
+                   let surface = target.target.surface {
+                    DispatchQueue.main.async {
+                        GhosttyRuntime.shared.onSurfaceNotification?(surface)
+                    }
+                    return true
+                }
                 guard action.tag == GHOSTTY_ACTION_PWD,
                       target.tag == GHOSTTY_TARGET_SURFACE,
                       let surface = target.target.surface,

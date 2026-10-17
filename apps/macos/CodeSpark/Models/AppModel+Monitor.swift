@@ -59,8 +59,13 @@ extension AppModel {
         }
 
         let oldState = sessionStates[sessionID]
-        let newState = TerminalStateDetector.detect(shellPID: host.shellPID) {
-            host.extractSnapshot()
+        var newState = TerminalStateDetector.detect(shellPID: host.shellPID) { host.extractSnapshot() }
+        // An ask outranks the poll — the asking program is a running child —
+        // until the shell is back: then whoever asked is gone, keystroke or not.
+        if newState == .idle {
+            sessionsAwaitingAnswer.remove(sessionID)
+        } else if sessionsAwaitingAnswer.contains(sessionID) {
+            newState = .needsInput
         }
         guard newState != oldState else { return }
         sessionStates[sessionID] = newState
@@ -71,6 +76,19 @@ extension AppModel {
            oldState == .running || oldState == nil {
             sendStateNotification(sessionID: sessionID, state: newState)
         }
+    }
+
+    /// A program in the tab asked through the terminal — Claude Code posts
+    /// OSC 777 when it wants a permission or has sat idle for a minute.
+    func sessionDidAskForInput(sessionID: String) {
+        guard hosts[sessionID] != nil else { return }
+        sessionsAwaitingAnswer.insert(sessionID)
+        detectState(sessionID: sessionID)
+    }
+
+    func terminalHostDidReceiveKey(sessionID: String) {
+        guard sessionsAwaitingAnswer.remove(sessionID) != nil else { return }
+        detectState(sessionID: sessionID)
     }
 
     /// Poll all sessions — called by the 10s timer for inactive sessions.

@@ -52,10 +52,12 @@ enum TerminalStateDetector {
     /// - snapshot closure returns nil: return .idle (surface unavailable).
     static func detect(shellPID: pid_t?, snapshot: () -> TerminalSnapshotViewData?) -> TerminalState {
         // Level 1: process check
-        if let pid = shellPID {
-            if hasChildProcesses(shellPID: pid) {
-                return .running
-            }
+        if let pid = shellPID, hasChildProcesses(shellPID: pid) {
+            // A program waiting on a prompt is still a running child. Codex
+            // asks without a word to the terminal (no OSC 9/777, no BEL —
+            // measured), so its footer is the only tell.
+            guard let lines = snapshot()?.lines, isCodexApproval(lines) else { return .running }
+            return .needsInput
         }
 
         // Level 2: screen parse
@@ -63,6 +65,12 @@ enum TerminalStateDetector {
             return .idle
         }
         return detectFromScreen(snap)
+    }
+
+    private static func isCodexApproval(_ lines: [String]) -> Bool {
+        lines.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+            .suffix(10)
+            .contains { $0.contains("Press enter to confirm or esc to cancel") }
     }
 
     // MARK: - Private helpers

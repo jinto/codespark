@@ -482,6 +482,30 @@ final class SSHConnectionInfoTests: XCTestCase {
     // shells"), so a remote tab that is not one makes two halves of the same app
     // behave like two different machines.
 
+    /// Claude Code picks how to announce a waiting prompt from `TERM_PROGRAM`,
+    /// which ssh does not carry — without it the far side says nothing.
+    func test_the_remote_shell_knows_it_is_inside_ghostty() throws {
+        let output = try runRemoteScript(shell: "/bin/zsh", typing: "echo TP=$TERM_PROGRAM\nexit\n")
+        XCTAssertTrue(output.contains("TP=ghostty"), output.debugDescription)
+    }
+
+    /// The same for a tab that runs claude directly on the far side.
+    func test_a_remote_command_knows_it_is_inside_ghostty() throws {
+        let info = SSHConnectionInfo(host: "box", remotePath: "/tmp")
+        let script = try XCTUnwrap(info.remoteCommand(replaying: nil, running: "echo TP=$TERM_PROGRAM"))
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", script]
+        process.environment = ["PATH": "/usr/bin:/bin", "SHELL": "/bin/sh", "HOME": NSTemporaryDirectory()]
+        let stdout = Pipe()
+        process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+        let output = String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+        process.waitUntilExit()
+        XCTAssertTrue(output.contains("TP=ghostty"), output.debugDescription)
+    }
+
     func test_a_real_zsh_runs_the_users_login_profile() throws {
         let output = try runRemoteScript(
             shell: "/bin/zsh",
