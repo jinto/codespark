@@ -1,5 +1,7 @@
 # Terminal State Detection via Process + Screen Parsing
 
+- Status: done — 9dfbc39 2026-04-13 (Services/TerminalStateDetector.swift, hook 시스템 삭제)
+
 ## Goal
 
 Hook 시스템을 완전히 제거하고, **프로세스 감지 + 화면 파싱**으로 범용 터미널 상태를 감지한다.

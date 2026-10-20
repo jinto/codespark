@@ -1,7 +1,8 @@
 # Intent: 사이드바 강화 (M2a)
 
 - Date: 2026-04-03
-- Status: retroactive — spec.md/plan.md에서 2026-10-20 재구성
+- Status: superseded — 2026-04-09-sidebar-flatten 이후 사이드바 세션 목록 없음; SessionSidebarRow 삭제 4ec6daf, PRD 정리 7fe2add 2026-08-31
+- Origin: retroactive — spec.md/plan.md에서 2026-10-20 재구성
 - Next: spec.md
 
 ## Problem

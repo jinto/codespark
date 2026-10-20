@@ -1,7 +1,8 @@
 # Intent: Stateful Terminal
 
 - Date: 2026-04-01
-- Status: retroactive — spec.md/plan.md에서 2026-10-20 재구성
+- Status: partial — Zig 코어로 출하 fd1b5b6 2026-04-01 (스냅샷·interrupted·restoreInterruptedTabs); 닫힌 세션 카드·공유 노트·레시피 UI 없음
+- Origin: retroactive — spec.md/plan.md에서 2026-10-20 재구성
 - Next: spec.md
 
 ## Problem

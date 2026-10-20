@@ -1,5 +1,7 @@
 # Sidebar Flatten — Project-Only List
 
+- Status: superseded — 43f89a8 2026-04-09 출하 후 워크트리 사이드바 트리(e3f8e3e 2026-08-11)로 계층 복귀
+
 ## Goal
 사이드바를 프로젝트 평탄 리스트로 단순화. 워크스페이스 계층 제거.
 

@@ -1,7 +1,8 @@
 # Intent: 사이드바 워크트리 — 부제 줄이 비지 않게
 
 - Date: 2026-08-25
-- Status: retroactive — spec.md/plan.md에서 2026-10-20 재구성
+- Status: done — 7008ede 2026-08-25 (부제 줄·main 미접힘·선택 무관 접기, Models/SidebarPresenter.swift)
+- Origin: retroactive — spec.md/plan.md에서 2026-10-20 재구성
 - Next: plan.md
 
 ## Problem

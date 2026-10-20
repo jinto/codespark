@@ -1,7 +1,8 @@
 # Intent: Overhaul — 전수조사와 수정
 
 - Date: 2026-08-30
-- Status: retroactive — spec.md/plan.md에서 2026-10-20 재구성
+- Status: done — d22e7f7…2b45afc 2026-08-30~31 (plan.md 6-A~6-D [x]); AppModel 타입 분해만 미완 [~]
+- Origin: retroactive — spec.md/plan.md에서 2026-10-20 재구성
 - Next: plan.md
 
 ## Problem

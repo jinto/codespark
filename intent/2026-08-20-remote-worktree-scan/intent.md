@@ -1,7 +1,8 @@
 # Intent: 원격(ssh) 프로젝트 워크트리 스캔
 
 - Date: 2026-08-20
-- Status: retroactive — spec.md/plan.md에서 2026-10-20 재구성
+- Status: done — d901d39…f768291 2026-08-20 (Models/WorkspaceAddress.swift, 원격 스캔·생성·삭제)
+- Origin: retroactive — spec.md/plan.md에서 2026-10-20 재구성
 - Next: spec.md
 
 ## Problem
