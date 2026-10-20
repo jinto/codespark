@@ -8,7 +8,7 @@
 
 **Tech Stack:** Zig (C API), Swift (SwiftUI), Ghostty (output tracking)
 
-**Spec:** `docs/superpowers/specs/2026-04-03-enhanced-sidebar-design.md`
+**Spec:** `intent/2026-04-03-enhanced-sidebar/spec.md`
 
 ---
 
