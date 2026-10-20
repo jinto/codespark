@@ -7,6 +7,10 @@
 ## Problem
 In a normal terminal, closing a tab ends the process and the work is gone: the app no longer knows what that tab was, where it was, what it was connected to, or what the screen looked like. Users have to rebuild prior work from memory.
 
+**추정** (원문에 이유 없음, 그 무렵 기록으로 2026-10-20에 추측): The likely trigger was the author's own day-to-day setup at the time: many terminals open per task across git worktrees, local shells and SSH hosts (including coding-agent sessions), where closing a tab or pane meant losing track of what it had been. The tools that inspired the project (cmux, Superset) center on agents and worktree orchestration; this spec explicitly puts its core value elsewhere ("not multiplexing or agent orchestration"), which suggests project memory was picked as the distinguishing focus.
+- 근거: initial commit `fd1b5b6`: README "Inspired by" (cmux, Superset) and PRD personas P1 (3+ projects at once) / P2 ("세션 복원이 생명선"); this folder's spec.md Summary.
+- 확신: 중간
+
 ## Proposed outcome
 - A macOS terminal whose core value is remembering projects after terminals close.
 - A project is a user-defined task context holding a mix of local and SSH sessions, plus one shared note.
