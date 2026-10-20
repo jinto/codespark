@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift 5 / SwiftUI / XCTest, `Foundation.Process`로 `/usr/bin/git`·`/usr/bin/ssh` 실행, Ghostty(GhosttyKit) 터미널 엔진.
 
-**Spec:** `docs/superpowers/specs/2026-08-20-remote-worktree-scan-design.md`
+**Spec:** `intent/2026-08-20-remote-worktree-scan/spec.md`
 
 ## Global Constraints
 
