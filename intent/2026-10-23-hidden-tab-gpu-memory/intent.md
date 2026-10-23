@@ -2,7 +2,7 @@
 
 - Date: 2026-10-23
 - Status: approved (2026-10-23)
-- Next: spec.md (draft)
+- Next: plan.md
 
 ## Problem
 9일째 켜 둔 앱의 footprint가 3.7GB였다. 그중 3.2GB가 GPU 메모리다(IOSurface 1.6GB = 21.4MB × 78장, IOAccelerator 1.6GB). 살아 있는 탭은 19개이고, 탭당 렌더 타겟이 약 4장이다. 4K 창 기준으로 탭 하나가 약 170MB를 쓴다.

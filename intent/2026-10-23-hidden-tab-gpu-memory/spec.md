@@ -1,7 +1,7 @@
 # Spec: 숨은 탭이 GPU 메모리를 놓게 한다
 
 - Intent: intent.md (approved 2026-10-23)
-- Status: draft
+- Status: approved (2026-10-23)
 
 ## 1. Ghostty 고정 커밋: `b58ef1d67` (main, 2026-10-20)
 
