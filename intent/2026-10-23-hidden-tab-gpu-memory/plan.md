@@ -1,50 +1,73 @@
 # Plan: 숨은 탭이 GPU 메모리를 놓게 한다
 
 - Spec: spec.md (approved 2026-10-23)
-- Status: draft
+- Status: draft (rev 2: codex·fable 리뷰 반영)
 
 순서가 중요하다. 메모리 기준선(0단계)은 업그레이드 **전** 빌드로만 잴 수 있다.
 
 ## 0. 기준선 측정 (업그레이드 전)
 - [ ] 현재 HEAD를 Release로 빌드한다. `vendor/ghostty`는 `ee236e9a`다. dev 앱을 띄운다.
-- [ ] 같은 창 크기에서 탭 11개(보이는 탭 1, 숨은 탭 10)를 연다. `footprint -p <pid>`에서 IOSurface와 IOAccelerator를 기록한다. `sample <pid> 2`로 앱이 앞일 때와 배경일 때의 CVDisplayLink 스레드 수도 기록한다.
-  → verify: 수치를 `docs/2026-10-23-hidden-tab-gpu-memory.md`에 남긴다. 숨은 탭 하나에 IOSurface 약 4장이 잡혀 있어야 한다.
+- [ ] 같은 창 크기에서 탭 11개(보이는 탭 1, 숨은 탭 10)를 연다. `footprint -p <pid>`에서 IOSurface(장수와 크기)와 IOAccelerator를 기록한다. `sample <pid> 2`로 앱이 앞일 때와 배경일 때의 CVDisplayLink 스레드 수도 기록한다.
+  → verify: `docs/2026-10-23-hidden-tab-gpu-memory.md`에 남긴다. 숨은 탭 하나에 IOSurface 약 4장이 잡혀 있어야 한다.
 
-## 1. zig 0.16 툴체인 (Ghostty 전, 단독으로 초록)
-zig를 부르는 곳은 셋이다: Xcode 빌드 페이즈(`project.yml`과 pbxproj), `.githooks/pre-commit`, `scripts/build-ghostty.sh`. 셋 다 `command -v zig`부터 찾는다. brew의 `zig`는 이제 0.17이므로 버전이 다른 zig가 조용히 잡힌다.
-- [ ] 리포 루트에 `.zig-version`(`0.16.0`) 하나를 둔다. 세 곳 모두 후보 목록 맨 앞에 `/opt/homebrew/opt/zig@0.16/bin/zig`(brew keg-only)를 두고, 실행 전에 `"$ZIG" version`이 `.zig-version`과 같은지 검사한다. 다르면 `brew install zig@0.16` 또는 `ZIG=`로 지정하라는 안내와 함께 `exit 1`.
-- [ ] `release.yml`: `setup-zig`의 `version`을 0.16.0으로 바꾸고 주석 근거도 고친다.
-- [ ] TDD: `ReleaseWorkflowTests`에 테스트를 먼저 추가한다. `.zig-version` = `release.yml`의 setup-zig 버전 = `libs/workspace-core/build.zig.zon`의 `minimum_zig_version`이고, 세 호출부가 `.zig-version`을 읽는지 본다. 빨간불을 확인한 뒤 고친다.
-- [ ] `libs/workspace-core`: `minimum_zig_version`을 `0.16.0`으로 바꾸고, `tests/store_test.zig`를 0.16 API로 옮긴다(`std.time.nanoTimestamp` 등). 본체 `src/`는 그대로 빌드된다(실측).
-  → verify: `zig build test --summary all`이 0.16에서 39개 이상 통과한다. pre-commit 훅이 통과한다. 0.15.2나 0.17로 지정하면 훅과 빌드 페이즈가 버전 메시지와 함께 실패한다.
+## 1. zig 0.16 + Ghostty `b58ef1d67` (한 커밋)
+**두 개를 나눌 수 없다.** Ghostty의 `requireZig`(`src/build/zig.zig`)는 minor 버전이 어긋나면 양쪽 방향 모두 `@compileError`를 낸다. zig 0.16으로는 `ee236e9a`를 빌드할 수 없고, 0.15로는 `b58ef1d67`을 빌드할 수 없다. 따로 커밋하면 그 사이의 커밋은 릴리즈 태그를 붙이면 CI에서 죽는다.
 
-## 2. Ghostty `b58ef1d67`로 올리기
-- [ ] `vendor/ghostty`를 `b58ef1d67…`(전체 40자)로 옮기고 `.ghostty-version`을 갱신한다. `scripts/build-ghostty.sh`로 xcframework를 빌드한다.
-- [ ] 앱 컴파일 에러를 고친다. `read_clipboard_cb`는 "읽지 않음"에 해당하는 enum 값을 반환한다. 동작은 바꾸지 않는다. 그 밖의 C API 변경은 컴파일러가 알려 주는 대로 최소한으로 고친다.
-  → verify: Release 빌드, 유닛 전체, `AppBundleMetadataTests`(terminfo `78/xterm-ghostty`, shell-integration 번들)가 모두 초록이다.
+- [ ] **zig 찾기**: 빌드 페이즈(`project.yml`과 pbxproj), `.githooks/pre-commit`, `scripts/build-ghostty.sh` 세 곳 모두 후보 맨 앞에 `/opt/homebrew/opt/zig@0.16/bin/zig`(brew keg-only)를 둔다. `build-ghostty.sh`도 맨 `zig` 대신 `"$ZIG"`로 부른다. 런타임 버전 비교는 넣지 않는다. 버전이 틀리면 `requireZig`(Ghostty)와 `minimum_zig_version`(workspace-core)이 이미 크게 실패한다. 실패 메시지가 brew 명령을 가리키도록, 찾지 못했을 때의 안내만 `brew install zig@0.16`으로 바꾼다.
+- [ ] **TDD 게이트**: 먼저 `ReleaseWorkflowTests`를 추가해 빨간불을 확인한다. 검사하는 것은 두 가지다. `release.yml`의 setup-zig 버전, `libs/workspace-core/build.zig.zon`의 `minimum_zig_version`, `vendor/ghostty`의 `build.zig.zon` `minimum_zig_version`이 모두 같은지(`.zig-version` 파일은 만들지 않는다. 기준점은 고정된 Ghostty다). 그리고 세 호출부가 keg 경로를 첫 후보로 두는지.
+- [ ] workspace-core: `minimum_zig_version`을 0.16.0으로 올리고, `tests/store_test.zig`를 0.16 API로 옮긴다. `src/`는 그대로 빌드된다(실측).
+- [ ] `release.yml`: setup-zig 0.16.0으로 바꾸고 주석도 고친다.
+- [ ] `vendor/ghostty`를 `b58ef1d67…`(전체 40자)로 옮기고 `.ghostty-version`을 갱신한 뒤, `scripts/build-ghostty.sh`로 빌드한다.
+- [ ] **C API 변경 목록**(헤더 diff로 확인. 앱이 쓰는 63개 심볼은 모두 존재한다):
+  - `read_clipboard_cb`: 인자가 6개로 늘고 반환형이 `ghostty_clipboard_read_result_e`가 된다. "읽지 않음"에 해당하는 값을 반환한다. `confirm_read_clipboard_cb` 타입도 맞춘다.
+  - **`ghostty_clipboard_content_s`에 `len`이 추가되고 `data`는 더 이상 NUL로 끝나지 않는다.** 필드 추가라서 **컴파일러가 잡지 못한다.** `GhosttyRuntime.swift`의 `String(cString: data)`는 버퍼를 넘어 읽는다(복사 / OSC 52). `data[0..<len]`로 문자열을 만든다.
+  → verify: `zig build test`(workspace-core)와 Release 빌드, 유닛 전체, `AppBundleMetadataTests`가 초록이다. 복사(Cmd+C)와 `printf '\e]52;c;%s\a' $(printf 한글abc | base64)`로 클립보드에 정확히 `한글abc`가 들어가는지 확인한다.
 
-## 3. CLAUDE.md 실측 지식 재검증 (spec §5)
-- [ ] spec §5의 항목마다 새 트리에서 근거 코드와 줄 번호를 확인한다. 바뀐 줄 번호와 동작을 CLAUDE.md에 반영한다. 동작이 바뀐 항목이 나오면 멈추고 사용자에게 보고한다(우리 코드가 그 동작에 기대고 있을 수 있으므로).
-  → verify: 항목별 "그대로 / 줄 번호만 / 동작 변경" 표를 docs 파일에 남긴다.
+## 2. CLAUDE.md 실측 지식 재검증 (spec §5)
+fable이 이미 확인한 항목: `updateSize` no-op, `wait-after-command`(`:533`→`:571`), `child_exited`(`:1225`→`Surface.zig:1281`), resourcesdir, `Exec.zig` TERMINFO와 integration, `/bin/bash` 거부, SharedGrid negative cache. 동작은 그대로이고 줄 번호만 바뀌었다.
+- [ ] 아직 안 읽은 고변동 파일부터 확인한다. `src/termio/stream_handler.zig`(OSC 7 `isLocal`, percent-decode, OSC 777 → DESKTOP_NOTIFICATION), `src/config/Config.zig`(`font-family` 반복이 fallback 추가로 동작하는지. 한글 글꼴 항목이 여기에 기댄다), `Surface.zig`.
+- [ ] 바뀐 줄 번호를 CLAUDE.md에 반영한다. 동작이 바뀐 항목이 나오면 멈추고 사용자에게 보고한다.
+  → verify: 항목별 "그대로 / 줄 번호만 / 동작 변경" 표를 docs에 남긴다.
 
-## 4. occlusion 알림 (TDD)
-- [ ] **빨강**: `SurfaceVisibilityTests`를 만든다. 순수 판정 `TerminalVisibility.isVisible(hasWindow:isHiddenOrHasHiddenAncestor:windowIsVisible:)`를 표로 검사한다. 5가지 경우는 창 없음, 숨김, 조상 숨김, 가려진 창, 보임이다.
-- [ ] **빨강**: 소스 게이트. `Terminal/` 밖에서도, 안에서도 `ghostty_surface_set_occlusion`을 부르는 곳은 `GhosttyTerminalSurfaceView.swift` 하나뿐이어야 한다. `SurfaceLifecycleTests`의 `test_only_the_surface_view_claims_the_keyboard`와 같은 방식이다.
-- [ ] **초록**: `TerminalFocus.swift` 옆에 `TerminalVisibility` enum을 둔다. 뷰에는 `surfaceVisible = true` 미러와 `surfaceVisibilityDidChange()`(다시 계산하고, 바뀌었을 때만 `ghostty_surface_set_occlusion`)를 둔다. 호출 시점은 init 직후, `viewDidMoveToWindow`, `viewDidHide`, `viewDidUnhide`, 그리고 창의 `didChangeOcclusionStateNotification`이다. 이 알림은 기존 `windowKeyObservers` 목록에 더해 같은 생명주기로 관리한다.
-  → verify: 유닛 전체가 초록이다. 미러 초기값을 `false`로 바꾸면 테스트가 실패하는지 확인한다. 실패하지 않으면 그 사실과 이유를 docs에 적는다. 유닛 환경은 표면을 못 만들기 때문이다.
+## 3. occlusion 알림 (TDD, 별도 커밋)
+- [ ] **빨강: AppKit 가정 테스트.** 진짜 근거는 AppKit에 있으므로, 표면 없이 기록하는 NSView 하위 클래스로 잰다. `AppKitResponderAssumptionTests`와 같은 방식이다.
+  - (a) 창이 없는 뷰의 `isHidden`을 바꿔도 `viewDidHide`/`viewDidUnhide`가 오는가
+  - (b) 조상을 숨겨도 오는가
+  - (c) 창을 miniaturize하면 `didChangeOcclusionStateNotification`이 오는가. 테스트 환경에서 재지 못하면 수동 오라클로 돌리고 그 사실을 적는다.
+- [ ] **빨강: 소스 게이트**(`SurfaceLifecycleTests`).
+  - `ghostty_surface_set_occlusion` 호출부는 `GhosttyTerminalSurfaceView.swift` 하나뿐이어야 한다.
+  - `private var surfaceVisible = true`. `test_a_surface_starts_believing_what_libghostty_believes`에 grep 한 줄을 추가한다.
+- [ ] **초록**: 뷰에 `surfaceVisible` 미러와 `syncVisibility()`를 둔다. 판정은 `window != nil && !isHiddenOrHasHiddenAncestor && window.occlusionState.contains(.visible)`를 인라인으로 쓴다(세 조건의 AND라 별도 타입을 만들지 않는다). 바뀌었을 때만 `ghostty_surface_set_occlusion`을 부른다. 호출 시점은 init 직후(미러는 true로 시작하고 false를 한 번 보낸다. b58의 swap chain은 lazy라서, 첫 draw 전에 숨김을 들은 탭은 렌더 타겟을 **아예 만들지 않는다**), `viewDidHide`/`viewDidUnhide`, `viewDidMoveToWindow`(**`syncSurfaceSize` 뒤에**. 그래야 즉시 그리는 첫 draw가 올바른 크기로 나간다), 창의 occlusion 알림(`windowKeyObservers` 목록에 더한다)이다.
+- [ ] `updateNSView`의 `ghostty_surface_refresh`는 유지한다. visible이 되면 Thread가 즉시 `renderCallback`을 돌리므로 draw가 한 번 중복될 뿐이고, 같은 렌더 스레드의 mailbox라 경쟁도 없다(fable 확인). codex는 제거를 제안했지만, 기존 게이트 `test_a_surface_coming_back_into_view_is_told_to_paint`가 이 호출을 지키고 있고 이득이 한 프레임이라 범위 밖으로 둔다.
+  → verify: 유닛 전체가 초록이다. 미러 초기값을 false로 바꾸면 게이트가 빨개진다.
 
-## 5. 실측 검증 (spec §6)
-- [ ] 0단계와 같은 조건(창 크기, 탭 11개)에서 `footprint`를 다시 잰다.
-  → verify: 숨은 탭 몫의 IOSurface와 IOAccelerator가 사라진다. IOAccelerator가 남는다면 남은 양을 기록한다(intent의 열린 질문).
-- [ ] 화면 오라클을 확인한다. 출력이 끝난 탭에서 다른 탭에 갔다 오기, 탭 없는 워크트리를 거쳐 돌아오기, 창 최소화 후 복원이다. 빈 화면이나 낡은 프레임이 없어야 한다. WINCH 트랩으로 크기 신호가 없음을 확인한다. 복원 재생에서 한글이 보이는지 확인한다. kitty 키보드 바이트 오라클(`printf '\e[>11u'; cat -v`)도 돌린다.
-- [ ] 배터리: 앱이 배경일 때 `sample`의 CVDisplayLink 스레드가 0이어야 한다.
-- [ ] XCUITest: 입력 소스는 ABC로 하고, 워크트리 재료를 준비한다. skip이 0이어야 한다.
-  → verify: 결과를 docs 파일에 기록한다. 사용자 기계의 3.7GB 상황에서 기대 절감량을 계산해 적는다.
+## 4. 실측 검증 (spec §6)
+자동화로 GPU 해제를 관측할 방법은 없다(유닛 환경은 표면을 못 만든다). 게이트는 소스 게이트와 아래 수동 오라클이다. kitty 바이트 오라클과 같은 모양이다.
+- [ ] 0단계와 같은 조건에서 `footprint`를 다시 잰다.
+  → **기대치를 미리 정해 둔다**: 숨은 탭마다 IOSurface 4장 중 **3장이 사라지고 1장은 남는다.** CoreAnimation 레이어 `contents`가 마지막 프레임을 쥐고 있고, 렌더러는 그걸 비우지 않는다(`IOSurfaceLayer`). 이 덕분에 다시 보일 때 빈 화면이 깜빡이지 않는다. IOAccelerator는 거의 0이어야 한다. Kitty 이미지 자원은 업스트림도 놓지 않으므로 이미지가 없는 탭으로 잰다. 사용자 기계(19탭, 4K)로 환산하면 3.2GB에서 약 0.4GB 남짓이 된다.
+- [ ] 화면 오라클:
+  - 출력이 끝난 탭에서 다른 탭에 갔다 오기
+  - **탭 없는 워크트리를 거쳐 돌아오기**. 이때는 모든 표면의 `window`가 nil이 되므로, 이제 **보이던 탭의 GPU 상태까지** 놓았다가 다시 만든다. 가장 위험한 경로다.
+  - 창 최소화 후 복원
+  - 시트를 띄운 상태에서 탭 전환
+  
+  모두 빈 화면이나 낡은 프레임 없이 그려져야 한다. WINCH 트랩으로 크기 신호가 없음을 확인하고, 복원 재생에서 한글이 보이는지, kitty 키보드 바이트 오라클이 통과하는지 확인한다.
+- [ ] 배터리: 앱이 배경일 때 `sample`의 CVDisplayLink 스레드가 0인지 본다. **오라클 문장이 바뀐다.** `6688aa072`(idle이면 display link를 멈춘다) 이후로는 앱이 앞에 있어도 idle이면 0이고, `97f57edcc` 이후로는 보이지만 포커스가 없는 탭이라도 출력 중이면 1이 될 수 있다. 회귀가 아니다.
+- [ ] XCUITest: 입력 소스는 ABC로 하고 워크트리 재료를 준비한다. skip이 0이어야 한다.
+  → verify: 결과를 docs에 기록한다.
 
-## 6. 리뷰와 마무리
+## 5. 리뷰와 마무리
 - [ ] 구현 리뷰를 codex와 fable에게 병렬로 받는다. 지적을 반영한다.
 - [ ] `ponytail-review`를 돌린다.
-- [ ] CLAUDE.md의 Ghostty Integration 절에 occlusion 규칙을 한 단락으로 추가한다. 무엇을 위해 부르는지, 왜 `true`로 시작하는지, 판정이 포커스와 독립이라는 점이다. Release 절에는 zig 버전이 `.zig-version`을 따른다고 적는다.
+- [ ] CLAUDE.md:
+  - Ghostty Integration 절에 occlusion 규칙(무엇을 위해 부르는지, 왜 true로 시작하는지, 포커스와 독립이라는 점, 1장이 남는 이유)과 clipboard `len` 함정을 추가한다.
+  - 배터리 오라클 문장을 고친다.
+  - Release 절에 zig 버전은 고정된 Ghostty를 따른다고 적는다.
 
 ## 커밋 단위
-1 → 2 → 3 → 4 → 5(docs와 CLAUDE.md). 각 커밋은 pre-commit 훅을 통과해야 한다. 2와 4를 한 커밋에 섞지 않는다. 업그레이드가 회귀를 내면 occlusion과 분리해서 되돌릴 수 있어야 한다.
+1(zig + Ghostty + C API) → 2(CLAUDE.md 줄 번호) → 3(occlusion) → 4·5(docs). 각 커밋은 pre-commit 훅을 통과해야 한다. 1과 3을 섞지 않아서, 업그레이드가 회귀를 내면 occlusion과 따로 되돌릴 수 있게 한다.
+
+## 리뷰에서 받지 않은 것
+- codex: "occlusion의 C API 전이를 런타임으로 검사하는 테스트". 유닛 환경은 표면을 만들 수 없다. AppKit 가정 테스트, 소스 게이트, 수동 오라클로 대신한다.
+- codex: `ghostty_surface_refresh` 제거. 위 3단계 참고.
+- fable 대안: occlusion을 옛 Ghostty에 먼저 싣기(CPU 절감만 있다). 업그레이드가 막힐 때만 고려한다.

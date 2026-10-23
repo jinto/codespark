@@ -12,7 +12,7 @@
 ghostty-org/ghostty#14017 "renderer: release GPU resources for hidden surfaces (macOS)"(mitchellh, 2026-08-25 머지, 머지 커밋 `683d8db6`).
 - 표면이 invisible이 되면(`setVisible(false)`, 즉 occlusion) swap chain 렌더 타겟, uniform/cell 버퍼, 폰트 텍스처를 놓고 다음 draw에서 다시 만든다.
 - 측정치(보이는 탭 1개 + 숨은 탭 20개): `footprint` IOSurface 309MB → 15MB, `MTLDevice.currentAllocatedSize` 393MB → 20MB, 다시 보일 때 재생성은 평균 0.43ms.
-- 우리 고정 커밋보다 1,752커밋 뒤에 있다. 정식 릴리즈(v1.3.1)에는 아직 들어가지 않았고 main에만 있다.
+- 우리 고정 커밋보다 한참 뒤에 있다(`b58ef1d67`까지 first-parent 991커밋). 정식 릴리즈(v1.3.1)에는 아직 들어가지 않았고 main에만 있다.
 
 그래서 처음에 계획한 (a) 자체 패치와 (b) 업스트림 PR은 필요 없어졌다. 같은 변경이 이미 업스트림에 있다.
 
