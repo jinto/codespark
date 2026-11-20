@@ -14,8 +14,14 @@ if [ ! -d "$GHOSTTY_DIR" ]; then
     exit 1
 fi
 
-if ! command -v zig &>/dev/null; then
-    echo "error: zig not found. Install with: brew install zig" >&2
+# The versioned keg comes first: PATH's `zig` moves whenever brew upgrades it, and
+# Ghostty's requireZig refuses any other minor version.
+ZIG=${ZIG:-}
+[ -n "$ZIG" ] || for c in /opt/homebrew/opt/zig@0.16/bin/zig "$(command -v zig || true)"; do
+    [ -x "$c" ] && ZIG=$c && break
+done
+if [ -z "$ZIG" ]; then
+    echo "error: zig not found. Install with: brew install zig@0.16" >&2
     exit 1
 fi
 
@@ -23,7 +29,7 @@ echo "Building Ghostty xcframework..."
 cd "$GHOSTTY_DIR"
 # ReleaseFast is not optional: a debug GhosttyKit ships a ~100x slower
 # allocator, which reads as the app being broken rather than slow.
-zig build -Doptimize=ReleaseFast -Demit-xcframework=true
+"$ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true
 
 if [ -d "$XCFRAMEWORK_OUT" ]; then
     echo "Build succeeded: $XCFRAMEWORK_OUT"

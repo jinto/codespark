@@ -26,15 +26,15 @@ targets:
           # is only on PATH in a *login* shell. So `zig` was routinely not found here —
           # and until `set -e` above, the phase reported success anyway and linked
           # whatever libworkspace-core.a happened to be on disk.
-          if [ -z "${ZIG:-}" ]; then
-            ZIG=$(command -v zig || true)
-          fi
-          for candidate in /opt/homebrew/bin/zig /usr/local/bin/zig; do
+          # The versioned keg comes before PATH: PATH's `zig` moves whenever brew
+          # upgrades it, and the pinned Ghostty refuses any other minor version.
+          ZIG=${ZIG:-}
+          for candidate in /opt/homebrew/opt/zig@0.16/bin/zig "$(command -v zig || true)" /opt/homebrew/bin/zig /usr/local/bin/zig; do
             [ -n "$ZIG" ] && break
             [ -x "$candidate" ] && ZIG=$candidate
           done
           if [ -z "$ZIG" ]; then
-            echo "error: zig not found. Install it (brew install zig) or set ZIG=/path/to/zig."
+            echo "error: zig not found. Install it (brew install zig@0.16) or set ZIG=/path/to/zig."
             exit 1
           fi
           if [ "$CONFIGURATION" = "Release" ]; then

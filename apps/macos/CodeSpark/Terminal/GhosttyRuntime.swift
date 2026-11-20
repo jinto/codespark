@@ -110,7 +110,10 @@ final class GhosttyRuntime {
                 }
                 return true
             },
-            read_clipboard_cb: { _, _, _ in false },
+            // We never serve clipboard reads (paste goes through our own path).
+            // UNSUPPORTED is the old `false`: the request isn't started, and a
+            // Kitty clipboard client hears ENOSYS instead of waiting forever.
+            read_clipboard_cb: { _, _, _, _, _, _ in GHOSTTY_CLIPBOARD_READ_UNSUPPORTED },
             confirm_read_clipboard_cb: { _, _, _, _ in },
             write_clipboard_cb: { _, loc, content, len, _ in
                 guard loc == GHOSTTY_CLIPBOARD_STANDARD else { return }
@@ -119,8 +122,13 @@ final class GhosttyRuntime {
                 pasteboard.clearContents()
                 // content is an array of ghostty_clipboard_content_s
                 let first = content.pointee
-                if let data = first.data {
-                    pasteboard.setString(String(cString: data), forType: .string)
+                // Not NUL-terminated since the pinned Ghostty grew `len`: reading
+                // it as a C string runs past the buffer. The compiler can't see
+                // this — adding a field breaks nothing at the call site.
+                if let data = first.data,
+                   let text = String(bytes: UnsafeRawBufferPointer(start: data, count: first.len),
+                                     encoding: .utf8) {
+                    pasteboard.setString(text, forType: .string)
                 }
             },
             close_surface_cb: { userdata, processAlive in

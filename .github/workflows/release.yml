@@ -18,10 +18,10 @@ jobs:
         # deprecation warning. Move it when a node24 release exists.
         uses: mlugg/setup-zig@v2
         with:
-          # The pinned ghostty tree declares 0.15.2 as its minimum; that is the
-          # version this commit is known to build with. Bump it with the pin, not
-          # on its own.
-          version: 0.15.2
+          # The pinned ghostty tree declares 0.16.0 as its minimum, and its
+          # requireZig rejects any other minor in both directions. Bump it with
+          # the pin, not on its own (ReleaseWorkflowTests checks they agree).
+          version: 0.16.0
 
       # No cache step here on purpose. Actions caches are scoped by ref, and this
       # workflow only ever runs from a fresh tag, so a `ghosttykit-relfast-*`

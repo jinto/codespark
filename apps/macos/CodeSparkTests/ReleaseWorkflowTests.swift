@@ -131,6 +131,41 @@ final class ReleaseWorkflowTests: XCTestCase {
             "릴리즈가 workspace-core 테스트를 돌리지 않는다")
     }
 
+    /// zig 버전은 고정된 Ghostty가 정한다. Ghostty의 `requireZig`는 minor가
+    /// 어긋나면 양방향으로 `@compileError`를 내므로, CI·workspace-core·Ghostty가
+    /// 한 버전이 아니면 릴리즈가 죽는다 — 로컬에서는 우연히 맞는 zig가 가려 준다.
+    func test_every_zig_consumer_agrees_with_the_pinned_ghostty() throws {
+        func minimumZig(_ zon: String) throws -> String {
+            let text = try contents(zon)
+            let match = try XCTUnwrap(
+                text.range(of: #"minimum_zig_version = "[0-9.]+""#, options: .regularExpression),
+                "\(zon)에 minimum_zig_version이 없다")
+            return String(text[match]).components(separatedBy: "\"")[1]
+        }
+        let ghostty = try minimumZig("vendor/ghostty/build.zig.zon")
+
+        XCTAssertEqual(try minimumZig("libs/workspace-core/build.zig.zon"), ghostty,
+                       "workspace-core의 minimum_zig_version이 고정된 Ghostty와 다르다")
+        XCTAssertTrue(
+            try contents(".github/workflows/release.yml").contains("version: \(ghostty)"),
+            "release.yml의 setup-zig가 고정된 Ghostty의 zig(\(ghostty))가 아니다")
+
+        // PATH의 `zig`는 brew가 올리는 대로 움직인다. 세 호출부 모두 버전이 박힌
+        // keg 경로를 PATH보다 먼저 본다.
+        let keg = "/opt/homebrew/opt/zig@\(ghostty.split(separator: ".").prefix(2).joined(separator: "."))/bin/zig"
+        for caller in [".githooks/pre-commit",
+                       "scripts/build-ghostty.sh",
+                       "apps/macos/project.yml",
+                       "apps/macos/CodeSpark.xcodeproj/project.pbxproj"] {
+            let text = try contents(caller)
+            let kegAt = try XCTUnwrap(text.range(of: keg), "\(caller)가 \(keg)를 찾지 않는다")
+            if let pathAt = text.range(of: "command -v zig") {
+                XCTAssertLessThan(kegAt.lowerBound, pathAt.lowerBound,
+                                  "\(caller)가 keg보다 PATH의 zig를 먼저 본다")
+            }
+        }
+    }
+
     /// Quoting for a remote shell lived in three files, byte for byte the same,
     /// and the tilde expression in three more. That is the duplication that
     /// matters most: it is where a directory name becomes shell syntax, so a

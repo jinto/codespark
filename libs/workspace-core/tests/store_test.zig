@@ -40,7 +40,7 @@ test "memory databases do not share state across connections" {
 test "file backed databases persist across reopen" {
     const path = try uniqueDbPath("project-store");
     defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     {
         var store = try core.Store.open(path);
@@ -89,7 +89,7 @@ test "closing a session updates recently closed count" {
 test "file backed reopen preserves session counts" {
     const path = try uniqueDbPath("session-lifecycle");
     defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     var project_id: []u8 = undefined;
     {
@@ -133,7 +133,7 @@ test "file backed reopen preserves session counts" {
 test "timeline events are recorded for project and session operations" {
     const path = try uniqueDbPath("timeline-events");
     defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     var project_id: []u8 = undefined;
     var session_id: []u8 = undefined;
@@ -203,7 +203,7 @@ test "closing an already closed session is idempotent" {
 test "session activity updates project list recency" {
     const path = try uniqueDbPath("session-lifecycle");
     defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     {
         var store = try core.Store.open(path);
@@ -249,7 +249,7 @@ test "session activity updates project list recency" {
 test "start session rejects missing project without creating orphan row" {
     const path = try uniqueDbPath("session-lifecycle");
     defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     var store = try core.Store.open(path);
     defer store.deinit();
@@ -420,7 +420,7 @@ test "deleteProject cascades to sessions and snapshots" {
 test "corrupt transport returns error instead of panic" {
     const path = try uniqueDbPath("corrupt-transport");
     defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     var store = try core.Store.open(path);
     const project_id = try store.createProject(std.testing.allocator, "test", "", .local);
@@ -505,7 +505,7 @@ test "project service returns project detail for swift" {
 test "project service file store exposes live sessions" {
     const path = try uniqueDbPath("project-service");
     defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     var status: core.project_status_t = .PROJECT_STATUS_OK;
     var project_id: ?[*:0]u8 = null;
@@ -772,7 +772,7 @@ test "moving a session refiles it under the target project and workspace" {
 test "sessions created before the workspace column report an empty workspace" {
     const path = try uniqueDbPath("workspace-migration");
     defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     var project_id: []u8 = undefined;
     {
@@ -1075,10 +1075,12 @@ fn freeTimelineEvents(items: []TimelineEventRow) void {
 }
 
 fn uniqueDbPath(prefix: []const u8) ![:0]u8 {
-    const stamp = std.time.nanoTimestamp();
-    const suffix = std.crypto.random.int(u64);
-    const path = try std.fmt.allocPrint(std.testing.allocator, "/tmp/{s}-{d}-{d}.sqlite3", .{
-        prefix, stamp, suffix,
+    // A random u64 alone keeps paths apart; the nanosecond stamp it used to
+    // carry has no clock API left in std without an Io (zig 0.16).
+    var suffix: u64 = undefined;
+    std.testing.io.random(std.mem.asBytes(&suffix));
+    const path = try std.fmt.allocPrint(std.testing.allocator, "/tmp/{s}-{d}.sqlite3", .{
+        prefix, suffix,
     });
     defer std.testing.allocator.free(path);
     return std.testing.allocator.dupeZ(u8, path);
@@ -1204,7 +1206,7 @@ fn expectSqliteDone(stmt: ?*sqlite.sqlite3_stmt, db: ?*sqlite.sqlite3) !void {
 test "a version row lost mid-write does not brick the store" {
     const path = try uniqueDbPath("migration-lost-version");
     defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     {
         var store = try core.Store.open(path);
@@ -1221,7 +1223,7 @@ test "a version row lost mid-write does not brick the store" {
 test "a migration replayed over its own columns does not brick the store" {
     const path = try uniqueDbPath("migration-replayed");
     defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     {
         var store = try core.Store.open(path);
@@ -1253,7 +1255,7 @@ test "a migration replayed over its own columns does not brick the store" {
 test "a store that fails to migrate closes its handle exactly once" {
     const path = try uniqueDbPath("migration-refused");
     defer std.testing.allocator.free(path);
-    defer std.fs.cwd().deleteFile(path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
 
     {
         var store = try core.Store.open(path);
