@@ -1,7 +1,7 @@
 # Plan: 숨은 탭이 GPU 메모리를 놓게 한다
 
 - Spec: spec.md (approved 2026-10-23)
-- Status: draft (rev 2: codex·fable 리뷰 반영)
+- Status: approved (2026-11-20, rev 2)
 
 순서가 중요하다. 메모리 기준선(0단계)은 업그레이드 **전** 빌드로만 잴 수 있다.
 
