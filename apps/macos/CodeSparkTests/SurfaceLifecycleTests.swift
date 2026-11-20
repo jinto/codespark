@@ -61,6 +61,47 @@ final class SurfaceLifecycleTests: XCTestCase {
         )
     }
 
+    /// 보이는지도 포커스와 같은 모양이다: libghostty는 표면을 visible로 만들고
+    /// (`renderer/Thread.zig`의 `visible: bool = true`) `set_occlusion(false)`를
+    /// 들어야만 숨은 탭의 GPU 자원(렌더 타겟·버퍼·폰트 텍스처)을 놓는다
+    /// (ghostty#14017). 미러가 `false`로 시작하면 한 번도 화면에 안 나온 탭에는
+    /// 그 호출이 영영 안 가고, 탭마다 4K 기준 약 170MB를 쥐고 있는다.
+    ///
+    /// 실측 오라클: 탭 N개(보이는 탭 1)에서 `footprint -p <pid>`의 IOSurface가
+    /// 숨은 탭마다 1장(CoreAnimation이 쥔 마지막 프레임)만 남아야 한다.
+    func test_a_surface_starts_believing_it_is_visible_like_libghostty() throws {
+        let source = try source("GhosttyTerminalSurfaceView.swift")
+        XCTAssertTrue(
+            source.contains("private var surfaceVisible = true"),
+            "미러가 libghostty의 초기값(visible)과 다르면 숨은 탭에 set_occlusion(false)가 안 간다."
+        )
+        XCTAssertTrue(
+            source.contains("NSWindow.didChangeOcclusionStateNotification"),
+            "창이 최소화되거나 가려져도 뷰의 isHidden은 그대로라, 창의 occlusion을 듣지 않으면 GPU를 못 놓는다."
+        )
+    }
+
+    /// 보이는지를 Ghostty에 말하는 곳은 표면 뷰 하나뿐이다 — 포커스와 같은
+    /// 이유로. 판단 재료(창, 숨김, 창의 occlusion)는 뷰만 갖고 있다.
+    func test_only_the_surface_view_tells_libghostty_whether_it_is_seen() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("CodeSpark")
+        let files = FileManager.default.enumerator(
+            at: root, includingPropertiesForKeys: nil
+        )?.compactMap { $0 as? URL } ?? []
+
+        var callers: [String] = []
+        for file in files where file.pathExtension == "swift" {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            if source.contains("ghostty_surface_set_occlusion(") {
+                callers.append(file.lastPathComponent)
+            }
+        }
+        XCTAssertEqual(callers, ["GhosttyTerminalSurfaceView.swift"])
+    }
+
     /// 다시 보이게 된 표면은 스스로 그리지 않는다. 렌더는 셸의 출력이나 크기
     /// 변화로만 걸리는데, idle 프롬프트에 두고 온 탭에는 둘 다 없다.
     /// 예전엔 같은 크기로 `set_size`를 불러 재렌더를 유도했지만, Ghostty의
@@ -284,6 +325,39 @@ final class AppKitResponderAssumptionTests: XCTestCase {
             window.makeFirstResponder(a),
             "AppKit이 숨겨진 뷰를 거절하기 시작했다면 `!isHidden` 조건은 이제 불필요하다.")
         XCTAssertTrue(window.firstResponder === a)
+    }
+
+    private final class HideProbe: NSView {
+        var hides = 0, unhides = 0
+        override func viewDidHide() { super.viewDidHide(); hides += 1 }
+        override func viewDidUnhide() { super.viewDidUnhide(); unhides += 1 }
+    }
+
+    /// 탭 전환은 조상(ZStack의 호스트)의 `isHidden`을 바꾸는 일이다. 표면이
+    /// `viewDidHide`/`viewDidUnhide`만 듣고 occlusion을 알리므로, AppKit이
+    /// 조상의 변화를 자손에게 전하지 않으면 숨은 탭이 GPU를 놓지 않는다.
+    func test_hiding_an_ancestor_tells_the_descendant() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+            styleMask: [.titled], backing: .buffered, defer: false)
+        let host = NSView(), probe = HideProbe()
+        host.addSubview(probe)
+        window.contentView?.addSubview(host)
+
+        host.isHidden = true
+        host.isHidden = false
+
+        XCTAssertEqual(probe.hides, 1, "조상 숨김이 자손의 viewDidHide로 오지 않는다")
+        XCTAssertEqual(probe.unhides, 1, "조상 표시가 자손의 viewDidUnhide로 오지 않는다")
+    }
+
+    /// 창이 없는 동안 숨김이 바뀌는 경우(SwiftUI가 뷰를 떼어낸 채 갱신할 때).
+    /// 알림이 오든 안 오든 표면은 `viewDidMoveToWindow`에서 다시 계산하므로
+    /// 상관없지만, 어느 쪽인지 적어 둔다 — 바뀌면 이 줄이 알려 준다.
+    func test_hiding_a_view_without_a_window_still_calls_back() {
+        let probe = HideProbe()
+        probe.isHidden = true
+        XCTAssertEqual(probe.hides, 1)
     }
 
     /// 표면이 창의 key 알림을 따로 듣는 이유. 다른 앱으로 가도 창은 first

@@ -18,6 +18,12 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
     /// `set_focus(false)`, and kept its display link running at the refresh rate.
     private var surfaceFocused = true
 
+    /// What libghostty was last told about being on screen. Born `true` like the
+    /// renderer (`visible: bool = true`), for the same reason as `surfaceFocused`:
+    /// a tab that never reaches the screen must still hear `false`, or it keeps
+    /// its GPU render targets (~170MB a tab at 4K) for the app's whole life.
+    private var surfaceVisible = true
+
     /// Called on every key press that reaches this terminal.
     var onKeyDown: (() -> Void)?
 
@@ -45,6 +51,9 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         // A project opens all its tabs at once and only one gets the keyboard.
         // The rest must hear they don't have it, or they draw every vsync.
         surfaceFocusDidChange(false)
+        // No window yet, so this says `false`: a tab that is never shown never
+        // builds its render targets at all.
+        syncVisibility()
     }
 
     private static func createSurface(
@@ -235,7 +244,27 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
                 guard let self, let window = self.window else { return }
                 self.surfaceFocusDidChange(window.isKeyWindow && window.firstResponder === self)
             }
-        }
+        } + [
+            // Minimized, on another Space, or fully covered: the view's own
+            // `isHidden` doesn't change, only the window's occlusion does.
+            NotificationCenter.default.addObserver(
+                forName: NSWindow.didChangeOcclusionStateNotification, object: window, queue: .main
+            ) { [weak self] _ in self?.syncVisibility() },
+        ]
+    }
+
+    /// Tell libghostty whether anyone can see this surface. Hidden, it releases
+    /// its GPU resources and rebuilds them on the next draw (ghostty#14017).
+    /// Independent of focus: a tab on screen behind another app is visible and
+    /// unfocused.
+    private func syncVisibility() {
+        guard let surface else { return }
+        let visible = window != nil
+            && !isHiddenOrHasHiddenAncestor
+            && window?.occlusionState.contains(.visible) == true
+        guard visible != surfaceVisible else { return }
+        surfaceVisible = visible
+        ghostty_surface_set_occlusion(surface, visible)
     }
 
     private func stopFollowingWindowKey() {
@@ -250,6 +279,9 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        // Last, on every path: leaving a window says `false`, and arriving says
+        // `true` only after the size is set, so the immediate draw is the right size.
+        defer { syncVisibility() }
         followWindowKey()
         // The window this view was waiting for. `updateNSView` could not claim
         // focus before now, so this is where the claim actually lands.
@@ -268,6 +300,12 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
         // Becoming the visible tab. AppKit fires this for an ancestor's change
         // too, which is what a tab switch is.
         claimFocus()
+        syncVisibility()
+    }
+
+    override func viewDidHide() {
+        super.viewDidHide()
+        syncVisibility()
     }
 
     override func setFrameSize(_ newSize: NSSize) {
