@@ -6,8 +6,9 @@ macOS terminal multiplexer powered by [Ghostty](https://ghostty.org) engine.
 
 ```bash
 # 1. Build GhosttyKit (ReleaseFast required — debug build has 100x slower allocator)
-cd vendor/ghostty
-zig build -Doptimize=ReleaseFast -Demit-xcframework=true
+#    zig는 고정된 Ghostty가 정한 0.16이어야 한다(brew install zig@0.16). 스크립트가 keg를 먼저 찾는다.
+#    Xcode 26은 Metal Toolchain을 따로 받아야 셰이더가 빌드된다: xcodebuild -downloadComponent MetalToolchain
+scripts/build-ghostty.sh
 
 # 2. Build CodeSpark
 xcodebuild -project apps/macos/CodeSpark.xcodeproj -scheme CodeSpark \
@@ -30,6 +31,11 @@ Key patterns:
   - **0×0은 넘기지 않는다**(`GhosttyTerminalSurfaceView.reportsSize`). 메인 영역이 `.terminals`를 떠났다 돌아오면(탭 없는 워크트리·프로젝트를 거쳐 오면) SwiftUI가 떼어낸 **모든** 표면의 프레임을 0×0으로 만든다(실측). 그대로 넘기면 Ghostty가 그리드를 1×1로 잡고(`GridSize.update`의 `@max(1, …)`) pty에 SIGWINCH, 몇 ms 뒤 원래 크기로 또 SIGWINCH — Claude Code 같은 전체화면 TUI가 한 줄짜리 화면에 맞춰 그렸다 돌아와 **출력과 입력창 사이에 빈 칸**이 남는다("Jump to bottom"이 같이 뜬다). 공식 Ghostty는 크기를 `GeometryReader`에서 받아 이걸 안 본다; 우리는 `setFrameSize`를 그대로 넘겨서 봤다. 오라클: 탭에서 `trap 'echo WINCH $(stty size) >> f' WINCH; while sleep 0.1; do :; done`을 돌리고 `Cmd` 숫자로 탭 없는 자리를 거쳐 온다 — 크기가 안 변했는데 WINCH가 찍히면 그 병이다.
 - Control characters (< 0x20) must be sent as original char + Ctrl modifier, not raw control code
 - Ghostty manages its own Metal layer — do NOT set `wantsLayer = true`
+- **숨은 탭은 `ghostty_surface_set_occlusion(false)`를 듣고 GPU를 놓는다**(ghostty#14017). 판정과 호출은 `GhosttyTerminalSurfaceView.syncVisibility()` 한 곳이다(창 있음 + 숨김 아님 + 창 occlusion visible). 포커스와는 독립이다 — 다른 앱 뒤에서 보이는 탭은 visible이고 unfocused다. 미러는 libghostty처럼 `true`로 태어나고 init 직후 `false`를 한 번 민다(포커스 미러와 같은 이유).
+  - **같은 자리에서 `layer.needsDisplayOnBoundsChange`도 끈다 — 빼면 occlusion이 무력해진다.** Ghostty 레이어는 bounds가 바뀔 때마다 메인 스레드에서 `drawFrame(true)`을 부르는데 그 경로엔 visible 검사가 없고, 그 draw가 방금 놓은 swap chain을 다시 만든다. SwiftUI는 숨은 탭에도 프레임을 주므로 마운트·창 리사이즈마다 그랬다. 실측(탭 11개): 이것 없이 IOSurface 34장/468MB, 있으면 4장/62MB(`docs/2026-10-23-hidden-tab-gpu-memory.md`).
+  - 보였다 숨은 탭은 IOSurface **1장**을 남긴다 — CoreAnimation이 쥔 마지막 프레임이고, 돌아올 때 빈 화면 깜빡임을 막는다. 회귀가 아니다.
+  - **오라클은 `footprint -p <pid>`의 IOSurface 장수**다. 키 입력 없이 재려면 dev 스토어 사본에 `live` 세션 N개를 남기고 `open -n --env CODESPARK_STORE_PATH=<사본> CodeSpark.app` — 복원이 탭을 연다. SSH에서도 된다.
+- **클립보드 쓰기의 `data`는 NUL로 끝나지 않는다**(`ghostty_clipboard_content_s.len`, b58ef1d67부터). `String(cString:)`은 버퍼 뒤를 읽는다 — 필드 추가라 컴파일러가 못 잡는다. 항목은 `len`개이고 순서가 없으니 `text/plain`을 골라 읽는다. 오라클: `printf '\e]52;c;%s\a' $(printf 한글abc | base64)` 뒤 `pbpaste | od -c`가 정확히 9바이트.
 - `close_surface_cb` receives **`config.userdata`가 준 포인터**를 돌려준다 — `config.platform.macos.nsview`가 아니다. 둘은 같은 뷰를 가리켜도 서로 무관한 필드이고, `userdata`를 안 채우면 콜백은 nil을 받아 첫 줄에서 돌아간다. 초기 커밋부터 그 상태였다: `exit`한 로컬 탭도, 끊긴 ssh 탭도 "Process exited. Press any key to close the terminal."을 찍은 채 영영 남았고 — 그 키 입력도 같은 close로 가서 같이 버려지므로 — **어떤 키로도 못 닫혔다**. 스토어에 `close_reason = process_exited`가 1,250여 세션 중 **한 번도** 없던 것이 그 흔적이다.
 - One surface per session — host owns it, `TerminalSurfaceHostView` borrows via `surfaceNSView`
 - **`config.command`을 준 표면은 `wait-after-command`가 켜진다** — 우리가 안 켜도. `embedded.zig`가 명령을 세팅하면서 같이 켠다(`:572`). 그래서 셸이 끝났을 때 로컬 탭(명령 없음)은 **스스로 닫히고**, 명령 탭(ssh·claude·복원된 원격)은 "Press any key"에 서서 기다린다. 이건 버그가 아니라 명령이 왜 끝났는지 읽으라는 것이고, C API로 끌 방법도 없다(플래그는 true로만 간다). 대신 그 키가 실제로 닫아야 한다 — 위 `userdata` 항목.
@@ -243,7 +249,7 @@ Uses `NavigationSplitView` with `.windowToolbarStyle(.unifiedCompact)`:
 - **libghostty에게도 알린다**: `become/resignFirstResponder`가 `ghostty_surface_set_focus`를 부른다(공식 `SurfaceView_AppKit.swift`와 같은 자리). 아무도 안 알려주던 동안 libghostty는 모든 표면이 포커스를 가졌다고 믿었고, **타이핑이 안 되는 탭이 커서를 멀쩡히 그렸다** — 눈으로 구분할 수 없던 이유다.
 - **미러는 libghostty처럼 `true`로 태어난다**: 표면은 focused로 만들어지고(`renderer/Thread.zig`) `set_focus(false)`를 받아야만 display link를 멈춘다. 미러가 `false`로 시작하면 프로젝트를 열 때 한꺼번에 만들어지는 나머지 탭에는 그 호출이 **영영 안 가서**, 안 보는 탭마다 vsync로 그린다 — 사용자 기계에서 표면 14개 중 13개, 배터리 메뉴의 "Using Significant Energy". 그래서 생성 직후 `false`를 한 번 민다.
   - **창의 key 알림도 듣는다**: 다른 앱으로 가도 창은 first responder를 놓지 않아(`AppKitResponderAssumptionTests`) `resignFirstResponder`가 안 울린다. 공식 Ghostty의 `syncFocusToSurfaceTree`와 같은 식(`isKeyWindow && firstResponder === self`)으로 다시 계산한다.
-  - **오라클은 스레드 수다**: `sample <pid> 2`의 `CVDisplayLink` 스레드 — 앞이면 1, 배경이면 0. sudo가 되면 `spindump`의 renderer 우선순위(46 = libghostty가 포커스로 믿음, 37 = 아님)가 표면별로 말해준다. 유닛 테스트 환경은 표면을 못 만들어 소스 게이트뿐이다. 진단 전체: `docs/2026-09-15-idle-tab-battery-drain.md`.
+  - **오라클은 스레드 수다**: `sample <pid> 2`의 `CVDisplayLink` 스레드 — 배경이면 0. 앞이면 1이었지만 b58ef1d67부터는 idle이면 앞이어도 0이고(display link를 idle에 멈춘다), 보이지만 포커스 없는 탭도 출력 중이면 1일 수 있다. 회귀가 아니다. sudo가 되면 `spindump`의 renderer 우선순위(46 = libghostty가 포커스로 믿음, 37 = 아님)가 표면별로 말해준다. 유닛 테스트 환경은 표면을 못 만들어 소스 게이트뿐이다. 진단 전체: `docs/2026-09-15-idle-tab-battery-drain.md`.
 - **오라클**: 유닛 테스트로는 순서를 못 본다. `Cmd+T` → New Terminal 직후 바로 타이핑, 그리고 **선택 다이얼로그가 떠 있는 동안 탭을 바꿨다가 닫고** 타이핑 — 둘 다 그 탭에 글자가 들어가야 한다. 잠긴 화면에서는 검증이 성립하지 않는다(창이 key가 안 된다).
 
 ### 모디파이어 키는 누름/뗌을 가려 보낸다 (kitty keyboard protocol)
@@ -401,6 +407,7 @@ git push origin v{VERSION}
 
 - CI: `.github/workflows/release.yml` (`on: push: tags: ['v*']`)
 - **ghostty는 `.ghostty-version`의 커밋에 고정된다**: `vendor/`는 gitignore라 CI가 직접 받아온다. 예전엔 `main`을 clone해서 **릴리즈가 업스트림과 경주했다** — 우리 쪽 변경이 없어도 어느 날 깨진다(v1.1.4: `read_clipboard_cb`의 인자가 3개에서 6개로 늘었다). 올릴 때는 `vendor/ghostty`를 그 커밋으로 옮기고 `git -C vendor/ghostty rev-parse HEAD > .ghostty-version`, zig 버전도 같이 본다(`build.zig.zon`의 `minimum_zig_version`).
+  - **zig는 고정된 Ghostty를 따른다.** Ghostty의 `requireZig`는 minor가 어긋나면 양방향으로 컴파일 에러다. release.yml의 setup-zig, workspace-core의 `minimum_zig_version`, 세 호출부(pre-commit·`build-ghostty.sh`·빌드 페이즈)의 keg 경로(`/opt/homebrew/opt/zig@X.Y`)를 함께 올린다 — `ReleaseWorkflowTests.test_every_zig_consumer_agrees_with_the_pinned_ghostty`가 지킨다.
   - `git clone`은 커밋을 못 가리키고 shallow fetch는 **전체 40자 SHA**만 받는다. `ReleaseWorkflowTests`가 이 두 가지를 지킨다 — 유닛 테스트로는 안 보이고 릴리즈가 죽어야만 드러나는 종류라 워크플로 파일을 직접 검사한다.
   - **캐시는 적중한 적이 없다**: 캐시는 ref 단위로 격리되는데 릴리즈는 매번 새 태그에서 돈다. `ghosttykit-relfast-*`는 쓰이기만 하고 읽히지 않는다.
 - 서명: Developer ID Application (QN9P7KSSMU)
