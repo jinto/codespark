@@ -1,7 +1,7 @@
 # Spec: Ghostty v1.4.0 + zig 0.17, OSC 7 제어 바이트 제거
 
 - Intent: intent.md (approved 2026-11-22)
-- Status: draft — 승인 대기 (rev 2: codex·fable 리뷰 반영)
+- Status: approved (2026-11-22, rev 2)
 
 ## 1. 고정점
 - `.ghostty-version` = `83fb95624b0439ee660c2679b43b38c8b63769cd`(태그 v1.4.0, 전체 40자). `vendor/ghostty`를 그 커밋으로 옮긴다.
@@ -26,7 +26,7 @@
   - `src/sqlite3_c.h`: `#include <sqlite3.h>` 한 줄.
   - `build.zig`: `b.addTranslateC(.{ .root_source_file = b.path("src/sqlite3_c.h"), .target, .optimize, .link_libc = true }).createModule()`을 `sqlite3_c`라는 이름으로 `lib_module`과 `test_module`에 `addImport`한다. `linkSystemLibrary("sqlite3")`는 그대로다.
   - `src/store.zig`, `tests/store_test.zig`: `const sqlite = @import("sqlite3_c");`.
-- **`Allocator.dupeZ` 제거** → `dupeSentinel(u8, x, 0)`. 호출부는 `store.zig` 3곳, `c_api.zig` 1곳, `store_test.zig` 6곳이다. 반환형(`[:0]u8`)은 같다.
+- **`Allocator.dupeZ` 제거** → `dupeSentinel(u8, x, 0)`. 호출부는 `store.zig` 3곳, `c_api.zig` 1곳, `store_test.zig` 8곳이다(합 12). 반환형(`[:0]u8`)은 같다.
 - translate-c는 처음 한 번 약 20초 걸리고, 이후엔 `.zig-cache`에서 나온다. Xcode 빌드 페이즈는 매 빌드마다 돈다("Based on dependency analysis" 꺼짐). 캐시가 있으면 비용은 무시할 수준이다. 1단계에서 확인한다.
 
 ## 4. 앱
