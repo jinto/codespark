@@ -6,7 +6,7 @@ macOS terminal multiplexer powered by [Ghostty](https://ghostty.org) engine.
 
 ```bash
 # 1. Build GhosttyKit (ReleaseFast required — debug build has 100x slower allocator)
-#    zig는 고정된 Ghostty가 정한 0.16이어야 한다(brew install zig@0.16). 스크립트가 keg를 먼저 찾는다.
+#    zig는 고정된 Ghostty가 정한 0.17이어야 한다(brew install zig@0.17). 스크립트가 keg를 먼저 찾는다.
 #    Xcode 26은 Metal Toolchain을 따로 받아야 셰이더가 빌드된다: xcodebuild -downloadComponent MetalToolchain
 scripts/build-ghostty.sh
 
@@ -39,7 +39,8 @@ Key patterns:
 - `close_surface_cb` receives **`config.userdata`가 준 포인터**를 돌려준다 — `config.platform.macos.nsview`가 아니다. 둘은 같은 뷰를 가리켜도 서로 무관한 필드이고, `userdata`를 안 채우면 콜백은 nil을 받아 첫 줄에서 돌아간다. 초기 커밋부터 그 상태였다: `exit`한 로컬 탭도, 끊긴 ssh 탭도 "Process exited. Press any key to close the terminal."을 찍은 채 영영 남았고 — 그 키 입력도 같은 close로 가서 같이 버려지므로 — **어떤 키로도 못 닫혔다**. 스토어에 `close_reason = process_exited`가 1,250여 세션 중 **한 번도** 없던 것이 그 흔적이다.
 - One surface per session — host owns it, `TerminalSurfaceHostView` borrows via `surfaceNSView`
 - **`config.command`을 준 표면은 `wait-after-command`가 켜진다** — 우리가 안 켜도. `embedded.zig`가 명령을 세팅하면서 같이 켠다(`:572`). 그래서 셸이 끝났을 때 로컬 탭(명령 없음)은 **스스로 닫히고**, 명령 탭(ssh·claude·복원된 원격)은 "Press any key"에 서서 기다린다. 이건 버그가 아니라 명령이 왜 끝났는지 읽으라는 것이고, C API로 끌 방법도 없다(플래그는 true로만 간다). 대신 그 키가 실제로 닫아야 한다 — 위 `userdata` 항목.
-  - 그러므로 폴링으로 `ghostty_surface_process_exited`를 보고 탭을 걷어내면 **안 된다**: `child_exited`는 비정상 종료 분기 **앞에서** 켜지므로(`Surface.zig:1281`), 방금 뜬 `ssh: Could not resolve hostname`을 사용자가 읽기 전에 지운다.
+  - 그러므로 폴링으로 `ghostty_surface_process_exited`를 보고 탭을 걷어내면 **안 된다**: `child_exited`는 비정상 종료 분기 **앞에서** 켜지므로(`Surface.zig:1299`), 방금 뜬 `ssh: Could not resolve hostname`을 사용자가 읽기 전에 지운다.
+- **OSC 7의 hostname은 RFC 1123을 통과해야 한다**(v1.4.0부터, `stream_handler.zig`의 `HostName.fromUri`). `my_mac.local`·`mac-.local`·`한글.local`은 `InvalidHostName`으로 로그만 남고 **버려진다**. Ghostty의 zsh·bash integration은 `$HOST`를 실으므로, 그런 hostname의 Mac에서는 로컬 탭의 cwd 추적이 조용히 죽고 복원이 프로젝트 폴더로 떨어진다. 판별: `scutil --get LocalHostName`. 우리 리포터(원격·로컬 Apple bash)는 `localhost`를 실어 해당이 없다.
 - `config.command`은 **`/bin/sh -c`로 실행된다** (`embedded.zig`의 `.{ .shell = cmd }`). 즉 명령 문자열은 만들 때가 아니라 **로컬 셸이 파싱한 뒤**의 argv가 진짜다. `&&`, `;`, `$VAR`를 따옴표 없이 넣으면 원격이 아니라 여기서 해석된다 — 명령 문자열만 비교하는 테스트로는 절대 안 보인다(`SSHConnectionInfoTests`의 stub `ssh` argv 테스트 참고)
 
 ## Architecture
@@ -306,7 +307,7 @@ libghostty는 `resources_dir`이 있으면 **무조건** `TERM=xterm-ghostty`를
 - **왜 릴리즈까지 갔나 — 그리고 개발자가 못 본 진짜 이유**: `resourcesdir.zig`는 release에서 `GHOSTTY_RESOURCES_DIR`을 검사 없이 채택하고 Debug는 sentinel 탐색 실패 **후** 채택한다(`:111-120`) — **Debug도 결국 채택한다**. 그러니 "Debug는 재현 안 됨"은 틀렸다(실측: Debug 번들의 `TERMINFO`도 죽은 경로를 가리켰다). 진짜 경계는 **"발견 가능한 xterm-ghostty terminfo DB가 있는 기계인가"**다 — Ghostty.app을 써본 기계는 `~/.terminfo/78/xterm-ghostty`가 있어 ncurses가 fallback으로 가려준다. 신고자는 Ghostty가 없어 재현됐다. **검증할 땐 반드시 `HOME` 격리 + `TERMINFO_DIRS` 언셋**으로 그 fallback을 치워야 한다 — 안 하면 `infocmp OK`에 속는다(이 기계에서 실제로 그랬다).
 - **sentinel 철자는 우리가 고른 게 아니다**: macOS는 `terminfo/78/xterm-ghostty`(`78`=`x`의 16진), 리눅스는 `x/xterm-ghostty`. `resourcesdir.zig:64`가 하드코딩한다. 게이트가 이 경로를 쓴다.
 - **빌드 페이즈는 fail-closed**: terminfo(`78/xterm-ghostty`)나 shell-integration이 없으면 **`exit 1`**(예전엔 경고+`exit 0`). stale `zig-out`이면 둘 다 없는 번들이 조용히 나왔다. 실패 메시지가 `scripts/build-ghostty.sh`를 가리킨다. `--delete`는 각 대상(`Resources/terminfo`, `Resources/ghostty`)으로 스코프된다 — 다른 리소스를 지우지 않게.
-- **`setenv`는 그대로 둔다 — terminfo 존재로 게이팅하지 말 것**: `GHOSTTY_RESOURCES_DIR`이 nil이 되면 libghostty가 **shell integration(OSC 7)을 끄고**(`Exec.zig:791-794`) XDG_DATA_DIRS·MANPATH도 잃는다. terminfo만 번들에 넣으면 원래 setenv 경로가 그대로 옳다(TERM 해석 + integration 유지). "안전망"이라며 게이팅하면 방금 고친 cwd 추적을 죽인다(Codex 리뷰가 잡았다).
+- **`setenv`는 그대로 둔다 — terminfo 존재로 게이팅하지 말 것**: `GHOSTTY_RESOURCES_DIR`이 nil이 되면 libghostty가 **shell integration(OSC 7)을 끄고**(`Exec.zig:796-799`) XDG_DATA_DIRS·MANPATH도 잃는다. terminfo만 번들에 넣으면 원래 setenv 경로가 그대로 옳다(TERM 해석 + integration 유지). "안전망"이라며 게이팅하면 방금 고친 cwd 추적을 죽인다(Codex 리뷰가 잡았다).
 - **게이트**: `AppBundleMetadataTests`가 **빌드된 앱 번들**(`Bundle.main`, `TEST_HOST`)에서 `terminfo/78/xterm-ghostty` 존재+readable, `ghostty/shell-integration` 존재, terminfo가 ghostty의 형제인지 검사한다. 파일 존재만으론 부족해서 — 화면 렌더는 실셸이 `TERM`을 해석해야 드러나므로 — 검증은 `env -u TERMINFO_DIRS HOME=/빈곳 infocmp -A "$TERMINFO" "$TERM"`로 `cub1`까지 확인한다. 릴리즈는 `codesign --verify --deep --strict`로 terminfo 트리까지 서명 검증한다(심링크가 번들 밖을 가리키면 공증 전에 잡는다 — 현재 DB는 심링크 없음).
 - **`project.yml`과 pbxproj를 같이 고친다**: pbxproj가 실제로 도는 것이지만 xcodegen(`build-macos.sh`)이 `project.yml`에서 재생성하므로, 한쪽만 고치면 되돌아간다(`ReleaseWorkflowTests`가 둘의 벌어짐을 감시한다).
   - **Apple `/bin/bash`에는 우리가 직접 심는다**: Ghostty는 macOS의 `/bin/bash`에 integration 주입을 **설계상 거부한다**(`shell_integration.zig` — SIP이 bash 3.2를 못 바꾸게 하는데, 그 bash는 주입이 딛는 ENV 기반 POSIX 시작이 죽어 있다). 로그인 셸이 그 bash인 기계에서는 로컬 탭의 OSC 7이 아예 없어 `last_cwd`가 탭 생성 시점에 얼어붙고, **복원이 언제나 프로젝트 폴더로 열렸다**(2026-09-02 elabs 증상과 정확히 일치 — 그 기계의 로그인 셸은 미확인). 그래서 surface 환경이 원격 리포터와 같은 `PROMPT_COMMAND` 문자열을 심는다(`RemoteCwdReporter.bashPromptCommand`, `GhosttyTerminalHost.terminalEnvironment`) — bash만 읽고 zsh/fish는 무시하므로 조건 없이 넣는다. 대가도 원격과 같다: 시작 파일이 `PROMPT_COMMAND`를 대입하면 리포터가 죽는다. 검증은 진짜 bash 3.2로 한다(`LocalCwdReporterTests`).
@@ -323,6 +324,10 @@ libghostty는 `resources_dir`이 있으면 **무조건** `TERM=xterm-ghostty`를
     - 전제는 `RemoteCwdReporter`와 같다 — 키 인증(BatchMode)과 원격 `tic`. 비밀번호 호스트·`tic` 없는 호스트는 자동이 안 되고, 그게 degrade의 대상이다.
     - **payload는 URI다 — `$PWD`를 percent-encoding 해야 한다.** Ghostty는 OSC 7을 `std.Uri`로 파싱하고 경로를 **percent-decode** 한다(`termio/stream_handler.zig`). 날것으로 찍으면 `a%20b`라는 디렉터리가 `a b`로 돌아오고, 이름에 `#`나 `?`가 있으면 **거기서 잘린다**(각각 fragment·query 구분자라서). 탭의 cwd가 조용히 다른 디렉터리가 되고 다음 복원이 그리로 간다. Ghostty 자신의 통합은 인코딩한다 — 우리 재구현만 안 했다.
       - 패턴은 대괄호로 쓴다(`${p//[#]/%23}`): `\#`는 Swift raw string(`#"…"#`)에서 이스케이프로 읽히고, `?`는 셸 글로브 와일드카드라 어차피 감싸야 한다.
+    - **인코딩 전에 제어 바이트를 지운다**(`${PWD//[[:cntrl:]]}`, fish는 `string replace -ra "[[:cntrl:]]" ""`). 디렉터리 이름은 신뢰할 수 없는 글자다 — BEL이 든 이름은 우리 OSC 7을 거기서 끝내고, 나머지(`ESC ]52;c;…`)가 **클립보드 쓰기**가 된다. 원격이면 남의 서버의 디렉터리 이름이 이 Mac의 클립보드를 쓴다. Ghostty 1.4.0이 자기 integration에서 고친 GHSA-2r63와 같은 구멍이었다.
+      - **fish는 겹따옴표**: 함수 전체가 `-C '…'` 안에 있어 홑따옴표 패턴은 바깥 따옴표를 닫는다 — 경로가 빈 OSC 7이 나간다.
+      - **테스트는 셸을 그 디렉터리에서 시작한다**: 대화형 bash 3.2는 파이프 stdin에도 readline을 돌려 `cd`로 치는 BEL·ESC를 먹고, `LANG`이 없으면 한글도 먹는다 — 리포터와 무관한 이유로 빨개진다. 비교는 바이트로(`OSC7Report`) — `String ==`은 한글의 NFC/NFD를 숨긴다.
+      - **이 수정이 막는 범위는 리포터까지다.** bash 프롬프트의 `\w`는 이름을 날것으로 찍어서(`PS1='[\w]$ '`, Debian 기본), 같은 디렉터리가 프롬프트를 통해 주입한다. 번들 bash integration의 제목(`\w`)도 그렇다. 사용자 프롬프트는 우리가 못 고친다. zsh의 `%~`는 제어 바이트를 `^G`로 찍어 안전하다.
     - **hostname은 반드시 `localhost`다.** Ghostty는 local이 아닌 host의 OSC 7을 **버린다**(`termio/stream_handler.zig`의 `hostname.isLocal`). 원격 셸이 자기 `$HOST`를 찍으면 로그 한 줄 남기고 사라진다 — Ghostty 자신의 zsh 통합을 그대로 원격에 갖다 놔도 안 되는 이유이고, 이 한 글자가 기능 전체를 좌우한다.
     - **셸마다 주입 지점이 다르다**: zsh는 `ZDOTDIR`, bash는 `PROMPT_COMMAND`(환경변수), fish는 `-C`. 함수는 `exec`을 건너지 못하므로 zsh·fish는 시작 파일/초기 명령이라야 하지만, bash의 `PROMPT_COMMAND`는 문자열이라 환경변수로 건너간다 — 그게 bash를 로그인 셸로 만들 수 있는 유일한 이유다(아래). 모르는 셸은 그냥 셸을 연다 — 최악이 예전 동작이어야 한다.
     - **fish는 `fish_prompt`가 아니라 `--on-variable PWD`**다. `fish_prompt` 이벤트는 tty가 없으면 아예 안 뜨고, 어차피 우리가 알고 싶은 건 디렉터리가 바뀌는 순간이다.
@@ -407,7 +412,8 @@ git push origin v{VERSION}
 
 - CI: `.github/workflows/release.yml` (`on: push: tags: ['v*']`)
 - **ghostty는 `.ghostty-version`의 커밋에 고정된다**: `vendor/`는 gitignore라 CI가 직접 받아온다. 예전엔 `main`을 clone해서 **릴리즈가 업스트림과 경주했다** — 우리 쪽 변경이 없어도 어느 날 깨진다(v1.1.4: `read_clipboard_cb`의 인자가 3개에서 6개로 늘었다). 올릴 때는 `vendor/ghostty`를 그 커밋으로 옮기고 `git -C vendor/ghostty rev-parse HEAD > .ghostty-version`, zig 버전도 같이 본다(`build.zig.zon`의 `minimum_zig_version`).
-  - **zig는 고정된 Ghostty를 따른다.** Ghostty의 `requireZig`는 minor가 어긋나면 양방향으로 컴파일 에러다. release.yml의 setup-zig, workspace-core의 `minimum_zig_version`, 세 호출부(pre-commit·`build-ghostty.sh`·빌드 페이즈)의 keg 경로(`/opt/homebrew/opt/zig@X.Y`)를 함께 올린다 — `ReleaseWorkflowTests.test_every_zig_consumer_agrees_with_the_pinned_ghostty`가 지킨다.
+  - **zig는 고정된 Ghostty를 따른다.** Ghostty의 `requireZig`는 minor가 어긋나면 양방향으로 컴파일 에러다. release.yml의 setup-zig, workspace-core의 `minimum_zig_version`, 세 호출부(pre-commit·`build-ghostty.sh`·빌드 페이즈)의 keg 경로(`/opt/homebrew/opt/zig@X.Y`)를 함께 올린다 — `ReleaseWorkflowTests.test_every_zig_consumer_agrees_with_the_pinned_ghostty`가 지킨다. 현재 minor의 `zig@X.Y`는 brew `zig`의 **별칭**이고(`brew info --json=v2 zig`의 `aliases`), 다음 minor가 나오면 brew가 그것을 버전 formula로 떼어 낸다 — 그래서 keg 경로가 언제나 존재한다.
+  - workspace-core는 `@cImport`가 아니라 빌드의 `addTranslateC`(`src/sqlite3_c.h`)로 sqlite를 본다 — zig 0.17이 `@cImport`를 없앴다. `minimum_zig_version`은 하한일 뿐이라 안전망이 아니다; 버전을 크게 실패시키는 건 Ghostty의 `requireZig` 하나다.
   - `git clone`은 커밋을 못 가리키고 shallow fetch는 **전체 40자 SHA**만 받는다. `ReleaseWorkflowTests`가 이 두 가지를 지킨다 — 유닛 테스트로는 안 보이고 릴리즈가 죽어야만 드러나는 종류라 워크플로 파일을 직접 검사한다.
   - **캐시는 적중한 적이 없다**: 캐시는 ref 단위로 격리되는데 릴리즈는 매번 새 태그에서 돈다. `ghosttykit-relfast-*`는 쓰이기만 하고 읽히지 않는다.
 - 서명: Developer ID Application (QN9P7KSSMU)
