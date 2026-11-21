@@ -17,11 +17,11 @@ fi
 # The versioned keg comes first: PATH's `zig` moves whenever brew upgrades it, and
 # Ghostty's requireZig refuses any other minor version.
 ZIG=${ZIG:-}
-[ -n "$ZIG" ] || for c in /opt/homebrew/opt/zig@0.16/bin/zig "$(command -v zig || true)"; do
+[ -n "$ZIG" ] || for c in /opt/homebrew/opt/zig@0.17/bin/zig "$(command -v zig || true)"; do
     [ -x "$c" ] && ZIG=$c && break
 done
 if [ -z "$ZIG" ]; then
-    echo "error: zig not found. Install with: brew install zig@0.16" >&2
+    echo "error: zig not found. Install with: brew install zig@0.17" >&2
     exit 1
 fi
 

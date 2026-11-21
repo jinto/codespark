@@ -76,4 +76,29 @@ final class AppBundleMetadataTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: shellIntegration.path, isDirectory: &isDir) && isDir.boolValue,
                       "no ghostty/shell-integration in the bundle — cwd tracking silently dies")
     }
+
+    /// The integration we ship must be one that strips control bytes from the
+    /// directory name before printing OSC 7. Older ones (Ghostty before 1.4.0)
+    /// let a name carrying BEL + `ESC ]52` end the report early and write the
+    /// clipboard (GHSA-2r63-vmw6-3m3c). Two ways this silently comes back: the
+    /// pin moves backwards, or the copy phase ships a stale `zig-out`.
+    ///
+    /// The strings also appear in comments, and `print -rnu` alone is in the
+    /// old zsh file's title code too — so the match is a code line that holds
+    /// both the OSC 7 scheme and the strip.
+    func test_bundled_shell_integration_strips_control_bytes_from_the_directory() throws {
+        let integration = resources.appendingPathComponent("ghostty/shell-integration")
+        let cases: [(file: String, scheme: String, strip: String)] = [
+            ("zsh/ghostty-integration", "kitty-shell-cwd://", "${PWD//[[:cntrl:]]}"),
+            ("bash/ghostty.bash", "kitty-shell-cwd://", "${PWD//[[:cntrl:]]/}"),
+        ]
+        for (file, scheme, strip) in cases {
+            let text = try String(contentsOf: integration.appendingPathComponent(file), encoding: .utf8)
+            let code = text.split(separator: "\n").filter {
+                !$0.trimmingCharacters(in: .whitespaces).hasPrefix("#")
+            }
+            XCTAssertTrue(code.contains { $0.contains(scheme) && $0.contains(strip) },
+                          "\(file) prints the raw directory into OSC 7 — a name can inject sequences")
+        }
+    }
 }
