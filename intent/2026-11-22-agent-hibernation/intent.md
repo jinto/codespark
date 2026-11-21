@@ -1,7 +1,7 @@
 # Intent: 쉬고 있는 에이전트를 재운다 (hibernation)
 
 - Date: 2026-11-22
-- Status: draft — 승인 대기 (rev 3, 2026-11-22: 리뷰와 실측 반영)
+- Status: 만들지 않음 (2026-11-22 사용자 결정) — 조사 기록으로 남긴다
 - Next: spec.md
 
 ## Problem

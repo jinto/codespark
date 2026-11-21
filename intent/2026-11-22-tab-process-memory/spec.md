@@ -1,7 +1,7 @@
 # Spec: 어느 탭이 메모리를 먹는지 보이게 한다
 
 - Intent: intent.md (draft — 승인 대기)
-- Status: draft — 승인 대기 (rev 2: codex·fable 리뷰 반영)
+- Status: 만들지 않음 (2026-11-22 사용자 결정) — 조사 기록으로 남긴다
 
 ## 1. 어떤 프로세스가 한 탭에 속하는가: 그 탭 pty의 프로세스 + 그 자손
 

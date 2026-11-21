@@ -1,7 +1,7 @@
 # Intent: 어느 탭이 메모리를 먹는지 보이게 한다
 
 - Date: 2026-11-22
-- Status: draft — 승인 대기 (rev 2: codex·fable 리뷰 반영)
+- Status: 만들지 않음 (2026-11-22 사용자 결정) — 조사 기록으로 남긴다
 - Next: spec.md
 
 ## Problem

@@ -1,7 +1,7 @@
 # Spec: 쉬고 있는 에이전트를 재운다 (hibernation)
 
 - Intent: intent.md (draft)
-- Status: draft — 승인 대기 (rev 3, 2026-11-22: fable 재리뷰 반영. procStart 형식, 복원 경로의 한계, 일괄 병렬화, 알림 문장)
+- Status: 만들지 않음 (2026-11-22 사용자 결정) — 조사 기록으로 남긴다
 
 ## 0. 실측으로 이미 정해진 것 (fable, Claude Code 2.1.330)
 tmux 안에서 버리는 haiku 세션으로 쟀다. 기록은 `docs/2026-11-22-agent-hibernation.md`에 옮긴다(plan 0단계).
