@@ -13,7 +13,7 @@ pub const SessionSummary = models.SessionSummary;
 
 const c_allocator = std.heap.c_allocator;
 
-/// A small spin mutex keeps workspace-core compatible with Zig 0.15 and 0.16.
+/// A small spin mutex keeps workspace-core free of std.Io (Zig 0.16+).
 /// Zig 0.16 moved blocking mutexes from std.Thread to std.Io, but the C API
 /// does not carry an Io instance through its synchronous entry points.
 const Mutex = struct {

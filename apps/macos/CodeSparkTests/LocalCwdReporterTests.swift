@@ -125,6 +125,7 @@ enum OSC7Report {
         "esc\u{07}\u{1B}]52;c;SGk=\u{07}y",
         "can\u{18}z",
         "lf\nw",
+        "cr\rtab\tdel\u{7F}v",
     ]
     /// Must come out exactly as before the fix.
     static let ordinaryName = "한글 a#?%"
