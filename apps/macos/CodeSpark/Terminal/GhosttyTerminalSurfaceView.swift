@@ -259,11 +259,17 @@ class GhosttyTerminalSurfaceView: NSView, NSTextInputClient {
     /// unfocused.
     private func syncVisibility() {
         guard let surface else { return }
-        let visible = window != nil
-            && !isHiddenOrHasHiddenAncestor
+        let visible = !isHiddenOrHasHiddenAncestor
             && window?.occlusionState.contains(.visible) == true
         guard visible != surfaceVisible else { return }
         surfaceVisible = visible
+        // Ghostty's layer redraws itself on every bounds change, on the main
+        // thread, past the renderer's visibility check — and that draw rebuilds
+        // the swap chain occlusion just released. SwiftUI sizes hidden tabs too,
+        // so without this every mount and window resize took the GPU back
+        // (11 tabs: 34 IOSurfaces instead of 4). Shown again, occlusion(true)
+        // draws at the current size, so nothing is lost while it is off.
+        layer?.needsDisplayOnBoundsChange = visible
         ghostty_surface_set_occlusion(surface, visible)
     }
 

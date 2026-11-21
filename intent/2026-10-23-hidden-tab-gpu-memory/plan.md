@@ -1,7 +1,7 @@
 # Plan: 숨은 탭이 GPU 메모리를 놓게 한다
 
 - Spec: spec.md (approved 2026-10-23)
-- Status: approved (2026-11-20, rev 2)
+- Status: approved (2026-11-20, rev 2) · rev 3 (2026-11-22): 3b 추가 — 5단계 리뷰(fable)와 실측이 3단계만으로는 숨은 탭이 GPU를 다시 쥔다는 걸 보였다
 
 순서가 중요하다. 메모리 기준선(0단계)은 업그레이드 **전** 빌드로만 잴 수 있다.
 
@@ -41,10 +41,18 @@ fable이 이미 확인한 항목: `updateSize` no-op, `wait-after-command`(`:533
 - [ ] `updateNSView`의 `ghostty_surface_refresh`는 유지한다. visible이 되면 Thread가 즉시 `renderCallback`을 돌리므로 draw가 한 번 중복될 뿐이고, 같은 렌더 스레드의 mailbox라 경쟁도 없다(fable 확인). codex는 제거를 제안했지만, 기존 게이트 `test_a_surface_coming_back_into_view_is_told_to_paint`가 이 호출을 지키고 있고 이득이 한 프레임이라 범위 밖으로 둔다.
   → verify: 유닛 전체가 초록이다. 미러 초기값을 false로 바꾸면 게이트가 빨개진다.
 
+## 3b. 숨은 동안 CoreAnimation이 다시 그리지 못하게 한다 (rev 3)
+3단계만으로는 거의 안 줄었다. 탭 11개 픽스처(`CODESPARK_STORE_PATH`)에서 실측하니 IOSurface가 기준선 35장(678MB)에서 34장(468MB)이 됐다. 숨은 탭마다 3장이 남은 셈이다.
+- **원인(fable, 소스로 확인)**: Ghostty가 레이어에 `needsDisplayOnBoundsChange = true`를 건다(`Metal.zig:129`). 그 `display`는 `displayCallback` → `drawFrame(true)`로 메인 스레드에서 그리는데, visible 검사는 렌더 스레드 경로(`Thread.zig:464`)에만 있다. `drawFrameLocked`는 놓았던 swap chain을 다시 만든다(`generic.zig:1767`). 놓는 쪽은 `setVisible(false)` 전이 한 번뿐이라, 한 번 다시 만들어지면 다음에 보였다 숨을 때까지 쥔다. SwiftUI가 숨은 탭에도 프레임을 주므로 마운트와 창 리사이즈마다 일어난다. 공식 앱은 창 단위로만 가려서 이 경로를 안 밟는다.
+- [ ] `syncVisibility`가 `layer?.needsDisplayOnBoundsChange = visible`도 같이 맞춘다. 벤더 패치는 하지 않는다. 다시 보일 때는 occlusion(true)이 렌더 스레드에서 현재 레이어 크기로 그리므로 꺼 둔 동안의 리사이즈를 잃지 않는다.
+- [ ] 소스 게이트: 같은 함수 안에서 둘을 함께 바꾸는지.
+  → verify(실측): 같은 픽스처에서 IOSurface 4장(62MB), phys_footprint 1006MB → 249MB. 남은 4장은 보이는 탭 하나 몫이다.
+- 업스트림에 `display` 경로도 visible을 보게 하자고 올릴 만하다. 범위 밖.
+
 ## 4. 실측 검증 (spec §6)
 자동화로 GPU 해제를 관측할 방법은 없다(유닛 환경은 표면을 못 만든다). 게이트는 소스 게이트와 아래 수동 오라클이다. kitty 바이트 오라클과 같은 모양이다.
 - [ ] 0단계와 같은 조건에서 `footprint`를 다시 잰다.
-  → **기대치를 미리 정해 둔다**: 숨은 탭마다 IOSurface 4장 중 **3장이 사라지고 1장은 남는다.** CoreAnimation 레이어 `contents`가 마지막 프레임을 쥐고 있고, 렌더러는 그걸 비우지 않는다(`IOSurfaceLayer`). 이 덕분에 다시 보일 때 빈 화면이 깜빡이지 않는다. IOAccelerator는 거의 0이어야 한다. Kitty 이미지 자원은 업스트림도 놓지 않으므로 이미지가 없는 탭으로 잰다. 사용자 기계(19탭, 4K)로 환산하면 3.2GB에서 약 0.4GB 남짓이 된다.
+  → **기대치를 미리 정해 둔다**(rev 3에서 고침: 한 번도 안 보인 숨은 탭은 0장, 보였다 숨은 탭은 1장): 숨은 탭마다 IOSurface 4장 중 **3장이 사라지고 1장은 남는다.** CoreAnimation 레이어 `contents`가 마지막 프레임을 쥐고 있고, 렌더러는 그걸 비우지 않는다(`IOSurfaceLayer`). 이 덕분에 다시 보일 때 빈 화면이 깜빡이지 않는다. IOAccelerator는 거의 0이어야 한다. Kitty 이미지 자원은 업스트림도 놓지 않으므로 이미지가 없는 탭으로 잰다. 사용자 기계(19탭, 4K)로 환산하면 3.2GB에서 약 0.4GB 남짓이 된다.
 - [ ] 화면 오라클:
   - 출력이 끝난 탭에서 다른 탭에 갔다 오기
   - **탭 없는 워크트리를 거쳐 돌아오기**. 이때는 모든 표면의 `window`가 nil이 되므로, 이제 **보이던 탭의 GPU 상태까지** 놓았다가 다시 만든다. 가장 위험한 경로다.
@@ -65,7 +73,7 @@ fable이 이미 확인한 항목: `updateSize` no-op, `wait-after-command`(`:533
   - Release 절에 zig 버전은 고정된 Ghostty를 따른다고 적는다.
 
 ## 커밋 단위
-1(zig + Ghostty + C API) → 2(CLAUDE.md 줄 번호) → 3(occlusion) → 4·5(docs). 각 커밋은 pre-commit 훅을 통과해야 한다. 1과 3을 섞지 않아서, 업그레이드가 회귀를 내면 occlusion과 따로 되돌릴 수 있게 한다.
+1(zig + Ghostty + C API) → 2(CLAUDE.md 줄 번호) → 3(occlusion) → 3b(+ 리뷰 반영) → 4·5(docs). 각 커밋은 pre-commit 훅을 통과해야 한다. 1과 3을 섞지 않아서, 업그레이드가 회귀를 내면 occlusion과 따로 되돌릴 수 있게 한다.
 
 ## 리뷰에서 받지 않은 것
 - codex: "occlusion의 C API 전이를 런타임으로 검사하는 테스트". 유닛 환경은 표면을 만들 수 없다. AppKit 가정 테스트, 소스 게이트, 수동 오라클로 대신한다.

@@ -118,18 +118,20 @@ final class GhosttyRuntime {
             write_clipboard_cb: { _, loc, content, len, _ in
                 guard loc == GHOSTTY_CLIPBOARD_STANDARD else { return }
                 guard let content, len > 0 else { return }
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                // content is an array of ghostty_clipboard_content_s
-                let first = content.pointee
+                // `len` representations, any order (a Kitty clipboard write may
+                // put an image first). We only carry text.
+                let items = UnsafeBufferPointer(start: content, count: len)
+                let item = items.first { $0.mime.map { String(cString: $0) } == "text/plain" } ?? items[0]
                 // Not NUL-terminated since the pinned Ghostty grew `len`: reading
                 // it as a C string runs past the buffer. The compiler can't see
                 // this — adding a field breaks nothing at the call site.
-                if let data = first.data,
-                   let text = String(bytes: UnsafeRawBufferPointer(start: data, count: first.len),
-                                     encoding: .utf8) {
-                    pasteboard.setString(text, forType: .string)
-                }
+                guard let data = item.data,
+                      let text = String(bytes: UnsafeRawBufferPointer(start: data, count: item.len),
+                                        encoding: .utf8) else { return }
+                // Decode first: a payload we can't read leaves the clipboard alone.
+                let pasteboard = NSPasteboard.general
+                pasteboard.clearContents()
+                pasteboard.setString(text, forType: .string)
             },
             close_surface_cb: { userdata, processAlive in
                 // Ghostty asks for a close exactly once per dead shell. If the

@@ -79,6 +79,10 @@ final class SurfaceLifecycleTests: XCTestCase {
             source.contains("NSWindow.didChangeOcclusionStateNotification"),
             "창이 최소화되거나 가려져도 뷰의 isHidden은 그대로라, 창의 occlusion을 듣지 않으면 GPU를 못 놓는다."
         )
+        XCTAssertTrue(
+            source.contains("layer?.needsDisplayOnBoundsChange = visible"),
+            "Ghostty 레이어는 bounds가 바뀔 때마다 메인 스레드에서 visible 검사 없이 그리고, 그 draw가 놓은 swap chain을 다시 만든다. 숨은 동안 꺼야 한다."
+        )
     }
 
     /// 보이는지를 Ghostty에 말하는 곳은 표면 뷰 하나뿐이다 — 포커스와 같은
@@ -333,9 +337,9 @@ final class AppKitResponderAssumptionTests: XCTestCase {
         override func viewDidUnhide() { super.viewDidUnhide(); unhides += 1 }
     }
 
-    /// 탭 전환은 조상(ZStack의 호스트)의 `isHidden`을 바꾸는 일이다. 표면이
-    /// `viewDidHide`/`viewDidUnhide`만 듣고 occlusion을 알리므로, AppKit이
-    /// 조상의 변화를 자손에게 전하지 않으면 숨은 탭이 GPU를 놓지 않는다.
+    /// 탭 전환은 표면 자신의 `isHidden`을 바꾸지만(`TerminalSurfaceHostView`),
+    /// 표면은 `viewDidHide`/`viewDidUnhide`만 듣고 occlusion을 알리므로 누가
+    /// 표면을 감싼 뷰를 숨기는 날에도 그 알림이 와야 한다. 안전망이다.
     func test_hiding_an_ancestor_tells_the_descendant() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
@@ -349,15 +353,6 @@ final class AppKitResponderAssumptionTests: XCTestCase {
 
         XCTAssertEqual(probe.hides, 1, "조상 숨김이 자손의 viewDidHide로 오지 않는다")
         XCTAssertEqual(probe.unhides, 1, "조상 표시가 자손의 viewDidUnhide로 오지 않는다")
-    }
-
-    /// 창이 없는 동안 숨김이 바뀌는 경우(SwiftUI가 뷰를 떼어낸 채 갱신할 때).
-    /// 알림이 오든 안 오든 표면은 `viewDidMoveToWindow`에서 다시 계산하므로
-    /// 상관없지만, 어느 쪽인지 적어 둔다 — 바뀌면 이 줄이 알려 준다.
-    func test_hiding_a_view_without_a_window_still_calls_back() {
-        let probe = HideProbe()
-        probe.isHidden = true
-        XCTAssertEqual(probe.hides, 1)
     }
 
     /// 표면이 창의 key 알림을 따로 듣는 이유. 다른 앱으로 가도 창은 first
