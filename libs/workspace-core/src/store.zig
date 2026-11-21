@@ -1,9 +1,7 @@
 const std = @import("std");
 const models = @import("models.zig");
 
-const sqlite = @cImport({
-    @cInclude("sqlite3.h");
-});
+const sqlite = @import("sqlite3_c");
 
 pub const StoreError = std.mem.Allocator.Error || error{
     Database,
@@ -14,7 +12,7 @@ pub const Store = struct {
     db: *sqlite.sqlite3,
 
     pub fn open(path: []const u8) StoreError!Store {
-        const path_z = try std.heap.c_allocator.dupeZ(u8, path);
+        const path_z = try std.heap.c_allocator.dupeSentinel(u8, path, 0);
         defer std.heap.c_allocator.free(path_z);
 
         var db: ?*sqlite.sqlite3 = null;
@@ -798,7 +796,7 @@ pub const Store = struct {
     }
 
     fn execScript(self: *Store, sql: []const u8) StoreError!void {
-        const sql_z = try std.heap.c_allocator.dupeZ(u8, sql);
+        const sql_z = try std.heap.c_allocator.dupeSentinel(u8, sql, 0);
         defer std.heap.c_allocator.free(sql_z);
 
         var err_msg: [*c]u8 = null;
@@ -820,7 +818,7 @@ const Statement = struct {
     stmt: *sqlite.sqlite3_stmt,
 
     fn init(db: *sqlite.sqlite3, sql: []const u8) StoreError!Statement {
-        const sql_z = try std.heap.c_allocator.dupeZ(u8, sql);
+        const sql_z = try std.heap.c_allocator.dupeSentinel(u8, sql, 0);
         defer std.heap.c_allocator.free(sql_z);
 
         var stmt: ?*sqlite.sqlite3_stmt = null;

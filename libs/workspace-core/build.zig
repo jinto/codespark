@@ -4,6 +4,14 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    // zig 0.17 removed @cImport: the header is translated by the build instead.
+    const sqlite_c = b.addTranslateC(.{
+        .root_source_file = b.path("src/sqlite3_c.h"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    }).createModule();
+
     const lib_module = b.createModule(.{
         .root_source_file = b.path("src/c_api.zig"),
         .target = target,
@@ -12,6 +20,7 @@ pub fn build(b: *std.Build) void {
     });
     // Use system SQLite instead of bundled source to avoid Apple linker alignment issues
     lib_module.linkSystemLibrary("sqlite3", .{});
+    lib_module.addImport("sqlite3_c", sqlite_c);
 
     const lib = b.addLibrary(.{
         .name = "workspace-core",
@@ -28,6 +37,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     test_module.linkSystemLibrary("sqlite3", .{});
+    test_module.addImport("sqlite3_c", sqlite_c);
     test_module.addImport("workspace_core", lib_module);
 
     const test_exe = b.addTest(.{

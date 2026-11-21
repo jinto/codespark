@@ -1083,27 +1083,25 @@ fn uniqueDbPath(prefix: []const u8) ![:0]u8 {
         prefix, suffix,
     });
     defer std.testing.allocator.free(path);
-    return std.testing.allocator.dupeZ(u8, path);
+    return std.testing.allocator.dupeSentinel(u8, path, 0);
 }
 
-const sqlite = @cImport({
-    @cInclude("sqlite3.h");
-});
+const sqlite = @import("sqlite3_c");
 
 fn execSql(path: []const u8, sql: []const u8, id: []const u8) !void {
     var db: ?*sqlite.sqlite3 = null;
-    const path_z = try std.testing.allocator.dupeZ(u8, path);
+    const path_z = try std.testing.allocator.dupeSentinel(u8, path, 0);
     defer std.testing.allocator.free(path_z);
     try expectSqliteOk(sqlite.sqlite3_open(path_z.ptr, &db), db);
     defer _ = sqlite.sqlite3_close(db);
 
     var stmt: ?*sqlite.sqlite3_stmt = null;
-    const sql_z = try std.testing.allocator.dupeZ(u8, sql);
+    const sql_z = try std.testing.allocator.dupeSentinel(u8, sql, 0);
     defer std.testing.allocator.free(sql_z);
     try expectSqliteOk(sqlite.sqlite3_prepare_v2(db, sql_z.ptr, -1, &stmt, null), db);
     defer _ = sqlite.sqlite3_finalize(stmt);
 
-    const id_z = try std.testing.allocator.dupeZ(u8, id);
+    const id_z = try std.testing.allocator.dupeSentinel(u8, id, 0);
     defer std.testing.allocator.free(id_z);
     try expectSqliteOk(sqlite.sqlite3_bind_text(stmt, 1, id_z.ptr, -1, null), db);
     try expectSqliteDone(stmt, db);
@@ -1111,13 +1109,13 @@ fn execSql(path: []const u8, sql: []const u8, id: []const u8) !void {
 
 fn rawCount(path: []const u8, sql: []const u8) !i64 {
     var db: ?*sqlite.sqlite3 = null;
-    const path_z = try std.testing.allocator.dupeZ(u8, path);
+    const path_z = try std.testing.allocator.dupeSentinel(u8, path, 0);
     defer std.testing.allocator.free(path_z);
     try expectSqliteOk(sqlite.sqlite3_open(path_z.ptr, &db), db);
     defer _ = sqlite.sqlite3_close(db);
 
     var stmt: ?*sqlite.sqlite3_stmt = null;
-    const sql_z = try std.testing.allocator.dupeZ(u8, sql);
+    const sql_z = try std.testing.allocator.dupeSentinel(u8, sql, 0);
     defer std.testing.allocator.free(sql_z);
     try expectSqliteOk(sqlite.sqlite3_prepare_v2(db, sql_z.ptr, -1, &stmt, null), db);
     defer _ = sqlite.sqlite3_finalize(stmt);
@@ -1129,7 +1127,7 @@ fn rawCount(path: []const u8, sql: []const u8) !i64 {
 
 fn listTimelineEvents(allocator: std.mem.Allocator, path: []const u8) ![]TimelineEventRow {
     var db: ?*sqlite.sqlite3 = null;
-    const path_z = try allocator.dupeZ(u8, path);
+    const path_z = try allocator.dupeSentinel(u8, path, 0);
     defer allocator.free(path_z);
     try expectSqliteOk(sqlite.sqlite3_open(path_z.ptr, &db), db);
     defer _ = sqlite.sqlite3_close(db);
@@ -1139,7 +1137,7 @@ fn listTimelineEvents(allocator: std.mem.Allocator, path: []const u8) ![]Timelin
         "select project_id, session_id, event_type\n" ++
         " from timeline_events\n" ++
         " order by created_at asc, rowid asc";
-    const sql_z = try allocator.dupeZ(u8, sql);
+    const sql_z = try allocator.dupeSentinel(u8, sql, 0);
     defer allocator.free(sql_z);
     try expectSqliteOk(sqlite.sqlite3_prepare_v2(db, sql_z.ptr, -1, &stmt, null), db);
     defer _ = sqlite.sqlite3_finalize(stmt);

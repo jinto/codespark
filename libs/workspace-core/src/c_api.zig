@@ -159,7 +159,7 @@ fn spanRequired(value: ?[*:0]const u8) ?[]const u8 {
 }
 
 fn dupCString(value: []const u8) ![*:0]u8 {
-    return (try c_allocator.dupeZ(u8, value)).ptr;
+    return (try c_allocator.dupeSentinel(u8, value, 0)).ptr;
 }
 
 fn dupOptionalCString(value: ?[]const u8) !?[*:0]u8 {
