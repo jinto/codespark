@@ -303,6 +303,21 @@ final class SSHConnectionInfoTests: XCTestCase {
         inspectingHome inspect: ((URL) -> Void)? = nil,
         typing input: String
     ) throws -> String {
+        String(decoding: try runRemoteScriptBytes(
+            shell: shell, remotePath: remotePath, planting: dotfiles, path: path,
+            installingTerminfo: terminfoBase64, inspectingHome: inspect, typing: input
+        ).output, as: UTF8.self)
+    }
+
+    private func runRemoteScriptBytes(
+        shell: String,
+        remotePath: String? = nil,
+        planting dotfiles: [String: String] = [:],
+        path: String = "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin",
+        installingTerminfo terminfoBase64: String? = nil,
+        inspectingHome inspect: ((URL) -> Void)? = nil,
+        typing input: String
+    ) throws -> (output: Data, status: Int32) {
         let home = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("cs-remote-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
@@ -339,7 +354,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         try? stdin.fileHandleForWriting.close()
         let data = stdout.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        return String(decoding: data, as: UTF8.self)
+        return (data, process.terminationStatus)
     }
 
     func test_a_real_zsh_reports_the_directory_it_moved_to() throws {
@@ -423,6 +438,28 @@ final class SSHConnectionInfoTests: XCTestCase {
             XCTAssertTrue(
                 reportedDirectories(in: output).contains(awkward),
                 "\(shell) reported \(reportedDirectories(in: output)) for \(awkward)")
+        }
+    }
+
+    /// A directory name on someone else's server is untrusted text, and its
+    /// OSC 7 lands on this Mac's terminal: a name carrying BEL + `ESC ]52` would
+    /// write this Mac's clipboard. The shell starts *in* the directory (typing a
+    /// `cd` would go through readline, which eats the very bytes under test),
+    /// so the whole run reports exactly once.
+    func test_a_remote_directory_name_cannot_smuggle_a_sequence_out_of_the_report() throws {
+        let fish = try XCTUnwrap(Self.installedFish, "fish is not installed here")
+        for shell in ["/bin/zsh", "/bin/bash", fish] {
+            for name in OSC7Report.hostileNames + [OSC7Report.ordinaryName] {
+                let dir = try makeDirectory(named: name)
+                defer { try? FileManager.default.removeItem(atPath: dir) }
+
+                let (output, status) = try runRemoteScriptBytes(
+                    shell: shell, remotePath: dir, typing: "exit 0\n")
+
+                XCTAssertEqual(status, 0, "\(shell) failed for \(name.debugDescription)")
+                XCTAssertEqual(OSC7Report.frames(in: output), [OSC7Report.expected(for: dir)],
+                               "\(shell) reported \(OSC7Report.frames(in: output).map(\.debugDescription)) for \(name.debugDescription)")
+            }
         }
     }
 

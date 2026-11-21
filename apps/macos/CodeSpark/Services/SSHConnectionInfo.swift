@@ -290,7 +290,13 @@ enum RemoteCwdReporter {
     /// `/bin/bash` a local tab's cwd froze exactly like a remote tab's used to.
     /// Planting this in the surface environment closes that hole; zsh and fish
     /// never read `PROMPT_COMMAND`, so for them it is inert either way.
-    static let bashPromptCommand = #"__cs_p=${PWD//[%]/%25}; __cs_p=${__cs_p//[#]/%23}; __cs_p=${__cs_p//[?]/%3F}; printf "\033]7;file://localhost%s\007" "$__cs_p""#
+    ///
+    /// Every reporter strips control bytes *before* encoding: a directory name
+    /// is untrusted text, and one carrying BEL + `ESC ]52` would otherwise end
+    /// the OSC 7 early and write the clipboard (GHSA-2r63-vmw6-3m3c — the same
+    /// hole Ghostty 1.4.0 closed in its own integration). fish's pattern is in
+    /// double quotes because the whole function sits inside `-C '…'`.
+    static let bashPromptCommand = #"__cs_p=${PWD//[[:cntrl:]]}; __cs_p=${__cs_p//[%]/%25}; __cs_p=${__cs_p//[#]/%23}; __cs_p=${__cs_p//[?]/%3F}; printf "\033]7;file://localhost%s\007" "$__cs_p""#
 
     /// A POSIX `sh` preamble that plants the `xterm-ghostty` terminfo entry on
     /// the far side — once, only if it is missing.
@@ -351,7 +357,7 @@ enum RemoteCwdReporter {
     [[ $HISTFILE == $CS_RC_DIR/* ]] && HISTFILE=$CS_RC_HOME/${HISTFILE##*/}
     [ -r "$CS_RC_HOME/.zshrc" ] && . "$CS_RC_HOME/.zshrc"
     __cs_report_pwd() {
-      local p=${PWD//[%]/%25}; p=${p//[#]/%23}; p=${p//[?]/%3F}
+      local p=${PWD//[[:cntrl:]]}; p=${p//[%]/%25}; p=${p//[#]/%23}; p=${p//[?]/%3F}
       printf '\033]7;file://localhost%s\007' "$p"
     }
     precmd_functions+=(__cs_report_pwd)
@@ -366,7 +372,7 @@ enum RemoteCwdReporter {
       exec "$__cs_s" -l -i
       ;;
     fish)
-      exec "$__cs_s" -l -i -C 'function __cs_report_pwd --on-variable PWD; set -l p (string replace -a "%" "%25" -- $PWD); set p (string replace -a "#" "%23" -- $p); set p (string replace -a "?" "%3F" -- $p); printf "\033]7;file://localhost%s\007" $p; end; __cs_report_pwd'
+      exec "$__cs_s" -l -i -C 'function __cs_report_pwd --on-variable PWD; set -l p (string replace -ra "[[:cntrl:]]" "" -- $PWD); set p (string replace -a "%" "%25" -- $p); set p (string replace -a "#" "%23" -- $p); set p (string replace -a "?" "%3F" -- $p); printf "\033]7;file://localhost%s\007" $p; end; __cs_report_pwd'
       ;;
     esac
     exec "$__cs_s" -i
