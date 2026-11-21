@@ -1,7 +1,7 @@
 # Intent: Ghostty v1.4.0 + zig 0.17로 올리고, OSC 7 주입 구멍을 막는다
 
 - Date: 2026-11-22
-- Status: draft — 승인 대기
+- Status: approved (2026-11-22)
 - Next: spec.md
 
 ## Problem
@@ -34,6 +34,7 @@
 - `vendor/ghostty` 고정, zig를 찾는 네 곳(pre-commit, `build-ghostty.sh`, Xcode 빌드 페이즈의 `project.yml`과 pbxproj), `release.yml`, workspace-core 빌드, `SSHConnectionInfo`의 리포터 문자열.
 
 ## Constraints
+- (spec 리뷰에서 정정: `zig@0.17`은 brew `zig`의 별칭으로 **있다**. 아래 문단은 그 전의 판단이다.)
 - **brew에 `zig@0.17`이 없다.** `zig` formula 자체가 0.17.1이다. 지난번에 "PATH의 zig는 brew가 올리는 대로 움직이니 버전이 박힌 keg를 먼저 본다"고 정했는데(`ReleaseWorkflowTests`가 `zig@X.Y` 경로를 요구한다), 0.17에는 그런 keg가 없다. 어떻게 찾을지 spec에서 정한다.
 - 리포터 수정은 OSC 7 동작을 바꾸면 안 된다. 정상 경로(공백, `#`, `?`, `%`, 한글)는 지금과 같은 바이트가 나가야 한다. cwd 추적이 조용히 죽는 종류라(CLAUDE.md) 진짜 셸 테스트가 필요하다.
 - 제어 바이트를 지운 경로는 실제 디렉터리와 다르다. 그 탭의 `last_cwd`가 틀린 경로가 되고 복원이 프로젝트 폴더로 떨어진다. 그런 이름은 드물고, 주입보다 낫다. Ghostty도 같은 선택을 했다.
