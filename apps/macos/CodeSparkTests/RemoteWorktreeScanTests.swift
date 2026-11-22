@@ -198,6 +198,36 @@ final class RemoteWorktreeScanTests: XCTestCase {
         XCTAssertEqual(creation.branch, "feat")
     }
 
+    /// ssh hands the command to the far *login shell*, and fish rejects the
+    /// script's `root=…` assignment (rc 127): remote worktree creation failed on
+    /// every fish-login host. The stub runs the command the way sshd does, in
+    /// real fish, against a real repository.
+    func test_creating_a_remote_worktree_survives_a_fish_login_shell() async throws {
+        let fish = try XCTUnwrap(SSHConnectionInfoTests.installedFish, "fish is not installed here")
+        let repo = stubDirectory.appendingPathComponent("repo").path
+        for args in [["init", "-q", repo], ["-C", repo, "commit", "-q", "--allow-empty", "-m", "x"]] {
+            let git = Process()
+            git.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+            git.arguments = ["-c", "user.name=t", "-c", "user.email=t@t"] + args
+            try git.run(); git.waitUntilExit()
+        }
+        let stub = stubDirectory.appendingPathComponent("ssh")
+        try """
+        #!/bin/sh
+        for last; do :; done
+        exec '\(fish)' -c "$last"
+        """.write(to: stub, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+        GitWorktreeService.sshExecutablePath = stub.path
+
+        let creation = try await GitWorktreeService.addWorktree(
+            at: WorkspaceAddress("ssh://box" + repo), branch: "feat",
+            worktreeRoot: stubDirectory.appendingPathComponent("wt").path, id: "ab12")
+
+        let created = try XCTUnwrap(WorkspaceAddress(creation.path).remote?.remotePath)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: created + "/.git"), creation.path)
+    }
+
     /// The directory name comes from the repository, and for a remote project
     /// the repository is named by the remote path — not by the URI.
     func test_the_directory_is_named_after_the_remote_repository() {
@@ -217,7 +247,8 @@ final class RemoteWorktreeScanTests: XCTestCase {
 
         let argv = try recordedArgv(argvFile)
         XCTAssertTrue(
-            argv.contains("git -C '/srv/repo' worktree remove '/srv/wt/repo-feat-ab12'"),
+            argv.contains("/bin/sh -c " + RemoteShell.quoted(
+                "git -C '/srv/repo' worktree remove '/srv/wt/repo-feat-ab12'")),
             "argv was \(argv)"
         )
         XCTAssertFalse(argv.joined().contains("ssh://"), "a URI reached git: \(argv)")

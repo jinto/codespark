@@ -100,6 +100,20 @@ final class RestoredScreenReplayTests: XCTestCase {
         XCTAssertFalse(output.contains("line 0 "))
     }
 
+    /// The budget is for the argument sshd hands the login shell, which is the
+    /// remote script quoted once more — and quoting turns every backslash into
+    /// `'\\'`. A screen dense in quotes and backslashes (JSON, regexes) grows
+    /// many times over on the way; counting before quoting let it cross 128KB.
+    func test_a_dense_screen_still_fits_in_the_argument_the_far_shell_receives() throws {
+        let lines = (0..<5000).map { #"{"k": "it's \\ a \"path\""} "# + "\($0)" }
+        let command = try XCTUnwrap(RestoredScreenReplay.inlineCommand(for: .fixture(lines: lines)))
+        let remote = try XCTUnwrap(
+            SSHConnectionInfo(host: "box", remotePath: "/srv").remoteCommand(replaying: command))
+
+        XCTAssertLessThan(("/bin/sh -c " + RemoteShell.quoted(remote)).utf8.count, 100 * 1024)
+        XCTAssertTrue(try shellOutput(of: command).contains("} 4999"))
+    }
+
     func test_inline_command_returns_nil_for_an_empty_screen() {
         XCTAssertNil(RestoredScreenReplay.inlineCommand(for: .fixture(lines: [])))
     }

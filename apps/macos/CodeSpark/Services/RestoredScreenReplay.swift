@@ -41,12 +41,16 @@ enum RestoredScreenReplay {
     ///
     /// The far side receives it inside one argument, and Linux caps a single
     /// argument at 128KB — over that the whole tab fails to open. So only the
-    /// newest lines that fit in `budget` escaped bytes ride along.
+    /// newest lines that fit in `budget` ride along — counted as they arrive
+    /// there, quoted twice (here and in `sshCommand`). Quoting turns each
+    /// backslash `printfEscaped` writes into `'\\'`, so a line dense in quotes
+    /// and backslashes costs many times its length.
     static func inlineCommand(for snapshot: TerminalSnapshotViewData, budget: Int = 64 * 1024) -> String? {
         var used = 0
         var start = snapshot.lines.endIndex
         for index in snapshot.lines.indices.reversed() {
-            used += printfEscaped(snapshot.lines[index]).utf8.count + 32 // dim/reset codes
+            let line = printfEscaped("\u{1B}[2m\(snapshot.lines[index])\u{1B}[0m\n")
+            used += RemoteShell.quoted(RemoteShell.quoted(line)).utf8.count
             guard used <= budget else { break }
             start = index
         }

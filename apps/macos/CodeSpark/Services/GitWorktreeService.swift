@@ -214,11 +214,13 @@ final class GitWorktreeService: @unchecked Sendable {
     }
 
     /// Runs one remote command and returns its stdout, or throws with the
-    /// remote's own stderr so the failure reads like git's.
+    /// remote's own stderr so the failure reads like git's. Wrapped in
+    /// `/bin/sh -c` like every other remote script: ssh hands the command to the
+    /// far *login shell*, and fish rejects the create script's `root=…`.
     private static func runRemote(_ info: SSHConnectionInfo, command: String) async throws -> String {
         let result = try await Subprocess.run(
             sshExecutablePath,
-            remoteSSHArguments(info, remoteCommand: command),
+            remoteSSHArguments(info, remoteCommand: "/bin/sh -c " + RemoteShell.quoted(command)),
             timeout: remoteTimeout)
         guard result.status == 0 else {
             let message = result.err.trimmingCharacters(in: .whitespacesAndNewlines)
