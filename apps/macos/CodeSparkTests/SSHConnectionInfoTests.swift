@@ -579,6 +579,37 @@ final class SSHConnectionInfoTests: XCTestCase {
         }
     }
 
+    /// The script arrives as base64, so a host that cannot decode it must fail
+    /// loudly. `eval ""` exits 0: a worktree removal reported success with
+    /// nothing removed, and the tabs closed on that word.
+    func test_a_script_that_cannot_be_decoded_fails_instead_of_succeeding() throws {
+        func run(_ path: String) throws -> (String, Int32) {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", RemoteShell.posixCommand("echo ran; exit 3")]
+            process.environment = ["PATH": path]
+            let out = Pipe()
+            process.standardOutput = out
+            process.standardError = FileHandle.nullDevice
+            try process.run()
+            let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            process.waitUntilExit()
+            return (text, process.terminationStatus)
+        }
+        XCTAssertEqual(try run("/usr/bin:/bin").1, 3, "the script's own exit code reaches ssh")
+        let (text, status) = try run("/nonexistent")
+        XCTAssertEqual(status, 127)
+        XCTAssertFalse(text.contains("ran"))
+    }
+
+    /// `CS_RC_DIR` only steers the zsh startup files; exported for every
+    /// shell, bash and fish tabs carried it for nothing.
+    func test_a_bash_tab_inherits_nothing_of_ours_but_its_reporter() throws {
+        let output = try runRemoteScript(
+            shell: "/bin/bash", typing: #"echo "D=${CS_RC_DIR-unset}""# + "\nexit 0\n")
+        XCTAssertTrue(output.contains("D=unset"), output.debugDescription)
+    }
+
     private func makeDirectory(named name: String) throws -> String {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("cs-odd-\(UUID().uuidString)")
@@ -899,7 +930,7 @@ extension String {
     /// base64 decoded and appended — so a test can look for what the far
     /// `/bin/sh` will run.
     var revealingRemoteScripts: String {
-        let regex = try! NSRegularExpression(pattern: "d=([A-Za-z0-9+/=]+);")
+        let regex = try! NSRegularExpression(pattern: "__cs_b64=([A-Za-z0-9+/=]+);")
         let matches = regex.matches(in: self, range: NSRange(startIndex..., in: self))
         return matches.reduce(self) { text, match in
             let encoded = String(self[Range(match.range(at: 1), in: self)!])

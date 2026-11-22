@@ -3670,7 +3670,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         try """
         #!/bin/sh
         for last; do :; done
-        last=$(printf %s "$last" | sed -n 's/.*d=\\([A-Za-z0-9+/=]*\\);.*/\\1/p' | base64 -d)
+        last=$(printf %s "$last" | sed -n 's/.*__cs_b64=\\([A-Za-z0-9+/=]*\\);.*/\\1/p' | base64 -d)
         case "$last" in
         *mission*) echo 'MISSION_PATH: /remote/tmp/codespark-missions/mission_for_worktree_repo-fix-stt.md' ;;
         *) echo '워크트리 생성함.'; echo 'WORKTREE_PATH: /srv/worktrees/repo-fix-stt' ;;

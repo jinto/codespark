@@ -335,11 +335,11 @@ enum RemoteCwdReporter {
     /// one.
     static let launcher = #"""
     __cs_s=${SHELL:-/bin/sh}
-    CS_RC_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/codespark/shell; export CS_RC_DIR
+    CS_RC_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/codespark/shell
     case ${__cs_s##*/} in
     zsh*)
       mkdir -p "$CS_RC_DIR" 2>/dev/null && {
-        CS_RC_HOME=${ZDOTDIR:-$HOME}; CS_RC_KEEP=${ZDOTDIR+1}; export CS_RC_HOME CS_RC_KEEP
+        CS_RC_HOME=${ZDOTDIR:-$HOME}; CS_RC_KEEP=${ZDOTDIR+1}; export CS_RC_DIR CS_RC_HOME CS_RC_KEEP
         cat > "$CS_RC_DIR/.zshenv.$$" <<'CS_EOF' && mv -f "$CS_RC_DIR/.zshenv.$$" "$CS_RC_DIR/.zshenv"
     ZDOTDIR=$CS_RC_HOME
     [ -r "$CS_RC_HOME/.zshenv" ] && . "$CS_RC_HOME/.zshenv"

@@ -33,9 +33,13 @@ enum RemoteShell {
     /// quoted script only survives the shells that parse quotes like sh. So the
     /// script crosses as base64 — letters, digits, `+/=` — and nothing in this
     /// word is special to any of them. `-D` is the decode flag of older macOS.
+    /// A host that cannot decode exits 127 instead of eval'ing nothing — `eval
+    /// ""` is a success, and callers act on success (a removal closes tabs).
+    /// The variable has an unlikely name because xonsh expands `$x` even
+    /// inside single quotes.
     static func posixCommand(_ script: String) -> String {
         let encoded = Data(script.utf8).base64EncodedString()
-        return #"/bin/sh -c 'd=\#(encoded); eval "$(printf %s "$d" | base64 -d 2>/dev/null || printf %s "$d" | base64 -D)"'"#
+        return #"/bin/sh -c '__cs_b64=\#(encoded); __cs_script=$(printf %s "$__cs_b64" | base64 -d 2>/dev/null || printf %s "$__cs_b64" | base64 -D) || exit 127; eval "$__cs_script"'"#
     }
 
     /// Flags for a login, interactive `$SHELL -c` — as a POSIX `sh` word.

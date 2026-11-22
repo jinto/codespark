@@ -558,7 +558,7 @@ final class GitWorktreeService: @unchecked Sendable {
                 sshExecutablePath,
                 remoteSSHArguments(
                     info,
-                    remoteCommand: remoteWorktreeListCommand(repoPath: repoPath)),
+                    remoteCommand: RemoteShell.posixCommand(remoteWorktreeListCommand(repoPath: repoPath))),
                 timeout: remoteTimeout)
             guard result.status == 0 else { return nil }
             // Remote git answers in its own filesystem's terms; the app speaks

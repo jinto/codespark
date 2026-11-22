@@ -109,7 +109,7 @@ final class RemoteWorktreeScanTests: XCTestCase {
 
         let argv = try recordedArgv(argvFile)
         XCTAssertTrue(argv.contains("jay@box"), "argv was \(argv)")
-        XCTAssertTrue(argv.contains("git -C '/srv/repo' worktree list --porcelain"), "argv was \(argv)")
+        XCTAssertTrue(argv.contains(RemoteShell.posixCommand("git -C '/srv/repo' worktree list --porcelain")), "argv was \(argv)")
     }
 
     /// Without a remote path there is no way to know where the repository is,
