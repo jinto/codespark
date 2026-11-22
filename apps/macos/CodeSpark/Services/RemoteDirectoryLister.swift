@@ -109,7 +109,7 @@ final class RemoteDirectoryLister: @unchecked Sendable {
         if let port = info.port { args.append(contentsOf: ["-p", "\(port)"]) }
         args.append("--")
         args.append(info.user.map { "\($0)@\(info.host)" } ?? info.host)
-        args.append(contentsOf: ["/bin/sh", "-c", RemoteShell.quoted(script)])
+        args.append(RemoteShell.posixCommand(script))
         return args
     }
 

@@ -25,6 +25,25 @@ enum RemoteShell {
         "'" + value.map { $0 == "'" ? #"'\''"# : $0 == "\\" ? #"'\\'"# : String($0) }.joined() + "'"
     }
 
+    /// The word ssh hands the far side to run `script` under `/bin/sh`.
+    ///
+    /// sshd runs it with the user's *login shell*, which is not ours to pick:
+    /// csh rejects a newline inside quotes and expands `!` even inside them,
+    /// xonsh rejects a nested `'\''`, fish reads backslashes inside them. A
+    /// quoted script only survives the shells that parse quotes like sh. So the
+    /// script crosses as base64 — letters, digits, `+/=` — and nothing in this
+    /// word is special to any of them. `-D` is the decode flag of older macOS.
+    static func posixCommand(_ script: String) -> String {
+        let encoded = Data(script.utf8).base64EncodedString()
+        return #"/bin/sh -c 'd=\#(encoded); eval "$(printf %s "$d" | base64 -d 2>/dev/null || printf %s "$d" | base64 -D)"'"#
+    }
+
+    /// Flags for a login, interactive `$SHELL -c` — as a POSIX `sh` word.
+    /// csh takes `-l` only as its sole flag, so it gets `-ic` (its `.cshrc`
+    /// runs for every shell anyway). The patterns open with `(`: bash 3.2 (the
+    /// `/bin/sh` of macOS) misparses a bare `pat)` inside `$(…)`.
+    static let loginInteractiveFlags = #"$(case ${SHELL##*/} in (*csh) echo -ic;; (*) echo -lic;; esac)"#
+
     /// A path as the *remote* shell should read it.
     ///
     /// A leading `~` is the one part we want expanded over there, so it is left

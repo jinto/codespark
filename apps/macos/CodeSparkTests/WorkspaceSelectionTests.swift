@@ -429,7 +429,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         await model.load()
 
         XCTAssertTrue(hosts.flatMap(\.initialInputs).compactMap { $0 }.isEmpty)
-        let command = try XCTUnwrap(hosts.flatMap(\.commands).compactMap { $0 }.first)
+        let command = try XCTUnwrap(hosts.flatMap(\.commands).compactMap { $0 }.first).revealingRemoteScripts
         XCTAssertTrue(command.contains("jinto@m3 ~ % ls"), "replay missing from: \(command)")
         XCTAssertFalse(command.contains(NSTemporaryDirectory()), "local path sent to the remote shell")
     }
@@ -3670,6 +3670,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         try """
         #!/bin/sh
         for last; do :; done
+        last=$(printf %s "$last" | sed -n 's/.*d=\\([A-Za-z0-9+/=]*\\);.*/\\1/p' | base64 -d)
         case "$last" in
         *mission*) echo 'MISSION_PATH: /remote/tmp/codespark-missions/mission_for_worktree_repo-fix-stt.md' ;;
         *) echo '워크트리 생성함.'; echo 'WORKTREE_PATH: /srv/worktrees/repo-fix-stt' ;;
@@ -3695,7 +3696,7 @@ final class WorkspaceSelectionTests: XCTestCase {
     func test_the_remote_claude_tab_command_survives_every_shell() throws {
         let info = try XCTUnwrap(SSHConnectionInfo(uri: "ssh://jinto@emac/srv/worktrees/wt"))
 
-        let command = info.sshCommand(running: "claude 'mission 을 읽어줘' --add-dir '/tmp/m'")
+        let command = info.sshCommand(running: "claude 'mission 을 읽어줘' --add-dir '/tmp/m'").revealingRemoteScripts
 
         XCTAssertTrue(command.hasPrefix("ssh "))
         XCTAssertTrue(command.contains("cd "), "the tab lands in the worktree first")
@@ -3735,7 +3736,7 @@ final class WorkspaceSelectionTests: XCTestCase {
         let error = await model.createWorktreeFromIssue("STT 버그")
 
         XCTAssertNil(error)
-        let command = try XCTUnwrap(hosts.last?.commands.last ?? nil)
+        let command = try XCTUnwrap(hosts.last?.commands.last ?? nil).revealingRemoteScripts
         XCTAssertTrue(command.hasPrefix("ssh "), "a remote worktree opens over ssh: \(command)")
         XCTAssertTrue(command.contains("claude"))
         XCTAssertTrue(command.contains("/remote/tmp/codespark-missions/m.md"))

@@ -125,7 +125,7 @@ final class RemoteDirectoryListerTests: XCTestCase {
     func test_the_script_survives_the_remote_login_shell_as_one_word() {
         let args = RemoteDirectoryLister.arguments(for: SSHConnectionInfo(host: "myhost"), script: "echo 'hi'")
 
-        XCTAssertEqual(args.suffix(3), ["/bin/sh", "-c", "'echo '\\''hi'\\'''"])
+        XCTAssertEqual(args.last, RemoteShell.posixCommand("echo 'hi'"))
     }
 
     // MARK: - Believing the failure

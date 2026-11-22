@@ -110,7 +110,7 @@ final class RestoredScreenReplayTests: XCTestCase {
         let remote = try XCTUnwrap(
             SSHConnectionInfo(host: "box", remotePath: "/srv").remoteCommand(replaying: command))
 
-        XCTAssertLessThan(("/bin/sh -c " + RemoteShell.quoted(remote)).utf8.count, 100 * 1024)
+        XCTAssertLessThan(RemoteShell.posixCommand(remote).utf8.count, 100 * 1024)
         XCTAssertTrue(try shellOutput(of: command).contains("} 4999"))
     }
 

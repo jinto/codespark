@@ -491,7 +491,7 @@ final class SSHConnectionInfoTests: XCTestCase {
     func test_a_path_with_a_quote_or_backslash_survives_a_fish_login_shell() throws {
         let fish = try XCTUnwrap(Self.installedFish, "fish is not installed here")
         for shell in ["/bin/zsh", "/bin/bash", fish] {
-            for name in ["it's", #"back\\slash"#, #"both\'"#] {
+            for name in ["it's", #"back\\slash"#, #"both\'"#, "bang!x"] {
                 let dir = try makeDirectory(named: name)
                 defer { try? FileManager.default.removeItem(atPath: dir) }
 
@@ -502,6 +502,80 @@ final class SSHConnectionInfoTests: XCTestCase {
                 XCTAssertEqual(OSC7Report.frames(in: output), [OSC7Report.expected(for: dir)],
                                "\(shell) reported \(OSC7Report.frames(in: output).map(\.debugDescription)) for \(name.debugDescription)")
             }
+        }
+    }
+
+    /// csh rejects a newline inside quotes and expands `!` even inside them,
+    /// so a quoted multi-line script never reached `/bin/sh` there ("Unmatched
+    /// quote", then every following line ran as csh). There is no reporter for
+    /// csh, but the tab has to open in its directory.
+    func test_a_csh_login_shell_still_opens_the_tab_in_its_directory() throws {
+        for shell in ["/bin/csh", "/bin/tcsh"] {
+            let dir = try makeDirectory(named: "it's a!b")
+            defer { try? FileManager.default.removeItem(atPath: dir) }
+
+            let (output, status) = try runRemoteScriptBytes(
+                shell: shell, remotePath: dir, overTheWire: true, typing: "pwd\nexit\n")
+
+            XCTAssertEqual(status, 0, shell)
+            XCTAssertTrue(String(decoding: output, as: UTF8.self).contains(dir),
+                          "\(shell): \(String(decoding: output, as: UTF8.self).debugDescription)")
+        }
+    }
+
+    /// `$SHELL` can name a versioned binary. The branch is picked by name, so
+    /// an exact match let `bash-5.2` fall through to a plain, non-login shell
+    /// with no reporter.
+    func test_a_versioned_shell_name_still_gets_its_reporter() throws {
+        let bin = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("cs-shells-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: bin) }
+        for (name, target) in [("bash-5.2", "/bin/bash"), ("zsh-5.9", "/bin/zsh")] {
+            let shell = bin.appendingPathComponent(name).path
+            try FileManager.default.createSymbolicLink(atPath: shell, withDestinationPath: target)
+            let output = try runRemoteScript(shell: shell, typing: "cd /tmp\nexit 0\n")
+            XCTAssertTrue(reportedDirectories(in: output).contains("/tmp"),
+                          "\(name) never reported: \(output.debugDescription)")
+        }
+    }
+
+    /// Our zsh startup files steer zsh with `ZDOTDIR` and the `CS_RC_*`
+    /// variables. Once the user's `.zshrc` has run they have done their job;
+    /// left exported, every child process inherited them.
+    func test_the_zsh_reporter_leaves_nothing_in_the_environment() throws {
+        let output = try runRemoteScript(
+            shell: "/bin/zsh",
+            typing: #"echo "Z=${ZDOTDIR-unset} H=${CS_RC_HOME-unset} D=${CS_RC_DIR-unset} K=${CS_RC_KEEP-unset}""# + "\nexit 0\n")
+        XCTAssertTrue(output.contains("Z=unset H=unset D=unset K=unset"), output.debugDescription)
+    }
+
+    /// A tab that runs a command (claude) asks for a login, interactive
+    /// `$SHELL -c`. csh takes `-l` only alone, so `-lic` died there with
+    /// "Unknown option: `-lic'".
+    func test_a_running_tab_reaches_its_command_under_every_login_shell() throws {
+        let fish = try XCTUnwrap(Self.installedFish, "fish is not installed here")
+        for shell in ["/bin/zsh", "/bin/bash", "/bin/sh", "/bin/csh", "/bin/tcsh", fish] {
+            let home = URL(fileURLWithPath: NSTemporaryDirectory())
+                .appendingPathComponent("cs-run-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: home) }
+            let script = try XCTUnwrap(SSHConnectionInfo(host: "box", remotePath: home.path)
+                .remoteCommand(replaying: nil, running: "echo ran-ok"))
+
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: shell)
+            process.arguments = ["-c", RemoteShell.posixCommand(script)]
+            process.environment = ["PATH": "/usr/bin:/bin", "HOME": home.path, "SHELL": shell, "TERM": "dumb"]
+            let out = Pipe()
+            process.standardOutput = out
+            process.standardError = FileHandle.nullDevice
+            process.standardInput = FileHandle.nullDevice
+            try process.run()
+            let text = String(decoding: out.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            process.waitUntilExit()
+
+            XCTAssertTrue(text.contains("ran-ok"), "\(shell): \(text.debugDescription)")
         }
     }
 
@@ -817,5 +891,19 @@ final class RemoteTerminfoInstallerTests: XCTestCase {
         let data = out.fileHandleForReading.readDataToEndOfFile()
         p.waitUntilExit()
         return String(decoding: data, as: UTF8.self)
+    }
+}
+
+extension String {
+    /// The command with every script `RemoteShell.posixCommand` carried as
+    /// base64 decoded and appended — so a test can look for what the far
+    /// `/bin/sh` will run.
+    var revealingRemoteScripts: String {
+        let regex = try! NSRegularExpression(pattern: "d=([A-Za-z0-9+/=]+);")
+        let matches = regex.matches(in: self, range: NSRange(startIndex..., in: self))
+        return matches.reduce(self) { text, match in
+            let encoded = String(self[Range(match.range(at: 1), in: self)!])
+            return text + "\n" + (Data(base64Encoded: encoded).map { String(decoding: $0, as: UTF8.self) } ?? "")
+        }
     }
 }

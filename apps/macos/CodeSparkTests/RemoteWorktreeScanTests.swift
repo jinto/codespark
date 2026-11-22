@@ -247,7 +247,7 @@ final class RemoteWorktreeScanTests: XCTestCase {
 
         let argv = try recordedArgv(argvFile)
         XCTAssertTrue(
-            argv.contains("/bin/sh -c " + RemoteShell.quoted(
+            argv.contains(RemoteShell.posixCommand(
                 "git -C '/srv/repo' worktree remove '/srv/wt/repo-feat-ab12'")),
             "argv was \(argv)"
         )

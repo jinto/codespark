@@ -104,7 +104,7 @@ struct SSHConnectionInfo: Equatable, Hashable {
             // shell*, which may be fish or csh. Neither parses the `case` the
             // reporter is built from, and today's `cd … && exec` only survived
             // there by being simple enough.
-            parts.append(RemoteShell.quoted("/bin/sh -c " + RemoteShell.quoted(remote)))
+            parts.append(RemoteShell.quoted(RemoteShell.posixCommand(remote)))
         }
         return parts.joined(separator: " ")
     }
@@ -168,7 +168,7 @@ struct SSHConnectionInfo: Equatable, Hashable {
             // The command owns the tty from here — no shell, so no cwd reporter:
             // there is never a prompt to fire it. Login *and* interactive, for
             // the PATH that lives in `.zshrc` (`-lc` never reads it).
-            lines.append("exec \"$SHELL\" -lic \(RemoteShell.quoted(run))")
+            lines.append("exec \"$SHELL\" \(RemoteShell.loginInteractiveFlags) \(RemoteShell.quoted(run))")
             return lines.joined(separator: "\n")
         }
         lines.append(RemoteCwdReporter.launcher)
@@ -337,9 +337,9 @@ enum RemoteCwdReporter {
     __cs_s=${SHELL:-/bin/sh}
     CS_RC_DIR=${XDG_CACHE_HOME:-$HOME/.cache}/codespark/shell; export CS_RC_DIR
     case ${__cs_s##*/} in
-    zsh)
+    zsh*)
       mkdir -p "$CS_RC_DIR" 2>/dev/null && {
-        CS_RC_HOME=${ZDOTDIR:-$HOME}; export CS_RC_HOME
+        CS_RC_HOME=${ZDOTDIR:-$HOME}; CS_RC_KEEP=${ZDOTDIR+1}; export CS_RC_HOME CS_RC_KEEP
         cat > "$CS_RC_DIR/.zshenv.$$" <<'CS_EOF' && mv -f "$CS_RC_DIR/.zshenv.$$" "$CS_RC_DIR/.zshenv"
     ZDOTDIR=$CS_RC_HOME
     [ -r "$CS_RC_HOME/.zshenv" ] && . "$CS_RC_HOME/.zshenv"
@@ -361,17 +361,19 @@ enum RemoteCwdReporter {
       printf '\033]7;file://localhost%s\007' "$p"
     }
     precmd_functions+=(__cs_report_pwd)
+    [[ -z $CS_RC_KEEP && $ZDOTDIR == $HOME ]] && unset ZDOTDIR
+    unset CS_RC_HOME CS_RC_DIR CS_RC_KEEP
     CS_EOF
         [ -r "$CS_RC_DIR/.zshrc" ] && [ -r "$CS_RC_DIR/.zprofile" ] && { ZDOTDIR=$CS_RC_DIR; export ZDOTDIR; }
       }
       exec "$__cs_s" -l -i
       ;;
-    bash)
+    bash*)
       PROMPT_COMMAND='\#(bashPromptCommand)'${PROMPT_COMMAND:+;$PROMPT_COMMAND}
       export PROMPT_COMMAND
       exec "$__cs_s" -l -i
       ;;
-    fish)
+    fish*)
       exec "$__cs_s" -l -i -C 'function __cs_report_pwd --on-variable PWD; set -l p (string replace -ra "[[:cntrl:]]" "" -- $PWD); set p (string replace -a "%" "%25" -- $p); set p (string replace -a "#" "%23" -- $p); set p (string replace -a "?" "%3F" -- $p); printf "\033]7;file://localhost%s\007" $p; end; __cs_report_pwd'
       ;;
     esac

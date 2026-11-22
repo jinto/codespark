@@ -332,6 +332,7 @@ libghostty는 `resources_dir`이 있으면 **무조건** `TERM=xterm-ghostty`를
     - **셸마다 주입 지점이 다르다**: zsh는 `ZDOTDIR`, bash는 `PROMPT_COMMAND`(환경변수), fish는 `-C`. 함수는 `exec`을 건너지 못하므로 zsh·fish는 시작 파일/초기 명령이라야 하지만, bash의 `PROMPT_COMMAND`는 문자열이라 환경변수로 건너간다 — 그게 bash를 로그인 셸로 만들 수 있는 유일한 이유다(아래). 모르는 셸은 그냥 셸을 연다 — 최악이 예전 동작이어야 한다.
     - **fish는 `fish_prompt`가 아니라 `--on-variable PWD`**다. `fish_prompt` 이벤트는 tty가 없으면 아예 안 뜨고, 어차피 우리가 알고 싶은 건 디렉터리가 바뀌는 순간이다.
     - **`/etc/zshrc`가 우리 두 파일 사이에서 돈다**: 그때의 `ZDOTDIR`로 `HISTFILE`을 잡으므로, 우리 `.zshrc`가 되돌려놓지 않으면 **원격 셸의 히스토리가 우리 캐시로 옮겨간다**. `.zshenv`는 반대로 되돌리면 안 된다 — zsh가 우리 `.zshrc`를 못 찾는다.
+    - **끝나면 흔적을 지운다**: 우리 `.zshrc`가 마지막에 `CS_RC_*`를 unset하고, 원래 없던 `ZDOTDIR`(값이 `$HOME`)도 unset한다 — 남겨두면 탭의 모든 자식 프로세스가 물려받았다. 탭 안에서 `exec zsh`를 하면 리포터는 없다(새 zsh는 사용자 파일만 읽는다).
     - 시작 파일은 `~/.cache/codespark/shell`에 **고정 경로**로 둔다. `mktemp -d`는 그걸 읽은 셸만 지울 수 있어서, 프롬프트까지 못 간 접속마다 원격에 쓰레기가 쌓인다.
     - **테스트는 진짜 셸에 물린다**(`SSHConnectionInfoTests`). 이 기능의 실패는 전부 셸 시작 순서에 있고, 명령 문자열을 비교하는 테스트로는 한 개도 안 보인다 — 위의 HISTFILE 이동도 그렇게 잡혔다.
     - **알려진 대가**: Ghostty는 이 보고를 로컬 surface의 pwd로도 받으므로, ssh 탭의 proxy icon이 이 기계에 없는 경로를 가리킨다.
@@ -362,10 +363,12 @@ libghostty는 `resources_dir`이 있으면 **무조건** `TERM=xterm-ghostty`를
 
 SSH 프로젝트의 **기본 폴더는 URI의 경로 부분**이다(`ssh://user@host:port/경로`). New SSH Project 시트의 `Browse…`가 원격을 훑어 그 칸을 채우면 나머지는 기존 길을 그대로 탄다 — `createProject`가 URI로 저장하고, `startSession`이 `ssh -t 'cd 경로 && exec $SHELL'`로 연다. `RemoteDirectoryLister`가 목록을, `RemoteFolderPickerSheet`/`RemoteFolderPickerModel`이 화면을 맡는다.
 
-- **원격 셸이 한 번 더 파싱한다**: ssh는 뒤따르는 인자를 공백으로 이어 붙여 원격 *로그인 셸*에 넘긴다. 그래서 스크립트를 `/bin/sh -c '<script>'` **한 단어로 감싸서** 보낸다. 안 감싸면 `;`와 `$e`가 저쪽에서 먹힌다 — `config.command`가 로컬 `/bin/sh`를 거치는 것과 같은 함정의 원격판.
-  - **그 로그인 셸이 fish면 홑따옴표가 POSIX가 아니다**: fish는 홑따옴표 안에서도 `\'`·`\\`를 이스케이프로 읽는다. 두 번 감싼 `'`(원격 명령 속 경로)가 fish에서 문자열을 안 닫아, 경로에 `'`나 `\`가 든 탭이 열리자마자 죽었다. 그래서 `RemoteShell.quoted`는 `\`도 따옴표 밖으로 뺀다(`'\\'`) — 따옴표 밖 `\\`는 모든 셸에서 백슬래시 하나다. 테스트는 stub `ssh`가 `$SHELL -c`로 넘기는 진짜 왕복으로 본다(`test_a_path_with_a_quote_or_backslash_survives_a_fish_login_shell`).
-    - **대가: 백슬래시 하나가 원격 인자에서 16바이트가 된다**(두 번 감싸므로). ssh 복원 재생(`RestoredScreenReplay.inlineCommand`)은 `\033`·`\n`으로 가득해서, 예산을 감싸기 **뒤** 크기로 잰다 — 앞에서 재면 따옴표 많은 화면이 Linux의 인자 상한 128KB를 넘어 탭이 안 열린다.
-    - 원격 git 명령(`GitWorktreeService.runRemote`)도 `/bin/sh -c`로 감싼다. 생성 스크립트의 `root=…`를 fish가 rc 127로 거부해, fish 호스트에서 원격 워크트리 생성이 늘 실패했다.
+- **원격 셸이 한 번 더 파싱한다**: ssh는 뒤따르는 인자를 공백으로 이어 붙여 원격 *로그인 셸*에 넘긴다. 그 셸은 우리가 못 고른다 — csh는 따옴표 안 줄바꿈을 거부하고 `!`를 따옴표 안에서도 확장하며, fish는 홑따옴표 안 `\'`·`\\`를 이스케이프로 읽고, xonsh는 겹친 `'\''`를 문법 오류로 낸다. 따옴표로 감싼 스크립트는 sh처럼 따옴표를 읽는 셸에서만 산다. 그래서 원격 스크립트는 전부 **`RemoteShell.posixCommand`** 하나로 보낸다: 스크립트를 base64로 실어 `/bin/sh -c 'd=…; eval "$(… | base64 -d || … base64 -D)"'` — 이 단어엔 어떤 셸에도 특별한 글자가 없다(탭·폴더 피커·원격 git·원격 claude 생성 모두).
+  - **대가: 원격에 `base64`가 있어야 한다**(GNU coreutils·BusyBox·macOS 모두 있다; `-D`는 옛 macOS용 폴백). 없으면 탭이 아예 안 열린다.
+  - **재생 예산은 도착 크기로 잰다**: ssh 복원 재생(`RestoredScreenReplay.inlineCommand`)은 `\033`·`\n`으로 가득하고 한 번 따옴표에 싸인 뒤 base64(4/3)가 된다. 앞 크기로 재면 따옴표 많은 화면이 Linux의 인자 상한 128KB를 넘어 탭이 안 열린다.
+  - **login + interactive는 `RemoteShell.loginInteractiveFlags`**: csh는 `-l`을 단독으로만 받아 `-lic`가 `Unknown option`으로 죽는다 — csh면 `-ic`. 그 `case`는 패턴을 `(`로 연다: macOS `/bin/sh`(bash 3.2)는 `$(…)` 안의 맨 `pat)`를 잘못 파싱한다.
+  - 런처의 셸 판별은 `zsh*`/`bash*`/`fish*`다 — `$SHELL`이 `bash-5.2` 같은 버전 이름이면 정확 일치는 리포터 없는 비로그인 셸로 떨어졌다. csh·sh·ksh는 리포터 없이 셸만 연다.
+  - 테스트는 stub `ssh`가 `$SHELL -c`로 넘기는 진짜 왕복으로 본다(`overTheWire:`, zsh·bash·fish·csh·tcsh). 명령 문자열을 들여다보는 테스트는 `revealingRemoteScripts`로 base64를 풀어 읽는다.
 - **`~`만 원격에 맡긴다**: `remoteExpression(for:)`이 선행 `~`만 `"$HOME"`으로 남기고 나머지는 통째로 따옴표에 넣는다. 경로를 그냥 노출하면 `$(...)`가 원격에서 실행된다.
 - **마커 뒤부터가 답이다**: 수다스러운 `.bashrc`는 우리 스크립트보다 먼저 찍는다. `__CODESPARK_LS__` 줄 다음이 payload고, 마커가 없으면 `malformedOutput` — 첫 줄을 경로로 믿으면 "Welcome to prod!"에 들어가 앉는다.
 - **BatchMode 고정**: 비밀번호를 묻는 호스트에서 피커가 멈추면 안 된다. 못 열면 배너만 띄우고 **경로 입력창은 그대로 살려둔다** — 브라우징 실패가 프로젝트 생성을 막지 않는 게 설계다.

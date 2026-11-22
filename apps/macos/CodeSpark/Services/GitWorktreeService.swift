@@ -220,7 +220,7 @@ final class GitWorktreeService: @unchecked Sendable {
     private static func runRemote(_ info: SSHConnectionInfo, command: String) async throws -> String {
         let result = try await Subprocess.run(
             sshExecutablePath,
-            remoteSSHArguments(info, remoteCommand: "/bin/sh -c " + RemoteShell.quoted(command)),
+            remoteSSHArguments(info, remoteCommand: RemoteShell.posixCommand(command)),
             timeout: remoteTimeout)
         guard result.status == 0 else {
             let message = result.err.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -777,8 +777,8 @@ enum ClaudeWorktreeCreator {
     /// the last line, and runs the resolved binary inside the repository.
     static func remoteCreationScript(repoPath: String, issue: String) -> String {
         """
-        p=$("$SHELL" -lic 'command -v claude' 2>/dev/null | tail -1)
-        [ -n "$p" ] || exit \(remoteClaudeMissingExitCode)
+        p=$("$SHELL" \(RemoteShell.loginInteractiveFlags) 'command -v claude || which claude' 2>/dev/null | tail -1)
+        [ -x "$p" ] || exit \(remoteClaudeMissingExitCode)
         cd \(RemoteShell.quoted(repoPath)) || exit 1
         exec "$p" -p \(RemoteShell.quoted(prompt(for: issue))) --allowedTools 'Bash(git:*)' Read Glob Grep
         """
@@ -804,7 +804,7 @@ enum ClaudeWorktreeCreator {
         let result = try await Subprocess.run(
             GitWorktreeService.sshExecutablePath,
             GitWorktreeService.remoteSSHArguments(
-                info, remoteCommand: "/bin/sh -c " + RemoteShell.quoted(script)),
+                info, remoteCommand: RemoteShell.posixCommand(script)),
             timeout: timeout
         )
         guard result.status == 0 else {
