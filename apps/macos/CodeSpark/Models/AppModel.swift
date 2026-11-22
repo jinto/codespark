@@ -403,7 +403,6 @@ final class AppModel: ObservableObject {
         landingOn requested: String? = nil,
         unlessPickedSince choices: Int
     ) {
-        let picked = worktreeChoices != choices ? activeWorkspacePath : nil
         selection = .loaded(detail)
         liveSessions = detail.liveSessions
         // Said once, where it happened: coming back later is not news.
@@ -423,8 +422,9 @@ final class AppModel: ObservableObject {
         // user watches: the row they left highlights, sits there for the length
         // of the worktree refresh, and only then does the one they asked for.
         // And unless a worktree was picked by hand meanwhile — only possible
-        // when reselecting the project on screen, whose detail stays landed.
-        let landing = picked ?? requested ?? projectSelectedWorkspaces[detail.id]
+        // when reselecting the project on screen, whose detail stays landed —
+        // and the memory below already holds that pick.
+        let landing = (worktreeChoices == choices ? requested : nil) ?? projectSelectedWorkspaces[detail.id]
         activeWorkspacePath = workspaces.contains { $0.path == landing } ? landing : detail.path
     }
 

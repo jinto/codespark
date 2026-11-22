@@ -238,7 +238,11 @@ extension AppModel {
             guard await selectProject(id: projectID, promptForRecovery: true, landingOn: path)
             else { return false }
         }
-        if worktreeChoices == choice { activeWorkspacePath = path }
+        // Nor over a worktree the refresh just found gone — `recomputeWorkspaces`
+        // already moved off it, and writing it back empties the tab bar.
+        if worktreeChoices == choice, workspaces.contains(where: { $0.path == path }) {
+            activeWorkspacePath = path
+        }
         return true
     }
 
