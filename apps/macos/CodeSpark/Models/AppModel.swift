@@ -313,6 +313,7 @@ final class AppModel: ObservableObject {
         cancelInflightWork()
         navigation += 1
         let generation = navigation
+        let choices = worktreeChoices
         pendingWorkspaceRecoveryProjectID = nil
 
         guard let id else {
@@ -342,7 +343,7 @@ final class AppModel: ObservableObject {
             do {
                 let detail = try await core.projectDetail(id: id)
                 guard !Task.isCancelled else { return }
-                apply(detail: detail, landingOn: landingWorkspacePath)
+                apply(detail: detail, landingOn: landingWorkspacePath, unlessPickedSince: choices)
                 await attachLiveSessions()
                 // SSH projects: show reconnect prompt if no live sessions
                 if detail.transport == "ssh" && liveSessions.isEmpty {
@@ -380,19 +381,29 @@ final class AppModel: ObservableObject {
         return navigation == generation
     }
 
-    /// A selection that needs no round trip still overtakes the one in flight.
-    /// Otherwise that navigation is still "current" when its round trip ends,
-    /// and `selectWorktree`'s write after its `await` takes the selection back:
-    /// `Cmd+3`, `Cmd+4` into one project landed on 4, then jumped to 3.
-    func overtakeNavigation() {
-        navigation += 1
+    /// Counts the worktrees picked by hand (digit, row, cycle). A navigation in
+    /// flight lands on its own worktree only if none was picked since it
+    /// started — otherwise its landing, arriving after its round trip, takes
+    /// the later pick back: `Cmd+3`, `Cmd+4` into one project landed on 4, then
+    /// jumped to 3. Kept apart from `navigation` on purpose: a pick inside the
+    /// project does not overtake the project, and callers act on that answer
+    /// (a confirmed worktree removal, the New Worktree sheet).
+    private(set) var worktreeChoices = 0
+
+    func noteWorktreeChoice() {
+        worktreeChoices += 1
     }
 
     private func cancelInflightWork() {
         detailTask?.cancel()
     }
 
-    private func apply(detail: ProjectDetailViewData, landingOn requested: String? = nil) {
+    private func apply(
+        detail: ProjectDetailViewData,
+        landingOn requested: String? = nil,
+        unlessPickedSince choices: Int
+    ) {
+        let picked = worktreeChoices != choices ? activeWorkspacePath : nil
         selection = .loaded(detail)
         liveSessions = detail.liveSessions
         // Said once, where it happened: coming back later is not news.
@@ -411,7 +422,9 @@ final class AppModel: ObservableObject {
         // not a project, and opening at the remembered one first is a step the
         // user watches: the row they left highlights, sits there for the length
         // of the worktree refresh, and only then does the one they asked for.
-        let landing = requested ?? projectSelectedWorkspaces[detail.id]
+        // And unless a worktree was picked by hand meanwhile — only possible
+        // when reselecting the project on screen, whose detail stays landed.
+        let landing = picked ?? requested ?? projectSelectedWorkspaces[detail.id]
         activeWorkspacePath = workspaces.contains { $0.path == landing } ? landing : detail.path
     }
 
@@ -1382,10 +1395,12 @@ final class AppModel: ObservableObject {
     /// Clicking a sidebar row is otherwise the only way to reach another
     /// worktree, which would strand its tabs whenever the sidebar is hidden.
     private func cycleWorktree(offset: Int) {
-        guard workspaces.count > 1,
+        // Mid-switch, `workspaces` are the rows of the project being left.
+        guard selection.detail != nil,
+              workspaces.count > 1,
               let current = activeWorkspacePath,
               let index = workspaces.firstIndex(where: { $0.path == current }) else { return }
-        overtakeNavigation()
+        noteWorktreeChoice()
         activeWorkspacePath = workspaces[(index + offset + workspaces.count) % workspaces.count].path
         // The same blind navigation as a digit, with the digit's manners: open
         // the tree (never fold it) and bring the landed row into view. With the

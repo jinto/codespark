@@ -1837,7 +1837,9 @@ final class WorkspaceSelectionTests: XCTestCase {
     /// one's round trip, still "current", landed it back on 3. Two windows:
     /// before the detail arrives, and during the worktree refresh after it.
     @MainActor
-    private func modelForADigitRace(slowRefresh: Bool) async throws -> AppModel {
+    private func modelForADigitRace(
+        slowRefresh: Bool, latency: [String: UInt64]? = nil
+    ) async throws -> AppModel {
         func summary(id: String, path: String, transport: String = "local") -> ProjectSummaryViewData {
             ProjectSummaryViewData(id: id, name: id, path: path, transport: transport,
                                    liveSessions: 0, recentlyClosedSessions: 0,
@@ -1868,7 +1870,7 @@ final class WorkspaceSelectionTests: XCTestCase {
                 ProjectDetailViewData(id: "p2", name: "p2", path: Self.otherProject,
                                       transport: "local", liveSessions: [])
             ],
-            detailLatencyByID: slowRefresh ? [:] : ["p1": 400_000_000]
+            detailLatencyByID: latency ?? (slowRefresh ? [:] : ["p1": 400_000_000])
         )
         let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
         await model.load()
@@ -1924,9 +1926,47 @@ final class WorkspaceSelectionTests: XCTestCase {
         model.selectNextWorktree()
         let cycledTo = model.activeWorkspacePath
         XCTAssertNotEqual(cycledTo, Self.mainWorktree)
-        _ = await first.value
+        let held = await first.value
+        XCTAssertTrue(held, "a worktree choice inside the project it opened is not an overtake: "
+                      + "callers act on this answer (a confirmed worktree removal)")
 
         XCTAssertEqual(model.activeWorkspacePath, cycledTo, "the digit's round trip took the cycle back")
+    }
+
+    /// Reselecting the project on screen keeps its detail landed while the new
+    /// one is fetched, so a digit pressed in that window is "already there" —
+    /// and the navigation's own landing, applied when its detail arrives, must
+    /// not take that digit back.
+    @MainActor
+    func test_a_digit_is_not_taken_back_by_the_landing_of_a_reselect_in_flight() async throws {
+        let model = try await modelForADigitRace(slowRefresh: false)
+        await model.selectProject(id: "p1")
+
+        let reselect = Task { await model.selectProject(id: "p1", landingOn: Self.featureWorktree) }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        await model.selectWorktree(projectID: "p1", path: Self.mainWorktree)
+        _ = await reselect.value
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree,
+                       "the reselect's landing took the digit back")
+    }
+
+    /// Cycling while another project is on its way cycles nothing — the rows
+    /// belong to the project being left — and must not make that switch report
+    /// itself overtaken: the "New Worktree" sheet and the scroll act on it.
+    @MainActor
+    func test_cycling_during_a_switch_does_not_make_the_switch_give_up() async throws {
+        let model = try await modelForADigitRace(slowRefresh: false, latency: ["p2": 400_000_000])
+        await model.selectProject(id: "p1")
+
+        let switchToP2 = Task { await model.selectProject(id: "p2") }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        model.selectNextWorktree()
+        let held = await switchToP2.value
+
+        XCTAssertTrue(held)
+        XCTAssertEqual(model.selection.detail?.id, "p2")
+        XCTAssertEqual(model.activeWorkspacePath, Self.otherProject)
     }
 
     /// And the same window has one more thing in it. An ssh project with no

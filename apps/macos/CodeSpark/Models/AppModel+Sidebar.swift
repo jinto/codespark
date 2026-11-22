@@ -223,22 +223,22 @@ extension AppModel {
     /// lands somewhere else — writing this worktree's path afterwards would put
     /// the project the user actually landed in on a worktree it does not have,
     /// emptying its tab bar. Returns whether it held.
-    @discardableResult
     ///
     /// "Already there" means the project has *arrived* (`detail`), not merely
     /// been picked: a digit pressed while the previous one is still waiting on
     /// the detail has to go through `selectProject` too, so it cancels that one
-    /// and lands where it was aimed. Already there, it lands at once — and still
-    /// overtakes whatever navigation is in flight, or that one's write below
-    /// takes the selection back when its worktree refresh ends.
+    /// and lands where it was aimed. And a worktree picked inside the project
+    /// while this one waited on its refresh wins — the project still held, so
+    /// this returns true, but the path is not written over the later pick.
+    @discardableResult
     func selectWorktree(projectID: String, path: String) async -> Bool {
+        noteWorktreeChoice()
+        let choice = worktreeChoices
         if selection.detail?.id != projectID {
             guard await selectProject(id: projectID, promptForRecovery: true, landingOn: path)
             else { return false }
-        } else {
-            overtakeNavigation()
         }
-        activeWorkspacePath = path
+        if worktreeChoices == choice { activeWorkspacePath = path }
         return true
     }
 
