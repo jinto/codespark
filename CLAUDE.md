@@ -363,6 +363,7 @@ libghostty는 `resources_dir`이 있으면 **무조건** `TERM=xterm-ghostty`를
 SSH 프로젝트의 **기본 폴더는 URI의 경로 부분**이다(`ssh://user@host:port/경로`). New SSH Project 시트의 `Browse…`가 원격을 훑어 그 칸을 채우면 나머지는 기존 길을 그대로 탄다 — `createProject`가 URI로 저장하고, `startSession`이 `ssh -t 'cd 경로 && exec $SHELL'`로 연다. `RemoteDirectoryLister`가 목록을, `RemoteFolderPickerSheet`/`RemoteFolderPickerModel`이 화면을 맡는다.
 
 - **원격 셸이 한 번 더 파싱한다**: ssh는 뒤따르는 인자를 공백으로 이어 붙여 원격 *로그인 셸*에 넘긴다. 그래서 스크립트를 `/bin/sh -c '<script>'` **한 단어로 감싸서** 보낸다. 안 감싸면 `;`와 `$e`가 저쪽에서 먹힌다 — `config.command`가 로컬 `/bin/sh`를 거치는 것과 같은 함정의 원격판.
+  - **그 로그인 셸이 fish면 홑따옴표가 POSIX가 아니다**: fish는 홑따옴표 안에서도 `\'`·`\\`를 이스케이프로 읽는다. 두 번 감싼 `'`(원격 명령 속 경로)가 fish에서 문자열을 안 닫아, 경로에 `'`나 `\`가 든 탭이 열리자마자 죽었다. 그래서 `RemoteShell.quoted`는 `\`도 따옴표 밖으로 뺀다(`'\\'`) — 따옴표 밖 `\\`는 모든 셸에서 백슬래시 하나다. 테스트는 stub `ssh`가 `$SHELL -c`로 넘기는 진짜 왕복으로 본다(`test_a_path_with_a_quote_or_backslash_survives_a_fish_login_shell`).
 - **`~`만 원격에 맡긴다**: `remoteExpression(for:)`이 선행 `~`만 `"$HOME"`으로 남기고 나머지는 통째로 따옴표에 넣는다. 경로를 그냥 노출하면 `$(...)`가 원격에서 실행된다.
 - **마커 뒤부터가 답이다**: 수다스러운 `.bashrc`는 우리 스크립트보다 먼저 찍는다. `__CODESPARK_LS__` 줄 다음이 payload고, 마커가 없으면 `malformedOutput` — 첫 줄을 경로로 믿으면 "Welcome to prod!"에 들어가 앉는다.
 - **BatchMode 고정**: 비밀번호를 묻는 호스트에서 피커가 멈추면 안 된다. 못 열면 배너만 띄우고 **경로 입력창은 그대로 살려둔다** — 브라우징 실패가 프로젝트 생성을 막지 않는 게 설계다.

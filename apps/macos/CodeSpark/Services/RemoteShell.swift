@@ -15,10 +15,14 @@ enum RemoteShell {
 
     /// One shell word, whatever is in it.
     ///
-    /// Single quotes take everything literally, so the only character needing
-    /// care is the quote itself: close, escape one, reopen.
+    /// Close, escape one, reopen — for the quote, and for the backslash too.
+    /// POSIX single quotes take a backslash literally, but the far login shell
+    /// may be fish, which reads `\'` and `\\` as escapes even inside them: a
+    /// quoted-twice `'` (a path inside the remote command) left fish an
+    /// unterminated string and the tab died. Outside quotes `\\` means one
+    /// backslash to sh, bash, zsh, fish and csh alike.
     static func quoted(_ value: String) -> String {
-        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        "'" + value.map { $0 == "'" ? #"'\''"# : $0 == "\\" ? #"'\\'"# : String($0) }.joined() + "'"
     }
 
     /// A path as the *remote* shell should read it.

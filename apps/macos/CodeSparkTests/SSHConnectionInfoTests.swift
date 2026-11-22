@@ -316,6 +316,7 @@ final class SSHConnectionInfoTests: XCTestCase {
         path: String = "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin",
         installingTerminfo terminfoBase64: String? = nil,
         inspectingHome inspect: ((URL) -> Void)? = nil,
+        overTheWire: Bool = false,
         typing input: String
     ) throws -> (output: Data, status: Int32) {
         let home = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -333,14 +334,34 @@ final class SSHConnectionInfoTests: XCTestCase {
         let script = try XCTUnwrap(info.remoteCommand(replaying: nil, installingTerminfo: terminfoBase64))
         defer { inspect?(home) }
 
+        // Over the wire, the whole `sshCommand` goes through the local `/bin/sh`
+        // as Ghostty runs it, and a stub `ssh` hands the remote word to the
+        // login shell the way sshd does (`$SHELL -c "<args joined>"`). That
+        // second parse is the login shell's, which may be fish.
+        var command = script, searchPath = path
+        if overTheWire {
+            let stub = home.appendingPathComponent("bin/ssh")
+            try FileManager.default.createDirectory(
+                at: stub.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try """
+            #!/bin/sh
+            while [ "$1" != -- ]; do shift; done
+            shift 2
+            exec "$SHELL" -c "$*"
+            """.write(to: stub, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+            command = info.sshCommand(installingTerminfo: terminfoBase64)
+            searchPath = stub.deletingLastPathComponent().path + ":" + path
+        }
+
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
-        process.arguments = ["-c", script]
+        process.arguments = ["-c", command]
         // A deliberately bare environment: HOME points into the temporary
         // directory so the reporter's cache lands there and the developer's own
         // dotfiles never take part.
         process.environment = [
-            "PATH": path,
+            "PATH": searchPath,
             "HOME": home.path,
             "SHELL": shell,
             "TERM": "dumb",
@@ -455,6 +476,27 @@ final class SSHConnectionInfoTests: XCTestCase {
 
                 let (output, status) = try runRemoteScriptBytes(
                     shell: shell, remotePath: dir, typing: "exit 0\n")
+
+                XCTAssertEqual(status, 0, "\(shell) failed for \(name.debugDescription)")
+                XCTAssertEqual(OSC7Report.frames(in: output), [OSC7Report.expected(for: dir)],
+                               "\(shell) reported \(OSC7Report.frames(in: output).map(\.debugDescription)) for \(name.debugDescription)")
+            }
+        }
+    }
+
+    /// ssh hands the remote command to the far *login shell* before our
+    /// `/bin/sh` ever sees it, and fish reads `\'` and `\\` as escapes even
+    /// inside single quotes. A quote or backslash in the path, quoted twice,
+    /// left fish with an unterminated string: the tab died with rc 127.
+    func test_a_path_with_a_quote_or_backslash_survives_a_fish_login_shell() throws {
+        let fish = try XCTUnwrap(Self.installedFish, "fish is not installed here")
+        for shell in ["/bin/zsh", "/bin/bash", fish] {
+            for name in ["it's", #"back\\slash"#, #"both\'"#] {
+                let dir = try makeDirectory(named: name)
+                defer { try? FileManager.default.removeItem(atPath: dir) }
+
+                let (output, status) = try runRemoteScriptBytes(
+                    shell: shell, remotePath: dir, overTheWire: true, typing: "exit 0\n")
 
                 XCTAssertEqual(status, 0, "\(shell) failed for \(name.debugDescription)")
                 XCTAssertEqual(OSC7Report.frames(in: output), [OSC7Report.expected(for: dir)],
