@@ -1831,6 +1831,104 @@ final class WorkspaceSelectionTests: XCTestCase {
                        "the main area offered New Terminal over a live tab")
     }
 
+    /// `Cmd+3` then `Cmd+4`, both worktrees of one project you are not in yet.
+    /// The second digit finds the project already picked, so it never went
+    /// through `selectProject` — no new generation, no cancel — and the first
+    /// one's round trip, still "current", landed it back on 3. Two windows:
+    /// before the detail arrives, and during the worktree refresh after it.
+    @MainActor
+    private func modelForADigitRace(slowRefresh: Bool) async throws -> AppModel {
+        func summary(id: String, path: String, transport: String = "local") -> ProjectSummaryViewData {
+            ProjectSummaryViewData(id: id, name: id, path: path, transport: transport,
+                                   liveSessions: 0, recentlyClosedSessions: 0,
+                                   hasInterruptedSessions: false, liveSessionDetails: [])
+        }
+        var summaries = [summary(id: "p1", path: Self.mainWorktree),
+                         summary(id: "p2", path: Self.otherProject)]
+        if slowRefresh {
+            // A remote project the refresh has to ask, slowly — the queue every
+            // project's lookup waits in, which is what makes the window long.
+            let stub = FileManager.default.temporaryDirectory
+                .appendingPathComponent("cs-slow-ssh-\(UUID().uuidString)")
+            try "#!/bin/sh\nsleep 0.6\n".write(to: stub, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: stub.path)
+            let original = GitWorktreeService.sshExecutablePath
+            GitWorktreeService.sshExecutablePath = stub.path
+            addTeardownBlock {
+                GitWorktreeService.sshExecutablePath = original
+                try? FileManager.default.removeItem(at: stub)
+            }
+            summaries.append(summary(id: "r", path: "ssh://box/srv/repo", transport: "ssh"))
+        }
+        let core = MockProjectCoreClient(
+            summaries: summaries,
+            details: [
+                ProjectDetailViewData(id: "p1", name: "p1", path: Self.mainWorktree,
+                                      transport: "local", liveSessions: []),
+                ProjectDetailViewData(id: "p2", name: "p2", path: Self.otherProject,
+                                      transport: "local", liveSessions: [])
+            ],
+            detailLatencyByID: slowRefresh ? [:] : ["p1": 400_000_000]
+        )
+        let model = AppModel(core: core, terminalFactory: { _ in MockTerminalHost() })
+        await model.load()
+        model.gitWorktreeService.primeCache([
+            GitWorktree(path: Self.mainWorktree, branch: "main", isMainWorktree: true),
+            GitWorktree(path: Self.featureWorktree, branch: "feature", isMainWorktree: false)
+        ], for: Self.mainWorktree)
+        await model.selectProject(id: "p2")
+        return model
+    }
+
+    @MainActor
+    func test_a_second_digit_into_the_same_project_wins_before_its_detail_arrives() async throws {
+        let model = try await modelForADigitRace(slowRefresh: false)
+
+        let first = Task { await model.selectWorktree(projectID: "p1", path: Self.mainWorktree) }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        await model.selectWorktree(projectID: "p1", path: Self.featureWorktree)
+        _ = await first.value
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree,
+                       "the first digit's round trip took the selection back")
+    }
+
+    @MainActor
+    func test_a_second_digit_into_the_same_project_wins_during_its_worktree_refresh() async throws {
+        let model = try await modelForADigitRace(slowRefresh: true)
+
+        let first = Task { await model.selectWorktree(projectID: "p1", path: Self.mainWorktree) }
+        // Until the detail has landed: the first digit is now parked in the refresh.
+        for _ in 0..<100 where model.selection.detail?.id != "p1" {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertEqual(model.activeWorkspacePath, Self.mainWorktree)
+        await model.selectWorktree(projectID: "p1", path: Self.featureWorktree)
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree)
+        _ = await first.value
+
+        XCTAssertEqual(model.activeWorkspacePath, Self.featureWorktree,
+                       "the first digit's round trip took the selection back")
+    }
+
+    /// `Cmd+Opt+]` in the same window: no round trip of its own, so it has to
+    /// overtake the digit still waiting on the refresh just the same.
+    @MainActor
+    func test_cycling_worktrees_during_a_digits_refresh_is_not_taken_back() async throws {
+        let model = try await modelForADigitRace(slowRefresh: true)
+
+        let first = Task { await model.selectWorktree(projectID: "p1", path: Self.mainWorktree) }
+        for _ in 0..<100 where model.selection.detail?.id != "p1" {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        model.selectNextWorktree()
+        let cycledTo = model.activeWorkspacePath
+        XCTAssertNotEqual(cycledTo, Self.mainWorktree)
+        _ = await first.value
+
+        XCTAssertEqual(model.activeWorkspacePath, cycledTo, "the digit's round trip took the cycle back")
+    }
+
     /// And the same window has one more thing in it. An ssh project with no
     /// tabs offers to reconnect, and `mainAreaContent` puts that offer ahead of
     /// everything — but it never asks *whose* offer it is, while its sibling

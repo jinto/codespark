@@ -380,6 +380,14 @@ final class AppModel: ObservableObject {
         return navigation == generation
     }
 
+    /// A selection that needs no round trip still overtakes the one in flight.
+    /// Otherwise that navigation is still "current" when its round trip ends,
+    /// and `selectWorktree`'s write after its `await` takes the selection back:
+    /// `Cmd+3`, `Cmd+4` into one project landed on 4, then jumped to 3.
+    func overtakeNavigation() {
+        navigation += 1
+    }
+
     private func cancelInflightWork() {
         detailTask?.cancel()
     }
@@ -1377,6 +1385,7 @@ final class AppModel: ObservableObject {
         guard workspaces.count > 1,
               let current = activeWorkspacePath,
               let index = workspaces.firstIndex(where: { $0.path == current }) else { return }
+        overtakeNavigation()
         activeWorkspacePath = workspaces[(index + offset + workspaces.count) % workspaces.count].path
         // The same blind navigation as a digit, with the digit's manners: open
         // the tree (never fold it) and bring the landed row into view. With the
